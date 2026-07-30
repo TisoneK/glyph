@@ -290,16 +290,22 @@ re-runnably. That's the signal to build the rest.
 
 ## 11. Open questions
 
-- Repo/service split: one repo with stages as packages, or capture-tool + catalog-service?
-- Catalog store: start SQLite (local, per-analyst), promote to a shared DB later?
-- How much of the mobile-MITM/APK flow can run headless in CI vs. needs a physical device?
-- Where exactly is the handoff line to InjecX when an endpoint needs a tunnel to reach?
-- Naming.
+Resolved during Session 3 (see RESEARCH-DEEP-DIVE.md §7) and recorded as ADRs:
+
+- ~~Repo/service split~~ → **monorepo, stages as packages, catalog as a library** (ADR-2).
+- ~~Catalog store~~ → **SQLite → DuckDB → Postgres** (ADR-2).
+- ~~Mobile-MITM/APK in CI vs. device~~ → **Android headless-tractable; iOS needs a jailbroken
+  device** (RESEARCH-DEEP-DIVE.md §7.3).
+- **Endpoint reachability:** when a decoded endpoint isn't directly reachable from the analyst's
+  network, Glyph records that as a neutral catalog attribute (`reachability` +
+  `reachability_note`) and stops there. What an analyst does with an unreachable endpoint is out
+  of Glyph's scope; Glyph names no external tool (ADR-3 — Glyph is fully standalone).
+- **Naming:** "Glyph" retained.
 
 ---
 
 ## 12. Immediate next step
 
-Commission the **Phase-0 proof** (§9): build stages 1–4 minimally against any convenient
-target and have it emit a code dictionary automatically. If it reproduces hand-analysis
-faster and re-runnably, greenlight the rest.
+Build the general-purpose package (ADR-2): the composable stages over a shared catalog. The
+core spine — Capture → Catalog → Schema-infer → Rosetta — must work on any target you point it
+at and emit a code dictionary automatically, re-runnably.

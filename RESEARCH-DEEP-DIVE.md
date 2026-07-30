@@ -449,11 +449,18 @@ RESEARCH.md asks: *"How much of the mobile-MITM/APK flow can run headless in CI 
 - **iOS dynamic analysis: physical jailbroken device required.** No emulator substitute. Out of scope for MVP CI.
 - **Architectural implication:** ship Android support first (CI-tractable end-to-end). Document iOS as "requires jailbroken device — analyst workflow, not CI." This matches how MobSF structures its iOS support.
 
-### 7.4 Handoff line to InjectX — **deferred to the user**
+### 7.4 Endpoint reachability — **a neutral catalog attribute (ADR-3)**
 
-RESEARCH.md asks: *"Where exactly is the handoff line to InjecX when an endpoint needs a tunnel to reach?"* (Note: ADR-1 spells it "InjectX"; RESEARCH.md §11 spells it "InjecX" — a typo to fix.)
+RESEARCH.md originally asked where the handoff line was to a separate tunneling project. Per the
+user's directive (2026-07-30) and ADR-3, **Glyph is fully standalone and names no sibling
+project.** Reachability is instead recorded as a neutral, Glyph-internal catalog attribute.
 
-**Resolution: deferred.** This is a product-boundary decision between two projects (Glyph and InjectX) that only the user can make. The factual input this deep-dive provides: Glyph's job is to *discover and decode* a target's surface; InjectX's job is to *route traffic* to reach endpoints that aren't directly accessible. The natural handoff is at the catalog — Glyph emits an endpoint record (URL, auth, gating profile), and if that endpoint is unreachable from the analyst's network, the record carries enough metadata (host, port, required egress) for InjectX to decide whether and how to tunnel. **Concrete recommendation:** define the handoff as a catalog-entry schema field (`reachability: direct | needs_tunnel | unreachable`) plus an optional `tunnel_hint` (e.g., "residential IP required," "JA4 must match Chrome"). The user should validate this against InjectX's actual interface once InjectX has one.
+**Resolution:** Glyph's job is to *discover and decode* a target's surface. When it observes that
+a decoded endpoint is not directly reachable from the analyst's network, it records that as a
+catalog field — `reachability: direct | needs_tunnel | unreachable` plus an optional free-text
+`reachability_note` (e.g., "residential IP required," "JA4 must match Chrome"). Glyph stops
+there: the attribute is a factual observation, not a handoff to any external tool. What an
+analyst does with an unreachable endpoint is outside Glyph's scope and outside its vocabulary.
 
 ### 7.5 Naming — **deferred to the user**
 
@@ -535,10 +542,10 @@ Ordered by priority:
 5. **Adopt Splink for confidence scoring and Label Studio for HITL review** (§4.6) — don't reinvent either.
 6. **Ship the Daraja callback verification recipe** (§3g) as an early concrete deliverable — it's a known Kenya-priority integration hazard and a clean differentiator.
 7. **Update RESEARCH.md §6b** to say "JA4/JA4+ (JA3 retained for backward compat)" instead of "JA3/JA4" — JA4 is the current standard (Cloudflare enterprise-wide Aug 2024).
-8. **Fix the InjectX/InjecX typo** in RESEARCH.md §11 (ADR-1 spells it "InjectX").
+8. **Keep Glyph standalone** — reachability is a neutral catalog attribute; name no sibling project (§7.4, ADR-3).
 9. **Demo Akto, Levo, and Salt Security** before any external novelty claim about Rosetta (§4.8) — confirm the gap.
 10. **Cite Cloudflare's ML API Discovery + Schema Learning defensively** in any external write-up — it's the cleanest published production example of the discovery+schema half.
-11. **Defer the InjectX handoff line and naming to the user** (§7.4, §7.5).
+11. **Retain the "Glyph" name** (§7.5).
 
 ---
 
