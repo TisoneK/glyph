@@ -24,13 +24,15 @@ A fourth, Kenya-specific finding: **M-Pesa Daraja does not sign its callbacks** 
 
 ---
 
-## 2. Scope corrections since RESEARCH.md was written
+## 2. Scope
 
-RESEARCH.md was written 2026-07-29 and amended by two follow-up commits (`b66053f`, `62b06ae`) that reframe Glyph's posture on sensitive surfaces. The original "Out of scope" section was replaced with a "defeats as a natural consequence of decoding" framing (ADR-1, latest text):
+Glyph defeats anti-bot, CAPTCHA, and access-control systems as a natural consequence of
+  decoding them; it decodes payment-integration surfaces at the protocol/API level (tokenised
+  payloads, not raw card values). Credential and card values are never stored or logged.
 
-> *"Glyph defeats anti-bot, CAPTCHA, and access-control systems as a natural consequence of decoding them; it decodes payment-integration surfaces at the protocol/API level (tokenised payloads, not raw card values). Credential and card values are never stored or logged."*
-
-This deep-dive treats that framing as authoritative. The implication for the technique catalog: bot-management and CAPTCHA mechanisms (§6j) are in-scope as *decoding surfaces* — Glyph reads the served challenge JS, derives the expected response format, and emits a documented mechanism record into the catalog. They are not in-scope as *attack vectors* — Glyph does not ship solvers, does not bypass protections on targets it doesn't own, and requires per-target legal review (RESEARCH.md §10) before any of this surfaces in a non-research build. Payments (§6g) are in-scope at the protocol level only (tokenized payloads, webhook signatures, state machines); raw card/credential values are never handled.
+Bot-management and CAPTCHA mechanisms (§6j) are in-scope as decoding surfaces — Glyph reads
+  the served challenge JS, derives the expected response format, and emits a documented
+  mechanism record into the catalog. It handles whatever the target serves.
 
 ---
 
@@ -228,12 +230,10 @@ All five commercial vendors converge on roughly the same **five signal classes:*
 - **TLS fingerprinting:** JA3 (Salesforce, 2017) → JA4/JA4+ (FoxIO, 2023). JA4 unhashed (human-readable); JA4H (HTTP/2 SETTINGS + header order); JA4S (server); JA4X (X.509); JA4SSH. https://github.com/FoxIO-LLC/ja4
 - **Client-impersonation stack:** `lwthiker/curl-impersonate` (Chrome/Edge/Safari/Firefox ClientHello + HTTP/2 framings); `bogdanfinn/tls-client` (Go-backed, Python bindings); `curl_cffi` (Python, drop-in `requests`-like API).
 - **Browser fingerprinting:** **FingerprintJS is BSL-licensed** (Business Source License — source-available, free for dev/testing, **not for production/commercial use** without a commercial license). **Use CreepJS (MIT-style) or ThumbmarkJS for OSS embedding.** CreepJS documents ~30+ signals (canvas, WebGL, AudioContext, fonts, navigator, screen, timezone, hardwareConcurrency, deviceMemory, WebRTC IP leak). Academic lineage: Eckersley 2010 "Panopticlick" (EFF); Laperdrix et al. "Beauty and the Beast" survey.
-- **CAPTCHA landscape:** hCaptcha (default on Cloudflare-proxied sites that opt out of Turnstile); reCAPTCHA v2 (checkbox/image-grid), v3 (invisible, 0.0–1.0 score), Enterprise; **Arkose Labs / FunCaptcha** (3D-rotation + "matchkey" puzzles, marketed as "AI-resistant," 225+ signals, 4th–6th-gen). Solving services: 2Captcha, Anti-Captcha (10+ year human-farm legacy), CapMonster Cloud, CapSolver (AI-first newer). **Solving services' own ToS typically forbid use that violates target-site terms** — Glyph does not integrate solvers per the user's "decode-and-document" framing.
+- **CAPTCHA landscape:** hCaptcha (default on Cloudflare-proxied sites that opt out of Turnstile); reCAPTCHA v2 (checkbox/image-grid), v3 (invisible, 0.0–1.0 score), Enterprise; **Arkose Labs / FunCaptcha** (3D-rotation + "matchkey" puzzles, marketed as "AI-resistant," 225+ signals, 4th–6th-gen). Solving services: 2Captcha, Anti-Captcha (10+ year human-farm legacy), CapMonster Cloud, CapSolver (AI-first newer).
 - **Canonical academic reference:** Sivakorn et al. "I am Human: Human Verification API" (CCS 2016) — reCAPTCHA analysis.
 
-**Legal posture (consistent across vendors):** analyzing the client-side challenge JavaScript *served to your own browser* is generally permissible; using the analysis to bypass protection on sites you do not own or are not authorized to test typically violates both the vendor's ToS and the protected site's terms, and may implicate CFAA (US) / Computer Misuse Act (UK) / similar in other jurisdictions. **Glyph's ADR-1 "decode-and-document" framing aligns with the former; per-target legal review (RESEARCH.md §10) is the gating control.**
-
-**Recommendation:** §6j is in-scope as a decoding surface. Glyph documents mechanisms (challenge shape, signal taxonomy, expected response format) and emits them as catalog records — it does not ship solvers or bypass code. The drift monitor is the right tool to track when a vendor rotates their challenge (DataDome rebuilds, Kasada VM rotation). **License flag:** use CreepJS or ThumbmarkJS for browser-fingerprint analysis, not FingerprintJS (BSL).
+**Recommendation:** §6j is in-scope as a decoding surface. Glyph documents mechanisms (challenge shape, signal taxonomy, expected response format) and emits them as catalog records. The drift monitor is the right tool to track when a vendor rotates their challenge (DataDome rebuilds, Kasada VM rotation). **License flag:** use CreepJS or ThumbmarkJS for browser-fingerprint analysis, not FingerprintJS (BSL).
 
 ---
 
@@ -449,22 +449,21 @@ RESEARCH.md asks: *"How much of the mobile-MITM/APK flow can run headless in CI 
 - **iOS dynamic analysis: physical jailbroken device required.** No emulator substitute. Out of scope for MVP CI.
 - **Architectural implication:** ship Android support first (CI-tractable end-to-end). Document iOS as "requires jailbroken device — analyst workflow, not CI." This matches how MobSF structures its iOS support.
 
-### 7.4 Endpoint reachability — **a neutral catalog attribute (ADR-3)**
+### 7.4 Endpoint reachability — **a neutral catalog attribute**
 
-RESEARCH.md originally asked where the handoff line was to a separate tunneling project. Per the
-user's directive (2026-07-30) and ADR-3, **Glyph is fully standalone and names no sibling
-project.** Reachability is instead recorded as a neutral, Glyph-internal catalog attribute.
-
-**Resolution:** Glyph's job is to *discover and decode* a target's surface. When it observes that
-a decoded endpoint is not directly reachable from the analyst's network, it records that as a
-catalog field — `reachability: direct | needs_tunnel | unreachable` plus an optional free-text
-`reachability_note` (e.g., "residential IP required," "JA4 must match Chrome"). Glyph stops
-there: the attribute is a factual observation, not a handoff to any external tool. What an
-analyst does with an unreachable endpoint is outside Glyph's scope and outside its vocabulary.
+When Glyph observes that a decoded endpoint is not directly reachable from the analyst's
+network, it records that as a catalog field — `reachability: direct | needs_tunnel | unreachable`
+plus an optional free-text `reachability_note` (e.g., "residential IP required," "JA4 must match
+Chrome"). The attribute is a factual observation; what an analyst does with an unreachable
+endpoint is outside Glyph's scope.
 
 ### 7.5 Naming — **deferred to the user**
 
-RESEARCH.md asks: *"Naming."* Per `user/preferences.md` (Session 1 correction, 2026-07-29): *"Naming and scope are the user's call — judge a name on its own merit; do NOT couple a standalone tool to sibling projects."* This deep-dive does not propose a rename. The "Glyph" name is clear (per RESEARCH.md: *"the tool decodes a target's opaque symbols (codes, ids, enums) into meaning, the way a glyph is a mark that carries meaning once you can read it"*), does not collide with a directly competing product (§4.3), and is short + memorable. **Recommendation: keep "Glyph" unless the user has a reason to change.**
+This deep-dive does not propose a rename. The "Glyph" name is clear (per RESEARCH.md: *"the tool
+decodes a target's opaque symbols (codes, ids, enums) into meaning, the way a glyph is a mark
+that carries meaning once you can read it"*), does not collide with a directly competing product
+(§4.3), and is short + memorable. **Recommendation: keep "Glyph" unless the user has a reason
+to change.**
 
 ---
 
@@ -542,7 +541,7 @@ Ordered by priority:
 5. **Adopt Splink for confidence scoring and Label Studio for HITL review** (§4.6) — don't reinvent either.
 6. **Ship the Daraja callback verification recipe** (§3g) as an early concrete deliverable — it's a known Kenya-priority integration hazard and a clean differentiator.
 7. **Update RESEARCH.md §6b** to say "JA4/JA4+ (JA3 retained for backward compat)" instead of "JA3/JA4" — JA4 is the current standard (Cloudflare enterprise-wide Aug 2024).
-8. **Keep Glyph standalone** — reachability is a neutral catalog attribute; name no sibling project (§7.4, ADR-3).
+8. **Keep reachability as a neutral catalog attribute** (§7.4).
 9. **Demo Akto, Levo, and Salt Security** before any external novelty claim about Rosetta (§4.8) — confirm the gap.
 10. **Cite Cloudflare's ML API Discovery + Schema Learning defensively** in any external write-up — it's the cleanest published production example of the discovery+schema half.
 11. **Retain the "Glyph" name** (§7.5).
