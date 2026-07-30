@@ -18,8 +18,9 @@ dist/
 .venv/
 venv/
 
-# Session 6 live-capture scratch artifacts (catalog DBs with capture-session-specific URLs/headers)
+# Session 6/7 live-capture scratch artifacts (catalog DBs with capture-session-specific URLs/headers)
 scripts/capture-out/
+scripts/capture-out-*/
 *.db
 # Reusable scripts ARE tracked; their output is not.
 .venv-*/

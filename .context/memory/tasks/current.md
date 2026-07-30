@@ -12,8 +12,9 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 6 (2026-07-30) ran live capture against linebet.com,
-  closed 3 backlog items (Phase-0 proof, Live-capture E2E, Real-world validation),
-  and cleared. See `agents/sessions.md` Session 6 and
-  `reviews/2026-07-30-real-world-validation.md`. Next items in `tasks/backlog.md`.
+- **Task:** none — Session 7 (2026-07-30) landed capture-all + websocket +
+  target-agnostic exploration, ran the proxied capture (100 decodings, 90
+  high-conf, 60-language dictionary), and cleared. See `agents/sessions.md`
+  Session 7 and `reviews/2026-07-30-proxied-capture.md`. Next items in
+  `tasks/backlog.md`.
 - **Status:** idle
