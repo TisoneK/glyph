@@ -117,3 +117,12 @@ never harvested.
   - **For (1):** ANY work involving credentials, multi-step git operations, or logic longer than 3-4 lines goes in a persisted script under `/home/z/my-project/scripts/`. Run the file. Never inline credentials in a bash command — the content filter will block it and break the session. This is Rule 9 + the user's explicit directive.
   - **For (2):** Capture layers record; analysis layers decide. Never pre-filter at capture time — the filter is always a shape assumption that will miss something. Recorded in the driver's docstring as a standing principle.
   - **For (3):** Set `tasks/current.md` at session start (Step 3) and update it when the task changes — not "after the work is done."
+
+
+---
+## 2026-07-31 — Super Z / glm-5.2 (Session 8)
+- **Problem:** My `sync_context.py` had a version-comparison bug: it checked only `local_major == pkg_major` before attempting `context-sync update`, not the full version ordering. When the project (0.3.0) was ahead of the package (0.2.0) — same MAJOR (0), but package is OLDER — the script proceeded to call `update`, which correctly refused to downgrade, then tried to `git commit` the (non-existent) changes, which failed with "nothing to commit, working tree clean."
+- **Cost:** ~2 min — the `git commit` failure was caught in the script output, I diagnosed it from the "refusing to downgrade" line, and wrote up the finding. No data lost; no wrong commit made.
+- **Cause:** I copied the protocol's "same-MAJOR is safe to update" rule verbatim without considering the reverse case (package older than project within the same MAJOR). The protocol's `context-sync update` handles it correctly (refuses to downgrade); my wrapper script's precondition was too loose.
+- **Workaround / fix:** Diagnosed from the output. The script's logic should be: only call `update` if `pkg_version > local_version` (full semver, not just MAJOR). I did NOT patch the script in-place this session — the script's incorrect branch was never committed (it's in `/home/z/my-project/scripts/sync_context.py`, outside the repo), and the correct behavior (refuse to downgrade) already happened via `context-sync update` itself. If reusing the script, fix the precondition first.
+- **Prevent next time:** when wrapping `context-sync update`, mirror its exact precondition (`ver_cmp` says "newer"), not a weaker MAJOR-only check. The protocol's `cmd_update` in `context-sync` already has the correct logic — delegate to it, don't re-implement.

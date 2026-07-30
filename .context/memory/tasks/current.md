@@ -12,9 +12,8 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 7 (2026-07-30) landed capture-all + websocket +
-  target-agnostic exploration, ran the proxied capture (100 decodings, 90
-  high-conf, 60-language dictionary), and cleared. See `agents/sessions.md`
-  Session 7 and `reviews/2026-07-30-proxied-capture.md`. Next items in
-  `tasks/backlog.md`.
+- **Task:** none — Session 8 (2026-07-31) committed the S7 bookkeeping +
+  ran the .context sync (found project 0.3.0 ahead of package 0.2.0 —
+  logged as a flaw; user action: push 0.3.0 to the package upstream).
+  See `agents/sessions.md` Session 8 and `reviews/2026-07-31-context-sync.md`.
 - **Status:** idle
