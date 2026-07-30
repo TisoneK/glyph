@@ -10,6 +10,31 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.4.0 — 2026-07-30
+
+**The Windows release.** The tool no longer assumes a POSIX shell. Windows
+agents run PowerShell, not `sh`, so a `sh`-only `context-sync` failed at
+session startup (`verify`/`status`) with no fallback. This adds a
+PowerShell port of the session commands.
+
+- **`core/bin/context-sync.ps1` (PowerShell port):** covers the project-mode
+  commands an agent hits inside a session — `status`, `verify`, `update`,
+  `rollback`, `lock`. Requires PowerShell 5.1+ (`pwsh` or Windows
+  PowerShell). Invoke as
+  `pwsh -File .context/core/bin/context-sync.ps1 <cmd>`; the `--major`
+  update gate is the `-Major` switch. Byte-compatible with the `sh` tool's
+  `MANIFEST.sha256` (identical SHA-256 hashes, forward-slash paths), so a
+  core verified on one platform verifies on the other.
+- **Package-mode commands stay `sh`-only:** `manifest`, `bootstrap`, and
+  `harvest` are not ported — the maintainer runs them from a package clone
+  on macOS/Linux. The `.ps1` prints a pointer to the `sh` script if asked
+  for one of them.
+- **Docs:** `sh …/context-sync <cmd>` invocations across the kickoff,
+  QUICKSTART, and schema now show the PowerShell equivalent for Windows.
+- **Migration from 0.3.x:** none. The port is additive; existing projects
+  gain `context-sync.ps1` on their next `update`. macOS/Linux behavior is
+  unchanged.
+
 ## 0.3.0 — 2026-07-21
 
 **The harvest release.** Closes the upstream loop the `flaws/` directory

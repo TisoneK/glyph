@@ -60,7 +60,8 @@ core/
 ├── CHANGELOG.md         # one entry per release + migration notes
 ├── MANIFEST.sha256      # checksums of every core file — integrity check
 ├── bin/
-│   └── context-sync     # status / verify / update / rollback / bootstrap
+│   ├── context-sync     # POSIX-sh: status / verify / update / rollback / bootstrap
+│   └── context-sync.ps1 # PowerShell port (Windows): status / verify / update / rollback / lock
 ├── rules/
 │   ├── ai-engineering-protocol-local.md   # LOCAL agents' edition
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
@@ -76,7 +77,9 @@ core/
 ```
 
 Integrity: `sh .context/core/bin/context-sync verify` checks every core
-file against `MANIFEST.sha256`. A failed verify means core was
+file against `MANIFEST.sha256` (on Windows:
+`pwsh -File .context/core/bin/context-sync.ps1 verify` — the port shares
+the same manifest). A failed verify means core was
 hand-edited or corrupted — restore it (`context-sync rollback` or
 `git checkout` of the last good commit) and log a flaw. Never "fix"
 core in place inside a project.
