@@ -3,7 +3,17 @@
 <!-- Generated at bootstrap from .context/core/templates/AGENTS.md.
 Refreshed on core updates (fill <PROJECT_NAME> again). Optionally also
 copied to CLAUDE.md and .github/copilot-instructions.md so tools that
-auto-load those paths get the same digest. -->
+auto-load those paths get the same digest.
+
+The "Core + Memory at a glance" section below was added by Session 2
+(2026-07-30) to give tier-1 agents a fast orientation map of the two
+zones without first having to read .context/README.md and the schema.
+It is project-owned documentation (the root AGENTS.md is NOT auto-
+refreshed by `context-sync update` — only `.context/README.md` is), so
+custom additions survive core bumps. If a future core release changes
+the zone layout, the file modes, or the fact scopes, regenerate this
+file from .context/core/templates/AGENTS.md and re-add the section by
+hand. -->
 
 This repo uses the `.context/` protocol: persistent agent memory plus a
 vendored copy of the full workflow, committed to git. **Before doing any
@@ -53,3 +63,90 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context/core/schemas/context-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context/memory/overrides/rules.md` (they win over the edition).
+
+---
+
+## Core + Memory at a glance
+
+The `.context/` directory has **two zones**. Memorize the boundary —
+it is the entire sync model.
+
+| Zone | Path | Owner | Agents may write? | How it changes |
+|---|---|---|---|---|
+| **core/** | `.context/core/` | the protocol package | **Never. Not one byte.** | Only via `context-sync update` (whole-tree, version-stamped, memory untouched) |
+| **memory/** | `.context/memory/` | this project | Yes — per each file's write mode | Normal session work, committed with the project |
+
+### Zone 1 — `core/` (read-only reference, vendored at version 0.3.0)
+
+```
+core/
+├── VERSION              # 0.3.0  (semver of this core tree)
+├── CHANGELOG.md         # one entry per release + migration notes
+├── MANIFEST.sha256      # checksums — `context-sync verify` checks every file
+├── bin/context-sync     # POSIX sh, 8 commands (5 project + 3 package)
+├── rules/               # ai-engineering-protocol.md (cloud) + -local.md (IDE)
+├── roles/               # overlays: feature-engineer, reviewer, security-auditor, docs-agent
+├── schemas/             # context-schema.md (authoritative) + context.schema.json (mirror)
+└── templates/           # AGENTS.md, context-README.md, kickoff.md, memory/ stub tree
+```
+
+`context-sync` commands (project mode — run as
+`sh .context/core/bin/context-sync <cmd>`):
+
+- `status` — local core version + best reachable update source (sibling clone, `CONTEXT_PKG`, or path arg).
+- `verify` — hash every core file against `MANIFEST.sha256`. On success, refresh `memory/core.lock`. On failure (exit 3): `rollback`, log a flaw, continue.
+- `update [SOURCE] [--major]` — atomically swap `core/` from a package source. Same-MAJOR is safe; MAJOR needs `--major`. **Never touches `memory/`.**
+- `rollback [VERSION]` — restore `core/` from this project's git history (default: the version in `memory/core.lock`).
+- `lock` — record the current verified core version in `memory/core.lock`.
+
+A protocol improvement belongs in `memory/flaws/log.md` (it flows
+upstream via `context-sync harvest` and comes back in a future core
+release) — **never patched into the vendored copy**.
+
+### Zone 2 — `memory/` (this project's living memory)
+
+| Path (under `memory/`) | Mode | Scope | Holds |
+|---|---|---|---|
+| `agents/sessions.md` | append-only | project | One entry per session: agent, model, task, commits, outcome |
+| `tasks/current.md` | overwrite | project | The one task in progress — **doubles as the concurrency lock** |
+| `tasks/backlog.md` | append-only | project | Open items for future sessions |
+| `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
+| `flaws/log.md` | append-only | project→package | Friction with the `.context/` system itself; flows upstream via `harvest` |
+| `inefficiencies/log.md` | append-only | project | Friction with the project's code/env/deps. Mark `Upstream: candidate` for protocol-level friction worth harvesting |
+| `reviews/YYYY-MM-DD-*.md` | new file per session | project | Session reports — commit as `docs(review):` |
+| `workflows/active.md` | overwrite | project | Standing session parameters; protocol recorded "by agent type" (both editions, never one) |
+| `system/environments.md` | update-in-place | **machine** | One block per machine, keyed by its "Identify by" line |
+| `system/ai-models.md` | update-in-place | **agent-model** | Registry + observations per agent/model |
+| `user/identity.md` | update-in-place | user | Who the user is |
+| `user/preferences.md` | update-in-place | user | Standing preferences, each bullet with provenance |
+| `overrides/rules.md` | update-in-place | project | Project-local protocol adjustments — beat the edition (except secrets/append-only). Tag `[core-defect]` or `[project-local]` |
+| `core.lock` | overwrite (by `context-sync` only) | project | Last-known-good core version + when verified |
+| `secrets/<slug>` | local-only | machine | One secret per file; line 1 = value. Self-gitignored, never travels |
+
+**Five write modes:** append-only · overwrite · update-in-place · generated · local-only.
+**Five fact scopes:** project · agent-type · machine · agent-model · user.
+
+**Scope contamination is the #1 multi-agent failure mode.** Your
+edition comes from YOUR agent type at session start — never from
+memory. A machine-scoped block applies only where its "Identify by"
+matches. PAT steps exist only in the cloud edition; a local agent
+that finds PAT instructions in memory ignores them and logs a flaw.
+When writing, ask: "would this sentence be wrong for an agent of the
+other type, on another machine?" If yes, key it to its scope or don't
+write it.
+
+### The three-tier translation layer (how weaker agents consume this)
+
+1. **This file** (`AGENTS.md` at the project root, ~60–100 lines) —
+   the floor. An agent that reads nothing else still learns where
+   memory lives, what it must never write to, and where to start.
+2. **`.context/kickoff.md`** — the front door: typed entry steps that
+   route by agent type and point into `core/rules/`.
+3. **The full edition in `core/rules/`** — the complete instruction
+   set for agents that can hold it (~986 lines cloud / ~976 lines local).
+
+Each tier links down to the next; no tier contradicts another because
+all three are rendered from the same core version. A weak agent
+following only tier 1 does less, but nothing **wrong** — it cannot
+clobber `core/`, cannot miss the entry point, and cannot pick the wrong
+edition.
