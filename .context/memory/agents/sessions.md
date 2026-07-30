@@ -117,3 +117,32 @@ full root-cause + fix narrative.
 - **Outcome:** done — (1) S7 bookkeeping committed + pushed (append-only + secret-scan clean). (2) Sync: `verify` OK (0.3.0); cloned the package upstream (`github.com/TisoneK/.context.git`) as a sibling via persisted script; `status` revealed the **project (0.3.0) is ahead of the package upstream (0.2.0)** — the 0.3.0 "harvest release" was developed in this project but never pushed to the package. `context-sync update` correctly refused to downgrade. No core update applied. The divergence is logged as a flaw (protocol has no project-ahead-of-package behavior + no `publish` command). Action for the user (package maintainer): push the 0.3.0 release to the package upstream.
 - **Open items:** push 0.3.0 to the package upstream (user); the flaw will only flow upstream via `harvest` once the package is at 0.3.0+ (chicken-and-egg). Remaining backlog unchanged (DuckDB, Daraja, 3.13+Pydantic, Label Studio, reach /LineFeed/, tighten sibling-prefix).
 - **Report:** .context/memory/reviews/2026-07-31-context-sync.md
+
+
+### Update (2026-07-31, same session — 0.4.0 sync landed)
+
+The 'Outcome' above said 'no core update applied' — that was true at the
+time (the package upstream was 0.2.0, project was 0.3.0, update refused
+to downgrade). The user then pushed 0.4.0 to the package upstream and
+said 'you can now sync.' Re-ran the sync:
+
+- Refreshed the package clone (PAT-authed fetch, PAT stripped after).
+- `context-sync status` now reported: source 0.4.0 — UPDATE AVAILABLE
+  (same MAJOR: safe to 'update').
+- `context-sync update` replaced .context/core/ (whole-tree, memory
+  untouched) — 0.3.0 -> 0.4.0. Verify passed.
+- Committed as `e19ef89` `chore(context): update core to 0.4.0` + pushed.
+
+0.4.0 is 'the Windows release' — adds `core/bin/context-sync.ps1`
+(PowerShell port) so Windows agents can run session commands. Relevant
+to the user's Windows/3.13 preference. The update also changed
+`templates/kickoff.md` materially (added Windows PowerShell instructions
+to the Entry Steps); .context/kickoff.md regenerated from the new
+template with Project Facts preserved (this commit). The root AGENTS.md
+template did NOT change, so no regen needed there.
+
+The 'project ahead of package' flaw logged earlier (flaws/log.md S8) is
+now RESOLVED for this project — the package is at 0.4.0, the project is
+at 0.4.0, sync direction is package -> project again as designed. The
+flaw itself (protocol has no project-ahead-of-package behavior) remains
+open for the package to address.

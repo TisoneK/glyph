@@ -99,3 +99,24 @@ Suggested package fixes: (1) `status` should WARN on project-ahead-of-package; (
 - **Secret scan:** clean — the scanner read the proxy password + PAT from gitignored files and checked all committed files; 0 leaks.
 - **Two-surfaces rule:** S7 bookkeeping commit (`fcaa58d`) is `.context`-surface + `.gitignore` (`chore(context):`); no product code mixed.
 - **Persisted-script approach:** all work via `/home/z/my-project/scripts/*.py` (Rule 9 + user directive). No bash one-liners with credentials.
+
+
+---
+
+## Correction (2026-07-31, same session — 0.4.0 sync landed)
+
+The Executive Summary and §3 above said 'no core update applied' and
+logged a 'project ahead of package' flaw. That was accurate at the time
+of writing (package upstream was 0.2.0, project was 0.3.0). The user
+then pushed 0.4.0 to the package upstream and authorized the sync.
+
+**What landed:**
+- `context-sync status` (with the refreshed package clone): `source: 0.4.0 — UPDATE AVAILABLE (same MAJOR: safe to 'update')`.
+- `context-sync update`: replaced `.context/core/` (whole-tree, memory untouched), 0.3.0 → 0.4.0. `verify` passed.
+- Commit `e19ef89` `chore(context): update core to 0.4.0` pushed.
+- 0.4.0 is "the Windows release" — adds `core/bin/context-sync.ps1` (PowerShell port of `context-sync` for Windows agents). Directly relevant to the user's Windows/Python 3.13 preference (`user/preferences.md`).
+- `templates/kickoff.md` changed materially (added Windows PowerShell instructions to Step 1). `.context/kickoff.md` regenerated from the 0.4.0 template with Project Facts preserved (this commit). The root `AGENTS.md` template did not change — no regen needed.
+
+**Flaw status:** the 'project ahead of package' flaw (flaws/log.md S8) is RESOLVED for this project — package and project are both at 0.4.0, sync direction is package → project as designed. The underlying protocol gap (no `publish` command, `status` doesn't warn on project-ahead) remains open for the package to address.
+
+**My earlier diagnosis was correct but incomplete.** I correctly identified that the package was behind (0.2.0 vs 0.3.0) and that the 0.3.0 release hadn't been pushed. What I missed: the user was actively developing 0.4.0 on their Windows machine and had not yet pushed it. Once they pushed, the sync proceeded cleanly. The lesson: 'no update source reachable' / 'source is older' can mean 'the maintainer hasn't pushed yet,' not 'the protocol is broken.' Log the flaw, but also just ask the user.

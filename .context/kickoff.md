@@ -14,7 +14,7 @@ Generation rules for the bootstrapping agent:
    that stay symbolic are the token forms
    (`<..._WITH_TOKEN_IF_PRIVATE>`, `${GIT_TOKEN}`) — never a real token.
    After filling, scan:
-   `grep -n "<PROJECT\|<GIT_\|<LIVE_\|<REPO>" .context/kickoff.md` —
+   `grep -n "<PROJECT\|<GIT_\|<LIVE_\|glyph" .context/kickoff.md` —
    hits are allowed only inside this comment and in the token forms.
 2. Do NOT copy session parameters here — they live in
    memory/workflows/active.md (single source of truth). This file only
@@ -111,12 +111,22 @@ sh .context/core/bin/context-sync verify    # integrity: core matches its MANIFE
 sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ```
 
+On **Windows** (no POSIX shell) run the PowerShell port instead — same
+commands, same output:
+
+```powershell
+pwsh -File .context/core/bin/context-sync.ps1 verify
+pwsh -File .context/core/bin/context-sync.ps1 status
+```
+
 - `verify` fails → core was hand-edited or corrupted. Run
-  `sh .context/core/bin/context-sync rollback`, log a flaw in
+  `sh .context/core/bin/context-sync rollback` (Windows:
+  `pwsh -File .context/core/bin/context-sync.ps1 rollback`), log a flaw in
   `memory/flaws/log.md`, continue on the restored core.
 - `status` reports a newer core with the **same MAJOR** → run
-  `sh .context/core/bin/context-sync update` (it replaces `core/` only;
-  memory is never touched), commit as
+  `sh .context/core/bin/context-sync update` (Windows: the `.ps1` with
+  `update`) — it replaces `core/` only,
+  memory is never touched — then commit as
   `chore(context): update core to <version>`, and read the new
   `core/CHANGELOG.md` entries.
 - A **MAJOR** bump, or no update source reachable → note it in your
