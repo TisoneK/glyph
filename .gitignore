@@ -17,3 +17,9 @@ dist/
 *.egg-info/
 .venv/
 venv/
+
+# Session 6 live-capture scratch artifacts (catalog DBs with capture-session-specific URLs/headers)
+scripts/capture-out/
+*.db
+# Reusable scripts ARE tracked; their output is not.
+.venv-*/
