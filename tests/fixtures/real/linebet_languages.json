@@ -1,0 +1,247 @@
+{
+  "_source": "linebet.com https://linebet.com/bff-api/config/group/get?groups=b.core,d.core,d.customize,b.other,d.application,d.auth,d.banner,d.betting,d.dicts,d.footer,d.global,d.header,d.information,d.other,d.reg,d.responsible,d.support,d.thirdparty,d.toto,d.white_feature,d.common,d.cyber,d.modules,d.promo,d.host,d.office,d.coupon,d.layout,d.boolean&lang=en&d=linebet.com&g=KE&p=650 (proxied live capture 2026-07-30, Session 7)",
+  "_note": "Real language-code -> language-name dictionary. Public data, no redaction needed.",
+  "_path": "$.-1009",
+  "languages": [
+    {
+      "code": "aa",
+      "title": "Badînî"
+    },
+    {
+      "code": "al",
+      "title": "Shqip"
+    },
+    {
+      "code": "am",
+      "title": "አማርኛ"
+    },
+    {
+      "code": "ar",
+      "title": "العربية"
+    },
+    {
+      "code": "az",
+      "title": "Azərbaycan dili"
+    },
+    {
+      "code": "bd",
+      "title": "বাংলা"
+    },
+    {
+      "code": "bg",
+      "title": "Български"
+    },
+    {
+      "code": "br",
+      "title": "Português (Brasil)"
+    },
+    {
+      "code": "bs",
+      "title": "Bosanski"
+    },
+    {
+      "code": "cn",
+      "title": "汉语"
+    },
+    {
+      "code": "cz",
+      "title": "Český"
+    },
+    {
+      "code": "en",
+      "title": "English"
+    },
+    {
+      "code": "es",
+      "title": "Español"
+    },
+    {
+      "code": "et",
+      "title": "Eesti keel"
+    },
+    {
+      "code": "fi",
+      "title": "Suomi"
+    },
+    {
+      "code": "fr",
+      "title": "Français"
+    },
+    {
+      "code": "ge",
+      "title": "ქართული ენა"
+    },
+    {
+      "code": "gr",
+      "title": "Ελληνικά"
+    },
+    {
+      "code": "he",
+      "title": "עברית"
+    },
+    {
+      "code": "hi",
+      "title": "हिन्दी"
+    },
+    {
+      "code": "hk",
+      "title": "廣東話"
+    },
+    {
+      "code": "hr",
+      "title": "Hrvatski jezik"
+    },
+    {
+      "code": "hu",
+      "title": "Magyar nyelv"
+    },
+    {
+      "code": "hy",
+      "title": "հայերեն"
+    },
+    {
+      "code": "id",
+      "title": "Bahasa Indonesia"
+    },
+    {
+      "code": "ir",
+      "title": "زبان فارسی"
+    },
+    {
+      "code": "it",
+      "title": "Italiano"
+    },
+    {
+      "code": "jp",
+      "title": "日本語"
+    },
+    {
+      "code": "km",
+      "title": "ភាសាខ្មែរ"
+    },
+    {
+      "code": "kr",
+      "title": "한국어"
+    },
+    {
+      "code": "ku",
+      "title": "Kurmancî"
+    },
+    {
+      "code": "ku",
+      "title": "سۆرانی"
+    },
+    {
+      "code": "kz",
+      "title": "Қазақ тілі"
+    },
+    {
+      "code": "lt",
+      "title": "Lietuvių kalba"
+    },
+    {
+      "code": "lv",
+      "title": "Latviešu valoda"
+    },
+    {
+      "code": "mk",
+      "title": "Македонски јазик"
+    },
+    {
+      "code": "mn",
+      "title": "Монгол хэл"
+    },
+    {
+      "code": "ms",
+      "title": "Bahasa Melayu"
+    },
+    {
+      "code": "mx",
+      "title": "Español mexicano"
+    },
+    {
+      "code": "nb",
+      "title": "Norsk"
+    },
+    {
+      "code": "ne",
+      "title": "नेपाली"
+    },
+    {
+      "code": "pl",
+      "title": "Polski"
+    },
+    {
+      "code": "pt",
+      "title": "Português"
+    },
+    {
+      "code": "ro",
+      "title": "Română"
+    },
+    {
+      "code": "rs",
+      "title": "Српски"
+    },
+    {
+      "code": "ru",
+      "title": "Русский"
+    },
+    {
+      "code": "si",
+      "title": "සිංහල"
+    },
+    {
+      "code": "sk",
+      "title": "Slovenčin"
+    },
+    {
+      "code": "so",
+      "title": "Af Soomaali"
+    },
+    {
+      "code": "sw",
+      "title": "Kiswahili"
+    },
+    {
+      "code": "ta",
+      "title": "தமிழ்"
+    },
+    {
+      "code": "th",
+      "title": "ภาษาไทย"
+    },
+    {
+      "code": "tj",
+      "title": "Tоҷикӣ"
+    },
+    {
+      "code": "tr",
+      "title": "Türkçe"
+    },
+    {
+      "code": "tw",
+      "title": "繁體中文"
+    },
+    {
+      "code": "ua",
+      "title": "Українська мова"
+    },
+    {
+      "code": "ur",
+      "title": "اُردُو‎"
+    },
+    {
+      "code": "uz",
+      "title": "Oʻzbek tili"
+    },
+    {
+      "code": "vi",
+      "title": "Tiếng Việt"
+    },
+    {
+      "code": "zu",
+      "title": "Zazaki"
+    }
+  ]
+}

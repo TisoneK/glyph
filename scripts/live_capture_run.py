@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -39,6 +41,10 @@ def main() -> int:
     ap.add_argument("--out", default="scripts/capture-out", help="dir to dump artifacts")
     ap.add_argument("--wait", default=None, help="CSS selector to wait for")
     ap.add_argument("--timeout", type=int, default=20000, help="nav timeout ms")
+    ap.add_argument("--proxy", default=os.environ.get("LIVE_PROXY"),
+                    help="upstream proxy URL (http://user:pass@host:port). "
+                         "Defaults to $LIVE_PROXY so creds never land in "
+                         "shell history or process listings.")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -47,12 +53,20 @@ def main() -> int:
     print(f"=== Glyph live capture + pipeline run ===")
     print(f"target: {args.url}")
     print(f"out:    {out}")
+    if args.proxy:
+        # Never echo credentials — show only scheme://host:port
+        m = re.match(r"([a-z0-9]+://)([^@]+@)?(.+)", args.proxy)
+        shown = (m.group(1) + m.group(3)) if m else "(unparseable)"
+        print(f"proxy:  {shown}  (credentials hidden)")
+    else:
+        print(f"proxy:  none (direct egress)")
     print()
 
     print("[1/4] live capture (headless chromium)...")
     cat = Catalog(path=str(out / "catalog.db"))
     try:
-        capture_url(cat, args.url, wait_selector=args.wait, timeout_ms=args.timeout)
+        capture_url(cat, args.url, wait_selector=args.wait,
+                    timeout_ms=args.timeout, proxy=args.proxy)
     except Exception as e:
         print(f"  CAPTURE FAILED: {type(e).__name__}: {e}")
         print("  (if this is a bot-protection block, we stop here per ADR-1)")
