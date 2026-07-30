@@ -11,8 +11,11 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 4 (2026-07-30) built the `glyph-re` base system and
-  cleared. See `agents/sessions.md` Session 4 and
-  `reviews/2026-07-30-build-base-system.md`. Next backlog items in `tasks/backlog.md`.
-- **Status:** idle
+- **Session:** 2026-07-30 — Claude Code / claude-opus-4-8 (Session 5)
+- **Task:** Build the human-in-the-loop (HITL) review workflow for Rosetta's
+  low-confidence dictionary rows — catalog persistence of review decisions
+  (confirm/edit/reject), a `glyph.review` module, and `glyph review` CLI
+  (interactive + non-interactive/scriptable). Completes the "tool narrows,
+  human confirms" loop and enables the deferred real-world validation.
+  Stays on 3.9/dataclasses/stdlib (retarget deferred per user).
+- **Status:** in-progress
