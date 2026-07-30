@@ -1,72 +1,189 @@
 # Glyph
 
-A standalone, general-purpose **reverse-engineering toolkit**. Point it at a target —
-a web app, a JSON/gRPC API, a mobile app, a data feed — and it does the mechanical work
-of discovering, capturing, decoding, and documenting that target's surface, so a human
-only has to confirm the ambiguous parts.
+> Point Glyph at a target — a web app, a JSON API, a mobile app — and it captures,
+> catalogs, and **decodes** that target's surface: turning opaque codes, ids, and enums
+> into documented meaning, so you only confirm the ambiguous parts.
 
-The name: the tool decodes a target's opaque symbols (codes, ids, enums) into meaning,
-the way a glyph is a mark that carries meaning once you can read it.
+Reverse-engineering an unfamiliar API is the same manual loop every time: capture the
+traffic, work out the endpoints, guess the schemas, and stare at the UI to figure out what
+`status: 3` actually *means*. Glyph automates the mechanical majority of that and collapses
+the semantic part — "what does this code mean?" — into a quick confirm step.
 
-**Status:** early alpha — the base package is built and tested. Full scope, technique
-catalog, and research live in **[RESEARCH.md](RESEARCH.md)** and
-**[RESEARCH-DEEP-DIVE.md](RESEARCH-DEEP-DIVE.md)**.
+The name says the goal: a glyph is a mark that carries meaning once you can read it. Glyph
+reads a target's marks.
+
+## Features
+
+- **Capture from anywhere** — ingest a HAR exported from browser DevTools, mitmproxy,
+  Charles, or Proxyman. No proxy or browser needed for the core workflow.
+- **Automatic cataloging** — collapses concrete URLs into endpoints
+  (`/users/123` → `/users/{id}`), dedupes, and stores everything in one queryable catalog.
+- **Schema inference** — a JSON Schema per endpoint, with enum-like fields flagged for you.
+- **Rosetta decoding** — the centerpiece: correlates opaque API codes with the
+  human-readable labels they map to, emitting a `code → meaning` dictionary with confidence
+  scores and evidence.
+- **Human-in-the-loop review** — confirm, edit, or reject uncertain decodings; your
+  decisions become ground truth and survive re-runs.
+- **OpenAPI export** — generate an OpenAPI 3 spec with decoded meanings annotated inline.
+- **Surface analysis** — identify the backend stack, authentication and request-signing
+  schemes, and rate-limiting / bot-management defenses.
+- **Drift tracking** — diff two captures over time to catch not just shape changes but
+  *meaning* changes.
+- **Mobile triage** — statically mine endpoints and URLs out of an APK or IPA.
 
 ## Install
 
-The base package is pure-stdlib — no third-party dependencies required:
+Requires Python 3.9+. The core is pure-Python with no required dependencies:
 
 ```bash
 pip install -e .
 ```
 
-Optional extras: `pip install -e '.[live]'` (mitmproxy + Playwright live capture),
-`.[schema]` (genson), `.[analytics]` (DuckDB), `.[dev]` (everything + pytest).
+Optional extras:
+
+| Extra | Adds |
+|-------|------|
+| `live` | live capture via mitmproxy + Playwright |
+| `schema` | higher-fidelity schema inference (genson) |
+| `analytics` | columnar catalog store (DuckDB) |
+| `dev` | everything above, plus pytest |
+
+```bash
+pip install -e '.[live]'
+```
 
 ## Quickstart
 
-Glyph works on **any** target — capture a session as a HAR (from browser devtools,
-mitmproxy, Charles, Proxyman), then run the pipeline:
+Record a session against a target you're authorized to analyze — in your browser,
+DevTools → Network → *Export HAR* — then:
 
 ```bash
-glyph run har session.har          # capture -> catalog -> schema -> rosetta
-glyph dict                         # the decoded code -> meaning dictionary
-glyph dict --review                # only rows needing a human confirm
-glyph codegen --out openapi.json   # OpenAPI 3 spec (meanings annotated inline)
-glyph fingerprint                  # backend family from response signals
-glyph auth                         # auth schemes + request signing
-glyph gating                       # rate-limit + bot-management signals
-glyph drift before.db after.db     # what changed between two snapshots
-glyph mobile app.apk               # mine endpoints/URLs from a mobile package
+glyph run har session.har         # capture → catalog → schema → rosetta
+glyph dict                        # see the decoded code → meaning dictionary
+glyph review                      # confirm/edit/reject the uncertain rows
+glyph codegen --out openapi.json  # export a documented OpenAPI 3 spec
 ```
 
-Every catalog command takes `--db PATH` (default `glyph.db`); analysis commands take
-`--json`. The pipeline is a set of composable stages over one shared SQLite catalog
-(**ADR-2**), each importable as a library (`from glyph.rosetta import build_dictionary`).
+That's the golden path. Every command that reads or writes a catalog takes `--db PATH`
+(default `glyph.db`).
 
-## Pipeline
+## How Rosetta works
 
-| Stage | Package | What it does |
-|-------|---------|--------------|
-| capture | `glyph.capture` | ingest observed traffic (HAR; optional live proxy/browser) |
-| catalog | `glyph.catalog` | the shared SQLite store every stage reads/writes |
-| schema | `glyph.schema` | infer a JSON Schema per endpoint, flag enum candidates |
-| **rosetta** | `glyph.rosetta` | **decode opaque codes -> meaning with confidence scores** |
-| fingerprint | `glyph.fingerprint` | identify the backend family |
-| auth | `glyph.auth` | classify authentication + request signing |
-| gating | `glyph.gating` | profile rate-limiting + bot-management (observation only) |
-| codegen | `glyph.codegen` | emit an OpenAPI 3 spec |
-| drift | `glyph.drift` | diff two catalog snapshots (shape **and** meaning) |
-| mobile | `glyph.mobile` | static endpoint/URL mining from an app package |
+Most APIs return codes whose meaning lives only in the rendered UI. Glyph recovers that
+mapping automatically, using several strategies and scoring each result:
 
-> **A note on security and payment surfaces** — Glyph defeats anti-bot, CAPTCHA,
-> and access-control systems as a natural consequence of decoding them. It handles
-> payment-integration surfaces at the protocol/API level (tokenised payloads, not
-> raw card values). Credential and card values are never stored or logged. Use it only
-> against targets you are authorized to analyze.
+- **Sibling fields** — an object carrying both `{"status": 3, "status_label": "Shipped"}`
+  (or the generic `{"type": 2, "name": "Premium"}`) hands you the mapping directly.
+- **Rendered labels** — a code that appears in the DOM next to its label, such as
+  `<span data-status="3">Shipped</span>`, harvested at capture time.
+- **References** — a `user_id` that resolves to the matching user object's name elsewhere
+  in the catalog.
 
-## Working with this repo
+Each candidate gets a confidence score, and agreement between strategies raises it. Anything
+below the bar is queued for review rather than asserted:
 
-This repo uses the `.context/` protocol — persistent agent memory plus a vendored copy of
-the workflow, committed to git. Any agent starts at
-**[.context/kickoff.md](.context/kickoff.md)**.
+```text
+$.orders[].status   3 → "Shipped"   conf 0.97  sibling
+$.orders[].status   1 → "Pending"   conf 0.95  dom_attr
+$.comments[].user_id 5 → "Alice"    conf 0.85  reference   [review]
+```
+
+Glyph narrows the problem; you make the final call on the ambiguous cases:
+
+```bash
+glyph review                     # interactive: [c]onfirm [e]dit [r]eject [s]kip
+glyph review --auto-confirm 0.9  # trust the model above a threshold, review the rest
+glyph review --stats             # progress
+```
+
+Confirmed and edited entries become ground truth — a later `glyph rosetta` never overwrites
+them.
+
+## Commands
+
+| Command | Purpose |
+|---------|---------|
+| `glyph run har <file>` | run the full pipeline on a HAR |
+| `glyph capture har <file>` | ingest traffic only |
+| `glyph schema` | infer schemas and flag enum candidates |
+| `glyph rosetta` | decode codes → meaning |
+| `glyph dict [--review]` | show the decoded dictionary |
+| `glyph review` | confirm / edit / reject decodings |
+| `glyph codegen [--out FILE]` | emit an OpenAPI 3 spec |
+| `glyph fingerprint` | identify the backend stack |
+| `glyph auth` | authentication and request signing |
+| `glyph gating` | rate-limiting and bot-management signals |
+| `glyph drift <a.db> <b.db>` | diff two catalog snapshots |
+| `glyph mobile <app.apk>` | mine endpoints from a mobile package |
+| `glyph catalog` | summarize the catalog |
+
+Analysis commands accept `--json` for machine-readable output.
+
+## Use it as a library
+
+Every stage is importable — the catalog is the integration point:
+
+```python
+from glyph.catalog import Catalog
+from glyph.capture import ingest_har
+from glyph.schema import infer_all
+from glyph.rosetta import build_dictionary
+
+cat = Catalog("glyph.db")
+ingest_har(cat, "session.har")
+infer_all(cat)
+build_dictionary(cat)
+
+for entry in cat.dictionary():
+    print(entry.json_path, entry.code, "→", entry.meaning)
+```
+
+## Architecture
+
+Glyph is a set of composable stages over one shared catalog. Each stage is an independent
+subpackage; the catalog is a plain SQLite database, with a promotion path to DuckDB or
+Postgres for larger workloads.
+
+```
+capture → catalog → schema → rosetta → review
+                       ↘ fingerprint · auth · gating · codegen · drift · mobile
+```
+
+```
+glyph/
+├── catalog/     shared store (models, SQLite, URL normalization)
+├── capture/     HAR ingestion + label harvesting (+ optional live backends)
+├── schema/      JSON Schema inference + enum detection
+├── rosetta/     code↔meaning correlation, confidence, dictionary
+├── review/      human-in-the-loop confirmation
+├── fingerprint/ · auth/ · gating/ · codegen/ · drift/ · mobile/
+└── cli.py       the `glyph` command
+```
+
+## Status
+
+Glyph is early and evolving. The HAR-based pipeline — capture, catalog, schema, Rosetta
+decoding, review, and OpenAPI export — works today with no external dependencies. Live
+capture (mitmproxy / Playwright) ships as an optional backend. Interfaces may still change
+as Glyph is exercised against more real targets.
+
+## Responsible use
+
+Glyph decodes access-control, anti-bot, CAPTCHA, and payment surfaces as a natural
+consequence of documenting them. It works at the protocol / API level and never stores or
+logs credential or card values. Use it only against targets you own or are explicitly
+authorized to analyze, and respect their terms and rate limits.
+
+## Development
+
+```bash
+pip install -e '.[dev]'
+pytest
+```
+
+The codebase is deliberately modular — one subpackage per stage, each independently
+testable. Design background lives in [RESEARCH.md](RESEARCH.md).
+
+## License
+
+MIT.
