@@ -16,9 +16,13 @@ don't remove the line.
       stages (capture, catalog, schema, rosetta, fingerprint, auth, gating, codegen, drift,
       mobile) + CLI, 32 passing tests. See `reviews/2026-07-30-build-base-system.md`.
       Follow-ups tracked as new backlog items below (HITL UI, DuckDB, Splink, live-capture E2E).
-- [ ] **Phase-0 proof** (added 2026-07-29 by Claude Code) — run stages 1–4 against any
-      target with opaque codes + a visible UI; have Rosetta auto-derive its code dictionary
-      and check it reproduces hand-analysis. RESEARCH.md §9. Gate for building the rest.
+- [x] **Phase-0 proof** (added 2026-07-29 by Claude Code; done 2026-07-30 by Super Z / glm-5.2,
+      Session 6) — ran stages 1–4 live against linebet.com/en/line/basketball (headless chromium
+      via `glyph.capture.driver`). Rosetta auto-derived a 104-entry dictionary, 99 high-confidence;
+      spot-checks match hand-analysis (`templateType=14`→Facebook, `13`→Instagram, `9`→Telegram,
+      `17`→X, `3`→Security department, `6`→Queries and suggestions). Locked in as a repeatable
+      integration test (`tests/test_real_world.py`, 12 tests) against a real captured fixture
+      (`tests/fixtures/real/linebet_contacts.json`). See Session 6 report.
 - [x] **Decide repo/service split + catalog store** (added 2026-07-29 by Claude Code;
       done 2026-07-30 by Claude Code, ADR-2) — resolved: monorepo, stages as packages,
       catalog as a library, SQLite → DuckDB → Postgres. See `plans/decisions.md` ADR-2.
@@ -40,20 +44,31 @@ don't remove the line.
       Claude Code) — current model is a hand-rolled noisy-OR over sibling/DOM/reference
       strategies. Add probabilistic matching (Splink, §4.6) and correlation for codes that
       neither sit next to a label nor appear in the DOM. Medium.
-- [ ] **Live-capture end-to-end run** (added 2026-07-30 by Claude Code) — `capture/mitm.py`
-      + `capture/driver.py` are written but only import-tested (the `live` extra isn't
-      installed). Do a real `playwright install chromium` capture against an authorized
-      target and confirm the DOM-label path decodes end-to-end. Medium.
+- [x] **Live-capture end-to-end run** (added 2026-07-30 by Claude Code; done 2026-07-30 by
+      Super Z / glm-5.2, Session 6) — `playwright install chromium` succeeded in the Z.ai
+      sandbox; `glyph.capture.driver.capture_url` ran live against linebet.com, captured
+      20 flows / 17 endpoints with response bodies + DOM labels, and the full pipeline
+      (catalog → schema → Rosetta) decoded 104 entries end-to-end. Reusable script at
+      `scripts/live_capture_run.py`. Caveat: the headless browser hit a partial block/
+      consent interstitial (`/en/block` referer), so the capture is shallow (20 flows, 7
+      labels) — the full betting-line depth needs a non-blocked session or interaction
+      (scroll, click-to-expand markets) to trigger the events/odds API calls. See Session 6.
 - [ ] **Daraja callback verification recipe** (added 2026-07-30 by Claude Code) — concrete
       early deliverable (RESEARCH-DEEP-DIVE §3g): M-Pesa Daraja doesn't sign callbacks; ship
       a Glyph recipe that documents/verifies the gap. Low-Medium, Kenya-priority.
-- [ ] **Real-world validation of the pipeline (not synthetic)** (added 2026-07-30 by Claude
-      Code) — per the user's testing preference (`user/preferences.md` → Testing): the 32
-      unit tests use hand-authored HARs. Validate against a REAL captured HAR from an
-      authorized target (real DOM, real messy codes) and confirm Rosetta reproduces
-      hand-analysis. Add these as integration tests kept separate from the unit suite. This
-      is the honest "does it work?" gate — do not report unit-test pass rates as real-world
-      evidence. High.
+- [x] **Real-world validation of the pipeline (not synthetic)** (added 2026-07-30 by Claude
+      Code; done 2026-07-30 by Super Z / glm-5.2, Session 6) — validated against a REAL live
+      capture of linebet.com (not a hand-authored HAR). Rosetta reproduced hand-analysis:
+      `templateType` ints → brand/department labels (Facebook, Instagram, Telegram, X,
+      Security department, Queries and suggestions, Customer Support), all spot-checks
+      correct, 99 of 104 entries high-confidence. Locked in as `tests/test_real_world.py`
+      (12 integration tests, kept separate from the unit suite per the backlog item's ask)
+      against `tests/fixtures/real/linebet_contacts.json` (real payload, contact values
+      redacted, code→label structure preserved). Caveat: the capture was shallow (partial
+      block interstitial) and the sibling strategy carried it — the DOM-attribute strategy
+      (Rosetta's thesis centerpiece) was exercised but contributed little because the SPA
+      hadn't fully rendered when the DOM snapshot was taken. Deeper capture + DOM-strategy
+      validation is a follow-up. See Session 6 report.
 - [ ] **Retarget to Python 3.13 + evaluate Pydantic models** (added 2026-07-30 by Claude
       Code) — user prefers 3.13 (Windows-stable) + Pydantic. Package was built 3.9/dataclasses
       as a stopgap. Decide with the user, then: bump `requires-python`, drop the `__future__`

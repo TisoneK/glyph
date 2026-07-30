@@ -12,7 +12,8 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 5 (2026-07-30) built the HITL review workflow and
-  cleared. See `agents/sessions.md` Session 5 and
-  `reviews/2026-07-30-hitl-review-workflow.md`. Next items in `tasks/backlog.md`.
+- **Task:** none — Session 6 (2026-07-30) ran live capture against linebet.com,
+  closed 3 backlog items (Phase-0 proof, Live-capture E2E, Real-world validation),
+  and cleared. See `agents/sessions.md` Session 6 and
+  `reviews/2026-07-30-real-world-validation.md`. Next items in `tasks/backlog.md`.
 - **Status:** idle
