@@ -40,3 +40,33 @@ past entries — append corrections instead.
 - **Outcome:** done — `RESEARCH-DEEP-DIVE.md` at repo root (76 KB, 612 lines, 11 sections); 5 parallel online-research clusters ran (capture+schema+codegen, Rosetta prior art, mobile+native+JS RE, bot-mgmt+payments, competitive landscape — ~13k words of verified research output total); Rosetta validated as novel-as-combination (closest prior art: *Carving UI Tests* ICSE 2023); 4 of 5 RESEARCH.md §11 open questions resolved (repo/service split, catalog store, mobile CI vs device, InjectX handoff deferred to user, naming deferred); Phase-0 proof scoped concretely (~2–3 weeks, stages 1–4 only); Kenya-priority finding: M-Pesa Daraja does not sign callbacks (first-class verification recipe opportunity).
 - **Open items:** M1 (RESEARCH.md §6b JA3→JA4 wording) + M2 (§11 InjecX→InjectX typo) — recommended in deep-dive §9 but left for user approval (RESEARCH.md is the user's canon); N1 (InjectX handoff catalog field) deferred to user; §4.9 research follow-ups (read Carving-UI-Tests PDF, demo Akto/Levo/Salt). The four backlog items from Session 1 stand, now with concrete scope.
 - **Report:** .context/memory/reviews/2026-07-30-glyph-research.md
+
+### Correction (2026-07-30, same session)
+
+The Session 3 entry above (and Session 2's entry) recorded commit SHAs that
+were authored as `Z User <z@container>` — the sandbox's default git identity —
+instead of `Tisone Kironget <tisonkironget@gmail.com>` (the project's Git
+identity per `.context/kickoff.md` Project Facts). I skipped Step 2's
+`git config user.name`/`user.email` lines in both sessions. The user caught
+it after Session 3.
+
+Fix applied this same session: set the correct identity locally, rewrote
+author + committer on the 6 wrong commits with `git filter-branch`, force-
+pushed with `--force-with-lease`. The old SHAs are now stale; the corrected
+SHAs are:
+
+| Old (stale) | Corrected | Message |
+|---|---|---|
+| 52f76c5 | e1689d9 | docs: add Core + Memory at-a-glance section to root AGENTS.md |
+| 944d010 | 586cc67 | docs(review): .context E2E research — core 0.3.0, core+memory modules |
+| c38cb37 | 7db56e6 | chore(context): log Session 2 + record core-defect override |
+| 43ee45f | b3ed937 | docs: add RESEARCH-DEEP-DIVE.md — Glyph research companion (Session 3) |
+| a0b97b7 | 3feaa7c | docs(review): Rosetta prior-art research + Session 3 report |
+| 211e816 | 4cfcd7e | chore(context): log Session 3 + correct model to glm-5.2 |
+
+`origin/main` now shows all 8 commits as `Tisone Kironget <tisonkironget@gmail.com>`.
+The protocol gap that let this happen is logged in `flaws/log.md` (marked
+`Upstream: candidate` — Step 2 should mark the git-config lines as critical
+and a pre-commit quality gate should verify `git config user.email`). See
+also `inefficiencies/log.md` 2026-07-30 (Session 3, correction) for the
+full root-cause + fix narrative.
