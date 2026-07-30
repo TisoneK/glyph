@@ -88,6 +88,7 @@ class DictionaryEntry:
     strategy: str  # how the mapping was derived
     evidence: str  # human-readable justification
     needs_review: bool = False
+    review_state: Optional[str] = None  # None | confirmed | edited | rejected
     id: Optional[int] = None
 
 

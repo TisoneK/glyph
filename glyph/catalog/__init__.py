@@ -12,7 +12,12 @@ from glyph.catalog.models import (
     PageObservation,
 )
 from glyph.catalog.normalize import split_url, template_path
-from glyph.catalog.store import Catalog
+from glyph.catalog.store import (
+    REVIEW_CONFIRMED,
+    REVIEW_EDITED,
+    REVIEW_REJECTED,
+    Catalog,
+)
 
 __all__ = [
     "Catalog",
@@ -24,6 +29,9 @@ __all__ = [
     "REACH_DIRECT",
     "REACH_NEEDS_TUNNEL",
     "REACH_UNREACHABLE",
+    "REVIEW_CONFIRMED",
+    "REVIEW_EDITED",
+    "REVIEW_REJECTED",
     "template_path",
     "split_url",
 ]

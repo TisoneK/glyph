@@ -47,3 +47,45 @@ def test_missing_file_reports_error(tmp_path, capsys):
                "--db", str(tmp_path / "c.db")])
     assert rc == 1
     assert "error" in capsys.readouterr().err
+
+
+def _run_with_pending(tmp_path, make_entry):
+    """Build a catalog file with a pending reference-join row; return its path."""
+    import json
+    from glyph.capture import ingest_har
+    from glyph.catalog import Catalog
+    from glyph.rosetta import build_dictionary
+    from glyph.schema import infer_all
+    db = str(tmp_path / "c.db")
+    har = tmp_path / "s.har"
+    har.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://s.t/users",
+                   body='{"users":[{"id":5,"name":"Alice"}]}'),
+        make_entry("GET", "https://s.t/comments",
+                   body='{"c":[{"user_id":5}]}'),
+    ]}}))
+    cat = Catalog(db)
+    ingest_har(cat, str(har))
+    infer_all(cat)
+    build_dictionary(cat)
+    pending_id = cat.dictionary(needs_review=True)[0].id
+    cat.close()
+    return db, pending_id
+
+
+def test_review_single_entry_reject(tmp_path, make_entry, capsys):
+    db, pid = _run_with_pending(tmp_path, make_entry)
+    assert main(["review", "--db", db, "--id", str(pid), "--reject"]) == 0
+    assert "rejected" in capsys.readouterr().out
+
+
+def test_review_bad_id_errors(tmp_path, make_entry, capsys):
+    db, _ = _run_with_pending(tmp_path, make_entry)
+    assert main(["review", "--db", db, "--id", "9999", "--reject"]) == 1
+    assert "error" in capsys.readouterr().err
+
+
+def test_review_stats_json(tmp_path, make_entry, capsys):
+    db, _ = _run_with_pending(tmp_path, make_entry)
+    assert main(["review", "--db", db, "--stats", "--json"]) == 0
+    assert "pending" in capsys.readouterr().out

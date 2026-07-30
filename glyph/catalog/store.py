@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS dictionary (
     strategy TEXT,
     evidence TEXT,
     needs_review INTEGER DEFAULT 0,
+    review_state TEXT,
     UNIQUE (endpoint_id, json_path, code)
 );
 CREATE TABLE IF NOT EXISTS page_observations (
@@ -87,7 +88,12 @@ CREATE INDEX IF NOT EXISTS idx_flows_endpoint ON flows (endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_fields_endpoint ON fields (endpoint_id);
 """
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
+
+# Human review outcomes stored in dictionary.review_state (NULL = not reviewed).
+REVIEW_CONFIRMED = "confirmed"
+REVIEW_EDITED = "edited"
+REVIEW_REJECTED = "rejected"
 
 
 def _dumps(value: Any) -> Optional[str]:
@@ -114,11 +120,19 @@ class Catalog:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.execute(
-            "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)",
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
             (SCHEMA_VERSION,),
         )
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Additive migrations for catalogs created by an older schema."""
+        cols = {r["name"] for r in self.conn.execute(
+            "PRAGMA table_info(dictionary)").fetchall()}
+        if "review_state" not in cols:
+            self.conn.execute("ALTER TABLE dictionary ADD COLUMN review_state TEXT")
 
     # -- lifecycle --------------------------------------------------------
     def __enter__(self) -> "Catalog":
@@ -261,6 +275,8 @@ class Catalog:
 
     # -- dictionary -------------------------------------------------------
     def upsert_dictionary(self, e: DictionaryEntry) -> int:
+        # A re-run of Rosetta must never overwrite a human decision: the
+        # WHERE clause skips the update for any row a human has reviewed.
         cur = self.conn.execute(
             "INSERT INTO dictionary (endpoint_id, json_path, code, meaning, "
             "confidence, strategy, evidence, needs_review) VALUES (?,?,?,?,?,?,?,?) "
@@ -268,7 +284,8 @@ class Catalog:
             "meaning=excluded.meaning, confidence=excluded.confidence, "
             "strategy=excluded.strategy, evidence=excluded.evidence, "
             "needs_review=excluded.needs_review "
-            "WHERE excluded.confidence >= dictionary.confidence",
+            "WHERE dictionary.review_state IS NULL "
+            "AND excluded.confidence >= dictionary.confidence",
             (
                 e.endpoint_id, e.json_path, _dumps(e.code), e.meaning,
                 e.confidence, e.strategy, e.evidence, 1 if e.needs_review else 0,
@@ -277,23 +294,60 @@ class Catalog:
         self.conn.commit()
         return int(cur.lastrowid)
 
-    def dictionary(self, needs_review: Optional[bool] = None) -> List[DictionaryEntry]:
-        sql = "SELECT * FROM dictionary"
-        params: tuple = ()
+    def dictionary(self, needs_review: Optional[bool] = None,
+                   review_state: Optional[str] = None,
+                   include_rejected: bool = False) -> List[DictionaryEntry]:
+        clauses: List[str] = []
+        params: List[Any] = []
         if needs_review is not None:
-            sql += " WHERE needs_review=?"
-            params = (1 if needs_review else 0,)
+            clauses.append("needs_review=?")
+            params.append(1 if needs_review else 0)
+        if review_state is not None:
+            clauses.append("review_state IS ?" if review_state == "unreviewed"
+                           else "review_state=?")
+            params.append(None if review_state == "unreviewed" else review_state)
+        elif not include_rejected:
+            # Rejected mappings are wrong meanings a human killed — hide by default.
+            clauses.append("(review_state IS NULL OR review_state != 'rejected')")
+        sql = "SELECT * FROM dictionary"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY confidence DESC"
-        rows = self.conn.execute(sql, params).fetchall()
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
         return [
             DictionaryEntry(
                 id=r["id"], endpoint_id=r["endpoint_id"], json_path=r["json_path"],
                 code=_loads(r["code"], r["code"]), meaning=r["meaning"],
                 confidence=r["confidence"], strategy=r["strategy"],
                 evidence=r["evidence"], needs_review=bool(r["needs_review"]),
+                review_state=r["review_state"],
             )
             for r in rows
         ]
+
+    def review_entry(self, entry_id: int, state: str,
+                     meaning: Optional[str] = None) -> bool:
+        """Record a human review decision on a dictionary row.
+
+        ``state`` is one of ``confirmed`` / ``edited`` / ``rejected``. A
+        confirmed or edited row becomes ground truth (confidence 1.0, no
+        longer needs review); ``meaning`` overrides the stored meaning when
+        given (required in spirit for ``edited``). Returns ``False`` if no
+        such row exists.
+        """
+        row = self.conn.execute(
+            "SELECT meaning FROM dictionary WHERE id=?", (entry_id,)).fetchone()
+        if row is None:
+            return False
+        new_meaning = meaning if meaning is not None else row["meaning"]
+        confidence = 1.0 if state != REVIEW_REJECTED else 0.0
+        self.conn.execute(
+            "UPDATE dictionary SET review_state=?, meaning=?, confidence=?, "
+            "needs_review=0 WHERE id=?",
+            (state, new_meaning, confidence, entry_id),
+        )
+        self.conn.commit()
+        return True
 
     # -- page observations ------------------------------------------------
     def add_page(self, page: PageObservation) -> int:
