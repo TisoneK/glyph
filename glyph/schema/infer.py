@@ -83,12 +83,14 @@ def _is_enum_candidate(json_type: str, leaf: str,
                        distinct: int, total: int, values: List[Any]) -> bool:
     if json_type not in ("integer", "string"):
         return False
-    if distinct == 0 or distinct > _ENUM_MAX_DISTINCT or total < 2:
+    if distinct == 0 or distinct > _ENUM_MAX_DISTINCT:
         return False
     if _DENY.search(leaf):
         return False
     if _ALLOW.search(leaf):
-        return True
+        return True  # the name alone is strong enough, even on one sample
+    if total < 2:
+        return False  # heuristics below need repeated observations
     if distinct < total:  # values repeat -> looks categorical
         return True
     if json_type == "integer" and all(
