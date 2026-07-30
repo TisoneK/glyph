@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# editor / env
+.env
+.env.*
+*.swp
+.idea/
+.vscode/
