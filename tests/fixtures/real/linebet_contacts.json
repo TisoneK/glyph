@@ -1,0 +1,329 @@
+{
+  "_source": "linebet.com /bff-api/config/group/get (live capture 2026-07-30)",
+  "_note": "Real templateType/templateCode/labelKey structures. Contact values redacted to placeholders.",
+  "networks": [
+    {
+      "placement": 4,
+      "title": "X",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "twitter",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 17,
+      "templateCode": "x"
+    },
+    {
+      "placement": 4,
+      "title": "Facebook",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "facebook",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 14,
+      "templateCode": "facebook"
+    },
+    {
+      "placement": 4,
+      "title": "Telegram",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "telegram",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 9,
+      "templateCode": "telegram"
+    },
+    {
+      "placement": 4,
+      "title": "Instagram",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "instagram",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 13,
+      "templateCode": "instagram"
+    },
+    {
+      "placement": 1,
+      "title": "X",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "twitter",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 17,
+      "templateCode": "x"
+    },
+    {
+      "placement": 1,
+      "title": "Facebook",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "facebook",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 14,
+      "templateCode": "facebook"
+    },
+    {
+      "placement": 1,
+      "title": "Telegram",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "telegram",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 9,
+      "templateCode": "telegram"
+    },
+    {
+      "placement": 1,
+      "title": "Instagram",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "instagram",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 13,
+      "templateCode": "instagram"
+    },
+    {
+      "placement": 8,
+      "title": "X",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "REDACTED_HANDLE",
+      "iconId": "twitter",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 17,
+      "templateCode": "x"
+    },
+    {
+      "placement": 9,
+      "title": "Instagram",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "",
+      "iconId": "instagram",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 13,
+      "templateCode": "instagram"
+    },
+    {
+      "placement": 9,
+      "title": "X",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "",
+      "iconId": "twitter",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 17,
+      "templateCode": "x"
+    },
+    {
+      "placement": 9,
+      "title": "Facebook",
+      "value": "REDACTED_SOCIAL_URL",
+      "labelKey": "",
+      "iconId": "facebook",
+      "iconPath": "",
+      "iconSection": "logos",
+      "templateType": 14,
+      "templateCode": "facebook"
+    }
+  ],
+  "emails": [
+    {
+      "placement": 4,
+      "title": "General queries",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_platform"
+    },
+    {
+      "placement": 4,
+      "title": "Security department",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 3,
+      "templateCode": "security_service"
+    },
+    {
+      "placement": 4,
+      "title": "Partnership queries",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 7,
+      "templateCode": "partnership_cooperation"
+    },
+    {
+      "placement": 4,
+      "title": "Queries about blocked accounts",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 2,
+      "templateCode": "support_platform"
+    },
+    {
+      "placement": 4,
+      "title": "Queries and suggestions",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 6,
+      "templateCode": "marketing_advertising"
+    },
+    {
+      "placement": 4,
+      "title": "Become an agent",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 7,
+      "templateCode": "partnership_cooperation"
+    },
+    {
+      "placement": 8,
+      "title": "Security department",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 3,
+      "templateCode": "security_service"
+    },
+    {
+      "placement": 8,
+      "title": "Queries and suggestions",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 6,
+      "templateCode": "marketing_advertising"
+    },
+    {
+      "placement": 5,
+      "title": "Security department",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 3,
+      "templateCode": "security_service"
+    },
+    {
+      "placement": 5,
+      "title": "Queries and suggestions",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 6,
+      "templateCode": "marketing_advertising"
+    },
+    {
+      "placement": 9,
+      "title": "Security department",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 3,
+      "templateCode": "security_service"
+    },
+    {
+      "placement": 9,
+      "title": "Queries and suggestions",
+      "value": "REDACTED@example.com",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 6,
+      "templateCode": "marketing_advertising"
+    }
+  ],
+  "phones": [
+    {
+      "placement": 4,
+      "title": "CUSTOMER SUPPORT",
+      "value": "+000-0000",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_questions"
+    },
+    {
+      "placement": 1,
+      "title": "CUSTOMER SUPPORT",
+      "value": "+000-0000",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_questions"
+    },
+    {
+      "placement": 5,
+      "title": "CUSTOMER SUPPORT",
+      "value": "+000-0000",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_questions"
+    },
+    {
+      "placement": 8,
+      "title": "CUSTOMER SUPPORT",
+      "value": "+000-0000",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_questions"
+    },
+    {
+      "placement": 9,
+      "title": "CUSTOMER SUPPORT",
+      "value": "+000-0000",
+      "labelKey": "",
+      "iconId": "",
+      "iconPath": "",
+      "iconSection": "",
+      "templateType": 1,
+      "templateCode": "common_questions"
+    }
+  ]
+}
