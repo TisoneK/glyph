@@ -79,3 +79,12 @@ full root-cause + fix narrative.
 - **Outcome:** done — `glyph-re` package built end-to-end: 10 pipeline stages as subpackages over a shared SQLite catalog + `glyph` CLI, **32 passing tests**, console script installs (`pip install -e .`). Pure-stdlib base; mitmproxy/Playwright/genson/duckdb are optional extras. ADR-2 (monorepo architecture) + ADR-3 (Glyph standalone, supersedes ADR-1's InjectX clause) recorded. Two bugs fixed mid-build (single-sample enum gap; auth signing-param false positive).
 - **Open items:** HITL review UI, DuckDB backend, Splink/positional Rosetta depth, live-capture E2E run, Daraja recipe — all in `tasks/backlog.md`. Phase-0 proof item is effectively subsumed (the pipeline it would have proven now exists); a real authorized-target run is the natural next validation.
 - **Report:** .context/memory/reviews/2026-07-30-build-base-system.md
+
+---
+## 2026-07-30 — Session 5
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Continue the build. User deferred the 3.13/Pydantic retarget and real-world validation (both in Session 4's follow-ups), so built the highest-value item within the kept 3.9/dataclasses/stdlib architecture: the human-in-the-loop (HITL) review workflow for Rosetta's low-confidence rows.
+- **Commits:** 4 — `chore(context)` (set Session 5 task) + `feat(review)` (the workflow, rebased to `7b1100a` after a concurrent push) + `docs(review)` (report) + this `chore(context)` bookkeeping.
+- **Outcome:** done — `glyph.review` module + `glyph review` CLI (interactive + `--auto-confirm` + single-entry `--id/--reject/--set` + `--stats`); `review_state` column with an additive migration; human decisions are ground truth and survive Rosetta re-runs (upsert skips reviewed rows); rejected rows hidden from output. **45 tests pass** (was 32; +13). A concurrent push (`c69fd06`, the user's own RESEARCH-DEEP-DIVE.md edit) landed mid-session — resolved with a clean rebase, no work lost.
+- **Open items:** real-world validation now unblocked by this workflow (still deferred by user); 3.13/Pydantic retarget deferred; DuckDB, Splink/positional Rosetta depth, live-capture E2E, Daraja recipe, optional Label Studio surface — all in `tasks/backlog.md`.
+- **Report:** .context/memory/reviews/2026-07-30-hitl-review-workflow.md

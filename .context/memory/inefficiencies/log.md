@@ -82,3 +82,11 @@ never harvested.
 - **Cause:** (1) macOS ships old Python; (2) over-restrictive gating of a correlation strategy; (3) harness tool semantics (Write-needs-Read, persistent shell cwd).
 - **Workaround / fix:** (1) recorded the 3.9 constraint in `system/environments.md` so the next session doesn't rediscover it; (2) fixed the enum guard + added a regression test; (3) use `Edit` after `Read` for overwrites, use absolute paths in Bash.
 - **Prevent next time:** `system/environments.md` now states the Python 3.9 target and the venv/test commands up front. No protocol change needed — these are local/tool facts, not workflow flaws.
+
+---
+## 2026-07-30 — Claude Code / claude-opus-4-8 (Session 5)
+- **Problem:** After committing `feat(review)` locally, `git pull --ff-only` failed ("Not possible to fast-forward") — `origin/main` had advanced by one commit (the user's own `c69fd06` docs edit to RESEARCH-DEEP-DIVE.md) that I didn't have locally. My chained `commit && pull && push` aborted at the pull.
+- **Cost:** ~2 min — inspect divergence, confirm zero file overlap, rebase, re-test, push.
+- **Cause:** The user pushed to `origin/main` from elsewhere while I was building. Normal multi-agent/multi-machine reality; the protocol anticipates it (Git Workflow: pull before push, rebase on non-fast-forward). My `--ff-only` in a `&&` chain turned a routine rebase into an aborted command.
+- **Workaround / fix:** `git fetch` → `git rev-list --left-right --count` (1/1) → `git show --stat` both sides to confirm no file overlap → `git rebase origin/main` (clean, my code vs their doc) → `pytest` (45 pass) → push. No work lost.
+- **Prevent next time:** when chaining commit+push, prefer `git pull --rebase` over `--ff-only` so a concurrent push rebases instead of aborting — or just fetch+inspect first. Not a protocol flaw; the protocol already prescribes exactly this recovery.

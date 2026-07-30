@@ -27,10 +27,12 @@ don't remove the line.
       and the pipeline/package table matching the built structure.
 
 ---
-- [ ] **HITL review UI for low-confidence dictionary rows** (added 2026-07-30 by Claude Code) —
-      `glyph dict --review` lists them in the terminal only. Build a proper review surface
-      (Label Studio integration or a minimal fork, RESEARCH-DEEP-DIVE §4.6). Reference-join
-      rows land at 0.85 and always queue. Medium.
+- [x] **HITL review UI for low-confidence dictionary rows** (added 2026-07-30 by Claude Code;
+      done 2026-07-30 by Claude Code, Session 5) — built `glyph.review` + `glyph review`
+      (interactive + `--auto-confirm` + single-entry `--id/--reject/--set` + `--stats`).
+      Decisions persist (review_state column + migration) and survive Rosetta re-runs.
+      Label Studio integration is now OPTIONAL, not required — see follow-up below.
+      See `reviews/2026-07-30-hitl-review-workflow.md`.
 - [ ] **DuckDB catalog backend** (added 2026-07-30 by Claude Code) — the store interface
       (`glyph.catalog.store.Catalog`) is ready for the ADR-2 promotion (SQLite → DuckDB when
       drift analytics matter). Not yet implemented. Medium.
@@ -57,3 +59,7 @@ don't remove the line.
       as a stopgap. Decide with the user, then: bump `requires-python`, drop the `__future__`
       workarounds, and consider replacing `glyph.catalog.models` dataclasses with Pydantic
       (revisits ADR-2's zero-dependency base — Pydantic is a hard dep). Medium.
+- [ ] **Optional: Label Studio review surface for teams** (added 2026-07-30 by Claude Code) —
+      the terminal + scriptable `glyph review` workflow (Session 5) covers single-analyst use.
+      A Label Studio export/import (RESEARCH-DEEP-DIVE §4.6) would give teams a GUI review
+      surface. Not needed for solo use; only if a multi-analyst workflow is wanted. Low.
