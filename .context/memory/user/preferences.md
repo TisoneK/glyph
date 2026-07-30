@@ -15,6 +15,31 @@ Pre-Flight at bootstrap; grows as sessions reveal preferences.
   modules/subpackages; a single long file is "unmaintainable." (stated,
   2026-07-30) Applied: `glyph/` is one subpackage per pipeline stage.
 
+## Runtime & tooling
+- **Target Python 3.13.** The user prefers 3.13 specifically because it is
+  stable on Windows and avoids platform issues (Pydantic works well on 3.12
+  and 3.13; 3.13 is the pick). (stated, 2026-07-30)
+  - **Note / open action:** the base package was built targeting 3.9 (the
+    only interpreter installed on bao@local) using stdlib dataclasses. This
+    conflicts with the 3.13 + Pydantic preference — retarget decision pending
+    with the user (see `agents/sessions.md` Session 4 follow-up).
+- **Pydantic is the preferred model/validation layer** (works well on 3.12/
+  3.13). Reconsider ADR-2's "zero required dependencies" base if adopting it —
+  Pydantic is a hard dependency. (stated, 2026-07-30)
+
+## Testing
+- **Real-world testing over green unit tests.** Tests can pass 100% because
+  they were "conditioned to pass that way" while the software still fails in
+  the real world. The user prefers validation against real targets/inputs, not
+  just synthetic fixtures. (stated, 2026-07-30)
+  - **Why:** unit tests over hand-authored inputs prove internal consistency,
+    not that the tool works against a messy real target.
+  - **How to apply:** for any stage, pair unit tests with an integration/real-
+    world run (a real captured HAR from an authorized target, a live capture,
+    an end-to-end pipeline run) before calling it "done." Never report "N tests
+    pass" as evidence the software works in the real world — say explicitly
+    what the tests do and don't cover.
+
 ## Review depth
 
 ## Risk & approvals

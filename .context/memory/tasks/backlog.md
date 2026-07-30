@@ -45,3 +45,15 @@ don't remove the line.
 - [ ] **Daraja callback verification recipe** (added 2026-07-30 by Claude Code) — concrete
       early deliverable (RESEARCH-DEEP-DIVE §3g): M-Pesa Daraja doesn't sign callbacks; ship
       a Glyph recipe that documents/verifies the gap. Low-Medium, Kenya-priority.
+- [ ] **Real-world validation of the pipeline (not synthetic)** (added 2026-07-30 by Claude
+      Code) — per the user's testing preference (`user/preferences.md` → Testing): the 32
+      unit tests use hand-authored HARs. Validate against a REAL captured HAR from an
+      authorized target (real DOM, real messy codes) and confirm Rosetta reproduces
+      hand-analysis. Add these as integration tests kept separate from the unit suite. This
+      is the honest "does it work?" gate — do not report unit-test pass rates as real-world
+      evidence. High.
+- [ ] **Retarget to Python 3.13 + evaluate Pydantic models** (added 2026-07-30 by Claude
+      Code) — user prefers 3.13 (Windows-stable) + Pydantic. Package was built 3.9/dataclasses
+      as a stopgap. Decide with the user, then: bump `requires-python`, drop the `__future__`
+      workarounds, and consider replacing `glyph.catalog.models` dataclasses with Pydantic
+      (revisits ADR-2's zero-dependency base — Pydantic is a hard dep). Medium.

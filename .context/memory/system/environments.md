@@ -33,7 +33,7 @@ block (and its "last verified" date) every time you run on it again.
 ## bao@local (macOS) (last verified 2026-07-30)
 - **Identify by:** `$USER` = bao; repo path `~/Code/glyph`
 - **OS:** macOS (Darwin 24.6.0)
-- **Runtimes:** system `python3` = **3.9.6** at `/usr/bin/python3` (no pyenv). Code targets `>=3.9` — use `from __future__ import annotations` + `typing` imports (no `X | Y` runtime unions, no `match`).
+- **Runtimes:** system `python3` = **3.9.6** at `/usr/bin/python3` (no pyenv) — this is only what's *currently installed*. **The user's preferred target is Python 3.13** (stable on Windows, no platform issues; see `user/preferences.md` → Runtime & tooling). The base package was written 3.9-compatible (`from __future__ import annotations` + `typing` imports) as a stopgap; a retarget to 3.13 (+ Pydantic models) is a pending decision. Next session: check whether 3.13 is installed (`python3.13 --version`) before assuming 3.9.
 - **Package manager:** `pip` via a project venv at `.venv/` (gitignored). Create with `python3 -m venv .venv`; install with `.venv/bin/python -m pip install -e '.[dev]'`.
 - **Verified commands (2026-07-30):**
   - `python3 -m venv .venv && .venv/bin/python -m pip install -e . pytest` — clean install of `glyph-re` (pure-stdlib base) + pytest
