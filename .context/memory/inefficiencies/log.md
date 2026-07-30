@@ -71,3 +71,14 @@ never harvested.
   - **Immediate (project-local):** the local git config is now correct on this sandbox (`user.name=Tisone Kironget`, `user.email=tisonkironget@gmail.com`), so future sessions on this same sandbox inherit it. But a fresh sandbox clone will reset to the default — always verify with `git config user.email` after Step 2.
   - **Protocol-level (Upstream: candidate):** the cloud edition should add (a) a Common Pitfall entry — "Don't commit before confirming `git config user.name`/`user.email` match the Pre-Flight Git identity; sandbox defaults to a generic user" — and (b) a pre-commit quality gate — "[ ] `git config user.email` matches the Pre-Flight Git Email." See `flaws/log.md` 2026-07-30 (Session 3, correction) entry for the full suggested fix.
 - **Upstream:** candidate  ← the protocol's Step 2 doesn't emphasize the git-config lines as critical, and no quality gate verifies the identity before the first commit. Every cloud/sandbox session on a fresh environment will hit this until the package adds the pitfall + the gate. Local agents are unaffected (they inherit the user's already-configured git identity).
+
+---
+## 2026-07-30 — Claude Code / claude-opus-4-8 (Session 4)
+- **Problem:** Minor, all project-local:
+  1. System Python is **3.9.6** (`/usr/bin/python3`, no pyenv). Had to keep all code 3.9-compatible — `from __future__ import annotations` everywhere, `typing.Optional/List/Dict` instead of `X | Y` runtime unions, no `match`. Not a blocker, but a constant constraint to remember.
+  2. Built Rosetta's DOM strategy to require enum-candidacy with `total >= 2` samples; the DOM unit test (single coded response) caught that a lone `status` value never gets flagged, so it couldn't decode. ~5 min to trace + fix. Turned into a real behavior improvement (allow-listed names qualify on one sample), not just a test tweak.
+  3. `Write` tool refuses to overwrite a file I'd only read via `Bash cat` (needs the `Read` tool first) — one failed Write on `tasks/current.md`, redone with `Edit` after `Read`. And the Bash shell's cwd persists across calls, so an earlier `cd .context/memory` made a later relative `cd` fail. Both are tool-usage learnings, ~2 min total.
+- **Cost:** ~10 min total across the three; none changed the outcome.
+- **Cause:** (1) macOS ships old Python; (2) over-restrictive gating of a correlation strategy; (3) harness tool semantics (Write-needs-Read, persistent shell cwd).
+- **Workaround / fix:** (1) recorded the 3.9 constraint in `system/environments.md` so the next session doesn't rediscover it; (2) fixed the enum guard + added a regression test; (3) use `Edit` after `Read` for overwrites, use absolute paths in Bash.
+- **Prevent next time:** `system/environments.md` now states the Python 3.9 target and the venv/test commands up front. No protocol change needed — these are local/tool facts, not workflow flaws.

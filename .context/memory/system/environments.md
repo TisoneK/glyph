@@ -30,13 +30,18 @@ block (and its "last verified" date) every time you run on it again.
 -->
 
 ---
-## bao@local (macOS) (last verified 2026-07-29)
+## bao@local (macOS) (last verified 2026-07-30)
 - **Identify by:** `$USER` = bao; repo path `~/Code/glyph`
 - **OS:** macOS (Darwin 24.6.0)
-- **Runtimes:** none required yet (research phase)
-- **Package manager:** — (TBD once a build starts)
-- **Verified commands:** `git` with the `osxkeychain` credential helper — commit + push to `origin` work
-- **Quirks:** `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper
+- **Runtimes:** system `python3` = **3.9.6** at `/usr/bin/python3` (no pyenv). Code targets `>=3.9` — use `from __future__ import annotations` + `typing` imports (no `X | Y` runtime unions, no `match`).
+- **Package manager:** `pip` via a project venv at `.venv/` (gitignored). Create with `python3 -m venv .venv`; install with `.venv/bin/python -m pip install -e '.[dev]'`.
+- **Verified commands (2026-07-30):**
+  - `python3 -m venv .venv && .venv/bin/python -m pip install -e . pytest` — clean install of `glyph-re` (pure-stdlib base) + pytest
+  - `.venv/bin/python -m pytest -q` → **32 passed**
+  - `.venv/bin/glyph --version` → `glyph 0.1.0` (console script installs)
+  - `python3 -m glyph.cli ...` runs without install when `PYTHONPATH=<repo>` is set
+  - `git` with the `osxkeychain` credential helper — commit + push to `origin` work
+- **Quirks:** `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
 
 ---
 ## Z.ai cloud sandbox (Linux) (last verified 2026-07-30)

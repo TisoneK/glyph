@@ -11,6 +11,9 @@ Pre-Flight at bootstrap; grows as sessions reveal preferences.
 - Chat summaries in plain language; keep the technical depth in the docs/reports. (stated, 2026-07-29)
 
 ## Code style
+- Prefer modular packages over one long file — split code into focused
+  modules/subpackages; a single long file is "unmaintainable." (stated,
+  2026-07-30) Applied: `glyph/` is one subpackage per pipeline stage.
 
 ## Review depth
 

@@ -70,3 +70,12 @@ The protocol gap that let this happen is logged in `flaws/log.md` (marked
 and a pre-commit quality gate should verify `git config user.email`). See
 also `inefficiencies/log.md` 2026-07-30 (Session 3, correction) for the
 full root-cause + fix narrative.
+
+---
+## 2026-07-30 — Session 4
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.3.0
+- **Task:** Build the general-purpose Glyph base system (user directive: "build everything, general-purpose tool not for specific target, remove injectx framing"). Shift the project from research to build.
+- **Commits:** 12 (`f4b4a9c`..`ed5e144`) — `chore(context)` build-mode shift + ADR-2/ADR-3; `docs` InjectX removal; 8 `feat`/`test`/`docs` commits building the package; `docs(review)` report. (Then this `chore(context)` bookkeeping commit.)
+- **Outcome:** done — `glyph-re` package built end-to-end: 10 pipeline stages as subpackages over a shared SQLite catalog + `glyph` CLI, **32 passing tests**, console script installs (`pip install -e .`). Pure-stdlib base; mitmproxy/Playwright/genson/duckdb are optional extras. ADR-2 (monorepo architecture) + ADR-3 (Glyph standalone, supersedes ADR-1's InjectX clause) recorded. Two bugs fixed mid-build (single-sample enum gap; auth signing-param false positive).
+- **Open items:** HITL review UI, DuckDB backend, Splink/positional Rosetta depth, live-capture E2E run, Daraja recipe — all in `tasks/backlog.md`. Phase-0 proof item is effectively subsumed (the pipeline it would have proven now exists); a real authorized-target run is the natural next validation.
+- **Report:** .context/memory/reviews/2026-07-30-build-base-system.md
