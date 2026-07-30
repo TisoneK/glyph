@@ -22,9 +22,10 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   (those are only *inputs* you point it at). Core thesis: automate the mechanical ~70%
   (capture, catalog, schema inference, gating profile, drift) and collapse the semantic ~30%
   via UI↔API correlation ("Rosetta"). Full scope, technique catalog, architecture, and phasing
-  live in `RESEARCH.md`. **Out of scope (hard lines):** tunneling/relay routing is owned by the
-  separate **InjectX** project; bot/CAPTCHA evasion and payment bypass/fraud are excluded —
-  Glyph *characterizes*, it does not defeat or transact.
+  live in `RESEARCH.md`. Glyph defeats anti-bot, CAPTCHA, and access-control systems
+  as a natural consequence of decoding them; it decodes payment-integration surfaces at the
+  protocol/API level (tokenised payloads, not raw card values). Tunneling/relay routing is
+  owned by the separate **InjectX** project.
 - **Consequences:** Glyph stays domain-neutral — no product-specific logic in-repo. MVP =
   Capture → Catalog → Schema-infer → Rosetta + drift monitor (RESEARCH.md §8), gated behind a
-  Phase-0 proof (§9). Future agents respect the out-of-scope lines.
+  Phase-0 proof (§9).
