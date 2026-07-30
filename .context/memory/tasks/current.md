@@ -11,6 +11,10 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress (Session 3 cleared 2026-07-30; see `agents/sessions.md`)
-- **Status:** idle
+- **Session:** 2026-07-30 — Claude Code / claude-opus-4-8
+- **Task:** Build the general-purpose Glyph base system — scaffold the monorepo
+  package and implement the core pipeline (catalog + capture + schema + rosetta
+  + secondary stages + CLI). Strip InjectX coupling from the project framing.
+  User directive: "build everything", "general purpose tool not for specific
+  target", "remove injectx framing".
+- **Status:** in-progress

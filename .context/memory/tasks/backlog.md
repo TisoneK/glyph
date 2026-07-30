@@ -18,8 +18,8 @@ don't remove the line.
 - [ ] **Phase-0 proof** (added 2026-07-29 by Claude Code) — run stages 1–4 against any
       target with opaque codes + a visible UI; have Rosetta auto-derive its code dictionary
       and check it reproduces hand-analysis. RESEARCH.md §9. Gate for building the rest.
-- [ ] **Decide repo/service split + catalog store** (added 2026-07-29 by Claude Code) —
-      one repo with stages as packages vs. capture-tool + catalog-service; SQLite (local)
-      → shared DB later. RESEARCH.md §11 open questions. Medium.
+- [x] **Decide repo/service split + catalog store** (added 2026-07-29 by Claude Code;
+      done 2026-07-30 by Claude Code, ADR-2) — resolved: monorepo, stages as packages,
+      catalog as a library, SQLite → DuckDB → Postgres. See `plans/decisions.md` ADR-2.
 - [ ] **README: proposed repo/package layout** (added 2026-07-29 by Claude Code) —
       flesh the repo structure once §11 is decided. Low.
