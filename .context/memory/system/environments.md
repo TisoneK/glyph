@@ -42,14 +42,17 @@ block (and its "last verified" date) every time you run on it again.
 ## Z.ai cloud sandbox (Linux) (last verified 2026-07-30)
 - **Identify by:** workspace path `/home/z/my-project/glyph` (sandbox; no `~/Code/glyph`); the agent runs as user `z`
 - **OS:** Linux (kernel details not probed; `/home/z/my-project` is the agent sandbox root)
-- **Runtimes:** `sh` (POSIX, needed for `context-sync`), `git`, `sha256sum` (Linux coreutils — `context-sync verify` works natively, no `shasum` fallback needed)
+- **Runtimes:** `sh` (POSIX, needed for `context-sync`), `git`, `sha256sum` (Linux coreutils — `context-sync verify` works natively, no `shasum` fallback needed), `python3` (used for multi-part file appends when the Write tool's JSON-arg length limit would truncate)
 - **Package manager:** — (TBD; no product code yet)
-- **Verified commands (this session, this env):**
+- **Verified commands (this env, last verified 2026-07-30 across Sessions 2 + 3):**
   - `sh .context/core/bin/context-sync verify` → `core OK: every file matches MANIFEST.sha256 (0.3.0)`
   - `sh .context/core/bin/context-sync status` → `core: 0.3.0  (.context/core)` / `locked: 0.3.0` / `source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) — skipping, this is fine`
   - `date -u +%F` → `2026-07-30` (used for every session entry, report filename, and `verified` field per Pitfall #41)
   - `git clone https://<token>@github.com/TisoneK/glyph.git` then `git remote set-url origin https://github.com/TisoneK/glyph.git` (PAT stripped from `.git/config` immediately after clone, per Step 2)
+  - Parallel sub-task pattern via the Task tool: launch 3–5 general-purpose agents in one message, each with a tight research scope; collect results; synthesize in the main agent. Verified Session 3 across 5 clusters (~13k words of research output total).
 - **Quirks:**
   - **No sibling package clone** — `context-sync status` cannot find an update source automatically. To enable auto-update checks, clone `https://github.com/TisoneK/.context.git` as a sibling and set `CONTEXT_PKG` to its path. Not required (sync never fails a session), just noted.
   - **Cloud/sandbox agent** — PAT is required for any push (even though the repo is private-only for clone, every push needs auth here). PAT comes from the user's first chat message; used as a transient `GIT_TOKEN` env var; stripped from `.git/config` after every push; unset in Step 19.
+  - **Parallel Task agents can time out on large scopes** — Session 3 Tasks 6 (bot-mgmt + payments) and 7 (competitive landscape) timed out (context deadline exceeded) as single large agents on the default glm-5.2 model. Recovery: split each into tighter-scope sub-tasks and re-launch on the faster `haiku` model — all completed. **Reusable pattern: keep each parallel research agent's scope narrow enough to finish in one tool-call window; prefer 3–4 small agents over 1 large one.**
+  - **Write tool JSON-arg length limit** — files >~30 KB can't be written in one Write call. Recovery: write the first part with Write, append subsequent parts with a small Python script via Bash (see `/home/z/my-project/scripts/append_deep_dive_part2.py` / `_part3.py` as the pattern).
   - **Local agents must NOT absorb this block** — the PAT dance, the `/home/z/my-project/glyph` path, and the cloud-sandbox identity are machine- and agent-type-scoped facts. A local agent reading this block should ignore the PAT instructions and log a flaw if memory tried to enforce them on a local session (Pitfall #43).

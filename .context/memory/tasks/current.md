@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — no session in progress (Session 2 cleared 2026-07-30; see `agents/sessions.md`)
+- **Task:** none — no session in progress (Session 3 cleared 2026-07-30; see `agents/sessions.md`)
 - **Status:** idle
