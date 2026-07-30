@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glyph-re"
+version = "0.1.0"
+description = "General-purpose reverse-engineering toolkit: capture a target's surface, catalog it, infer schemas, and decode opaque codes into meaning."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Tisone Kironget" }]
+keywords = ["reverse-engineering", "api", "capture", "schema-inference", "openapi", "har"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
+# The base package is pure-stdlib on purpose: catalog, capture (HAR),
+# schema inference, rosetta, and all analysis stages run with zero
+# third-party dependencies. Heavy backends are optional extras below.
+dependencies = []
+
+[project.optional-dependencies]
+# Live capture backends (proxy + browser driver).
+live = ["mitmproxy>=10", "playwright>=1.40"]
+# Higher-fidelity JSON Schema inference (the pure-python inferer is the fallback).
+schema = ["genson>=1.2"]
+# Columnar catalog store for drift analytics (post-MVP promotion path, ADR-2).
+analytics = ["duckdb>=0.10"]
+# Everything, plus test tooling.
+dev = ["glyph-re[live,schema,analytics]", "pytest>=7"]
+
+[project.scripts]
+glyph = "glyph.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/TisoneK/glyph"
+Repository = "https://github.com/TisoneK/glyph"
+
+[tool.setuptools.packages.find]
+include = ["glyph*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
