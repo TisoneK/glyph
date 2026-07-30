@@ -36,4 +36,6 @@ Examples:
   user, 2026-07-14)
 -->
 
-*(none yet)*
+---
+
+- **[core-defect]** `core/schemas/context.schema.json` declares `"coreVersion": "0.2.0"` while `core/VERSION` is `0.3.0`. The JSON is documented as a machine-readable mirror of `context-schema.md` and "must be updated in the same commit as any schema change" — but the 0.3.0 release (harvest release) did not bump the JSON's `coreVersion` field. Workaround: read `core/VERSION` for the authoritative version (which `context-sync` already does); treat the JSON's `coreVersion` as stale until the package fixes it. The fix belongs in the package repo: bump `context.schema.json`'s `coreVersion` to `0.3.0` in the next 0.3.x patch release, and add "if `core/VERSION` changed, update `context.schema.json`'s `coreVersion` in the same commit" to the package release checklist. (set by Super Z, 2026-07-30; see `memory/inefficiencies/log.md` 2026-07-30 entry for full context)

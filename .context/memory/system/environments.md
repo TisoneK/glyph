@@ -37,3 +37,19 @@ block (and its "last verified" date) every time you run on it again.
 - **Package manager:** — (TBD once a build starts)
 - **Verified commands:** `git` with the `osxkeychain` credential helper — commit + push to `origin` work
 - **Quirks:** `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper
+
+---
+## Z.ai cloud sandbox (Linux) (last verified 2026-07-30)
+- **Identify by:** workspace path `/home/z/my-project/glyph` (sandbox; no `~/Code/glyph`); the agent runs as user `z`
+- **OS:** Linux (kernel details not probed; `/home/z/my-project` is the agent sandbox root)
+- **Runtimes:** `sh` (POSIX, needed for `context-sync`), `git`, `sha256sum` (Linux coreutils — `context-sync verify` works natively, no `shasum` fallback needed)
+- **Package manager:** — (TBD; no product code yet)
+- **Verified commands (this session, this env):**
+  - `sh .context/core/bin/context-sync verify` → `core OK: every file matches MANIFEST.sha256 (0.3.0)`
+  - `sh .context/core/bin/context-sync status` → `core: 0.3.0  (.context/core)` / `locked: 0.3.0` / `source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) — skipping, this is fine`
+  - `date -u +%F` → `2026-07-30` (used for every session entry, report filename, and `verified` field per Pitfall #41)
+  - `git clone https://<token>@github.com/TisoneK/glyph.git` then `git remote set-url origin https://github.com/TisoneK/glyph.git` (PAT stripped from `.git/config` immediately after clone, per Step 2)
+- **Quirks:**
+  - **No sibling package clone** — `context-sync status` cannot find an update source automatically. To enable auto-update checks, clone `https://github.com/TisoneK/.context.git` as a sibling and set `CONTEXT_PKG` to its path. Not required (sync never fails a session), just noted.
+  - **Cloud/sandbox agent** — PAT is required for any push (even though the repo is private-only for clone, every push needs auth here). PAT comes from the user's first chat message; used as a transient `GIT_TOKEN` env var; stripped from `.git/config` after every push; unset in Step 19.
+  - **Local agents must NOT absorb this block** — the PAT dance, the `/home/z/my-project/glyph` path, and the cloud-sandbox identity are machine- and agent-type-scoped facts. A local agent reading this block should ignore the PAT instructions and log a flaw if memory tried to enforce them on a local session (Pitfall #43).
