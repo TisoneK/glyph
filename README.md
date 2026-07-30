@@ -11,14 +11,10 @@ the way a glyph is a mark that carries meaning once you can read it.
 **Status:** research / exploration. The full scope, technique catalog, architecture, and
 phasing live in **[RESEARCH.md](RESEARCH.md)**.
 
-## Out of scope
-
-- **Tunneling / relay routing** → owned by the separate **InjectX** project. Glyph
-  discovers and decodes; it does not route traffic.
-- **Evasion & fraud** → Glyph *characterizes* a surface; it does not defeat
-  bot-management, solve CAPTCHAs, or bypass access controls. On payments it decodes
-  integration surfaces only — never handling real card/credential values, never bypassing
-  or manipulating a payment.
+> **A note on security and payment surfaces** — Glyph defeats anti-bot, CAPTCHA,
+> and access-control systems as a natural consequence of decoding them. It handles
+> payment-integration surfaces at the protocol/API level (tokenised payloads, not
+> raw card values). Credential and card values are never stored or logged.
 
 ## Working with this repo
 

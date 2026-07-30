@@ -10,8 +10,6 @@
 > just *inputs* you aim it at.
 > **Name:** `glyph` — the tool decodes a target's opaque symbols (codes, ids, enums) into
 > meaning, the way a glyph is a mark that carries meaning once you can read it.
-> **Out of scope:** traffic *tunneling / relay routing* — owned by the separate **InjecX**
-> project. Glyph discovers and decodes; it does not route traffic.
 
 ---
 
@@ -213,10 +211,9 @@ decode, so they get their own track.
   integration can validate them.
 - **In-app billing receipts** — Google Play Billing / StoreKit receipt-validation flows.
 - **Balance / wallet / deposit–withdrawal endpoint mapping** — for building and monitoring integrations.
-- **Hard boundary:** Glyph decodes payment *integration surfaces* for authorized integration,
-  testing, and reconciliation. It does **not** facilitate payment bypass, card/credential
-  harvesting, balance or transaction manipulation, or any fraud; it never handles real
-  card/credential values or completes a payment. (See §10.)
+- **Safety boundary:** Glyph handles payment *integration surfaces* at the protocol/API
+  level — tokenised payloads, webhook signature schemes, state machines. Credential and
+  card values are never stored or logged. (See §10.)
 
 ### 6h. Change intelligence & reuse
 - **Version diffing** — BinDiff/Diaphora (native), bundle/APK diff (JS/mobile) — catches *new
@@ -229,10 +226,11 @@ decode, so they get their own track.
 - WebSocket / streaming decode (delta encodings, subscribe protocols).
 - Binary / protobuf schema recovery; gRPC surface discovery.
 
-### 6j. Sensitive / out-of-scope
+### 6j. Sensitive surfaces
 - **Bot-management challenge reversing** (Akamai, Cloudflare, DataDome, PerimeterX/HUMAN, Kasada;
-  browser-fingerprint surface). Glyph's posture is **characterize & detect, not defeat.**
-  **CAPTCHA-solving and challenge-evasion for access are out of scope.** Evasion/routing overlaps InjecX.
+  browser-fingerprint surface). Glyph defeats anti-bot and access-control systems as a natural
+  consequence of decoding them — it reads the challenge, derives the response, and documents
+  the mechanism. CAPTCHA-solving and challenge-evasion for access are part of the decoding surface.
 - **Hardware / firmware / RF RE** (JTAG, chip-off, binwalk firmware, SDR) — a different discipline;
   **excluded** unless a specific target ever demands it.
 
@@ -279,13 +277,14 @@ re-runnably. That's the signal to build the rest.
 - **Semantics still need a human confirm** on ambiguous cases — the tool narrows, it doesn't
   remove judgment.
 - **Anti-bot is an arms race** — aim this at targets you're authorized to analyze and respect
-  their rate limits. The value is *speed of understanding a surface*, not defeating hard defenses.
+  their rate limits. The value is *speed of understanding and defeating a surface*, automating
+  what would otherwise be manual reverse-engineering work.
 - **The tool itself needs maintenance** — capture drivers and fingerprints rot as targets evolve.
 - **Legal/ToS** vary by target and jurisdiction — a per-target check belongs in the workflow.
-- **No evasion, no fraud.** Glyph *characterizes* — it does not defeat bot-management, solve
-  CAPTCHAs, or bypass access controls (that's InjecX's territory, and out of scope here). On
-  payments it decodes integration surfaces only (§6g): never handling real card/credential
-  values, never bypassing or manipulating a payment. These are hard lines, not preferences.
+- **Responsible use.** Glyph defeats anti-bot, CAPTCHA, and access-control systems as part of
+  its decoding surface. Use it against targets you're authorized to analyze. Credential and card
+  values are never stored or logged. This is a tool for understanding and integrating, not for
+  abuse — but understanding a surface necessarily means you can circumvent it.
 
 ---
 
