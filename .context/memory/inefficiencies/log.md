@@ -349,3 +349,40 @@ never harvested.
   found" failures that look like flaky tests. Every agent on this sandbox hits this;
   worth a core note: "use absolute paths or `git -C` for repo-scoped commands; the
   Bash shell's CWD resets between calls."
+
+---
+## 2026-07-31 — Super Z / unknown (Session 19 cont. 5)
+- **Problem:** Browse mode (ADR-14) shipped with mock-Playwright tests all green
+  (156 pass), but the FIRST real on-device run (Windows + Brave + Python 3.14,
+  `glyph run live --browse https://facebook.com --browser brave`) flooded ~190
+  lines of `greenlet.error: cannot switch to a different thread` on Ctrl+C, then
+  a sustained `TargetClosedError: BrowserContext.cookies` for the entire pipeline
+  duration. The capture + pipeline themselves worked (30 flows, full analysis) —
+  the shutdown path was the bug.
+- **Cost:** One round-trip to the user (they had to paste the 855-line log back)
+  + one fix commit. ~20 min of diagnosis.
+- **Cause:** My `_cookie_loop` ran in a **daemon thread** and called
+  `ctx.cookies()`. **Playwright's sync API is NOT thread-safe** — its objects are
+  greenlet-bound to the thread that created them. Cross-thread `ctx.cookies()`
+  corrupted the greenlet state on close and kept firing on the closed context.
+  The mock-Playwright fakes in `tests/test_capture_live.py`
+  (`_FakeChromium`/`_FakeBrowser`/`_FakeContext`/`_FakePage`) have NO greenlet or
+  asyncio event loop, so they happily accepted the cross-thread call and the tests
+  passed — hiding the real-world failure.
+- **Workaround / fix:** Removed the daemon thread; folded the periodic cookie
+  snapshot into the main-thread poll loop (`while not done.wait(0.2)`, every ~5s
+  call `_snapshot_cookies(context)` inline). Commit `c36c97e`.
+- **Prevent next time:** Mock-based tests for a library with a non-trivial
+  concurrency/thread-affinity model do NOT prove the real path works. When the
+  library's objects are thread-bound (Playwright sync API, sqlite3 connections,
+  most GUI toolkits), a daemon-thread caller is a design smell on its face —
+  don't reach for a thread just because "polling on the main thread blocks the
+  wait." For Playwright sync API specifically: ALL calls must happen on the
+  thread that created the `sync_playwright()` context. Add a real-browser
+  integration test (gated behind a marker, run on-device) for any new Playwright
+  code path — the mock tests can't catch thread-affinity or event-loop issues.
+- **Upstream:** candidate — the "mock tests passed but real run flooded errors"
+  pattern is general. A core note could help: "for libraries with thread-affine
+  or event-loop-bound objects (Playwright sync, sqlite3, tkinter, etc.), mock
+  tests are necessary but NOT sufficient; flag the need for a real-integration
+  test in the session's exit checklist."

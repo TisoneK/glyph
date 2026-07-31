@@ -632,3 +632,38 @@ NOT verifiable in this sandbox (no real browser + no display) — the user must
 verify on their machine (Brave primary). Honored the retry-limit rule: the
 first `pytest` run hung (the `Event.wait()` issue); I diagnosed with a single
 per-test timeout run instead of looping.
+
+### Update (2026-07-31, Session 19 cont. 5) — fix: cookie snapshot on main thread (not a daemon thread)
+User ran `glyph run live --browse https://facebook.com --browser brave` on their Windows box
+(Python 3.14, Brave at `C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`).
+The launch-fallback worked (no CDP on :9222 → launched Brave with a dedicated profile at
+`C:\Users\tison\.glyph\profiles\facebook.com`), they browsed, hit Ctrl+C, and the capture +
+pipeline SUCCEEDED (30 flows captured; rosetta/sensitive/snihunt all ran; snihunt found 144
+CT-log subdomains, resolved 146 hosts, reverse-IP on 42). BUT the shutdown path flooded
+~190 lines of `greenlet.error: cannot switch to a different thread (which happens to have
+exited)` on Ctrl+C, then a sustained `TargetClosedError: BrowserContext.cookies` flood for
+the entire pipeline duration (minutes of snihunt network recon). User flagged it: "According
+to you this is how it should work?"
+
+Root cause: my `_cookie_loop` ran in a DAEMON THREAD and called `ctx.cookies()` — but
+**Playwright's sync API is NOT thread-safe** (its objects are greenlet-bound to the thread
+that created them). Calling `ctx.cookies()` cross-thread corrupted the greenlet state on
+Ctrl+C close, and the thread kept calling it on the closed context afterward (the
+`TargetClosedError` flood). This is a real design flaw, not expected behavior — the capture
+itself was fine.
+
+Fix (commit `c36c97e`, `fix(capture): browse-mode cookie snapshot on main thread`): removed
+the `_cookie_loop` daemon thread entirely. Folded the periodic cookie snapshot into the
+main-thread poll loop (`while not done.wait(0.2)`): every ~5s call `_snapshot_cookies(context)`
+ON THE MAIN THREAD. Set `done` BEFORE close in the KeyboardInterrupt path so no more snaps
+fire during shutdown. Final snapshot in `finally` also runs on the main thread. Wrapped
+`close` in try/except to swallow residual greenlet noise (capture is already done). Capture
+semantics unchanged; only the threading model of the cookie snapshot changed. 156 pass /
+5 skip (unchanged); auto-mode smoke verified against example.com (2 flows). The CDP-attach
+path still needs on-device re-verification with this fix.
+
+Lesson (logged to inefficiencies/log.md): Playwright's sync API is thread-bound — NEVER
+call its objects from a non-main thread. The mock-Playwright tests did NOT catch this
+because the fakes have no greenlet/asyncio loop. Only a real on-device run surfaced it.
+Future: for any Playwright sync API call that needs to happen periodically, run it inline
+on the main thread's poll loop, not a daemon thread.
