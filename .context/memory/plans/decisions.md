@@ -179,3 +179,23 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   (multiple `.apk` entries, a `manifest.json`, or an `Android/obb/` dir) and recurse one level;
   add split `.so` and OBB assets as scan surfaces; keep the existing per-entry size cap.
   Tracked as an implementation item in `tasks/backlog.md`.
+
+---
+## ADR-8: `rich` is the CLI rendering layer + the package's one runtime dependency (2026-07-31)
+- **Status:** accepted (amends ADR-2's "zero third-party deps")
+- **Context:** The user wanted advanced, *designed* terminal output — real tables, panels,
+  consistent color that works on all platforms (they were on Windows PowerShell seeing plain
+  output). `colorama` only shims Windows ANSI; it has no tables. Hand-rolled ANSI (Session 12/13)
+  was fragile and still looked like debug lines. ADR-2 set a zero-dependency base.
+- **Decision:** Adopt **`rich`** as the CLI's rendering layer and the package's single runtime
+  dependency (`rich>=13`). It is pure-python, lightweight, and handles Windows VT, `NO_COLOR`,
+  and non-TTY/pipe detection itself. **The importable library core stays dependency-free:** rich
+  is imported only by `glyph.cli` (via `glyph/cli/_console.py`), never by the stage packages, and
+  a `HAS_RICH` flag falls back to plain rendering if it is somehow absent. Heavy backends
+  (mitmproxy/Playwright/genson/duckdb) remain optional extras.
+- **Consequences:** `pip install glyph-re` now pulls rich (+ its small dep tree); `import glyph`
+  still needs nothing third-party. `run` renders a panel; `sensitive`/`dict` render rich tables
+  with severity color-coding. This amends ADR-2: the base is "one lightweight presentation dep
+  (rich); the library core remains stdlib-only." `_format.py`'s ANSI helpers are retained for the
+  no-rich fallback and for the analyzer commands not yet migrated (fingerprint/auth/gating/catalog
+  still use the plain tree renderer — a follow-up could move them to rich tables).

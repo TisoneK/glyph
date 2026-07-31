@@ -242,3 +242,11 @@ resource-type sub-line, severity-colored counts, 'view' footer). Enabled ANSI/VT
 (SetConsoleMode +0x0004) so color renders in PowerShell/conhost — the likely reason Session 11's
 output looked plain. Color still auto-off on non-TTY/NO_COLOR/--json. 97 tests. Lesson: verify UX
 polish on the user's actual platform (Windows console != a Unix TTY for ANSI).
+
+### Update (2026-07-31, Session 13) — adopt rich for real designed output (ADR-8)
+User: hand-rolled ANSI was "still shitty"; wanted real designed tables + a cross-platform package
+(colorama or similar). Adopted `rich` as the CLI rendering layer + the package's one runtime dep
+(ADR-8): run → rounded panel, sensitive/dict → bordered rich tables with severity color-coding.
+rich handles Windows/NO_COLOR/non-TTY itself; library core stays dep-free (rich imported only in
+glyph.cli, HAS_RICH fallback). 97 tests. Follow-up: migrate fingerprint/auth/gating/catalog to
+rich tables too. Lesson: for polished cross-platform CLI output, use rich — don't hand-roll ANSI.
