@@ -332,3 +332,46 @@ def test_cli_run_has_no_snihunt_flag():
     from glyph.cli import build_parser
     args = build_parser().parse_args(["run", "har", "x.har", "--no-snihunt"])
     assert args.no_snihunt is True
+
+
+def test_cli_snihunt_direct_target_no_net(tmp_path, capsys):
+    # `glyph snihunt <host>` — direct target mode, no capture needed.
+    # --no-net keeps it offline (no DoH/CT/reverse-IP); the zero-rating
+    # heuristics + CDN suffix detection still run over the seeded host.
+    from glyph.cli import main
+    db = str(tmp_path / "c.db")
+    # 0.facebook.com is a known zero-rated pattern → surfaces offline.
+    assert main(["snihunt", "0.facebook.com", "--db", db, "--no-net"]) == 0
+    out = capsys.readouterr().out
+    assert "0.facebook.com" in out
+    assert "zero" in out.lower()
+
+
+def test_cli_snihunt_direct_target_normalizes_scheme(tmp_path, capsys):
+    # A URL with scheme+path should normalize to just the host.
+    from glyph.cli import main
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "c.db")
+    assert main(["snihunt", "https://www.example.com/path", "--db", db,
+                 "--no-net"]) == 0
+    # The catalog should have the target set to the normalized host.
+    cat = Catalog(db)
+    assert cat.target() == "example.com"
+    cat.close()
+
+
+def test_cli_snihunt_catalog_mode_still_works(tmp_path, make_entry, capsys):
+    # No positional target → runs over the existing catalog (the original mode).
+    from glyph.cli import main
+    from glyph.capture import ingest_har
+    db = str(tmp_path / "c.db")
+    har = tmp_path / "s.har"
+    har.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://0.facebook.com/x"),
+    ]}}))
+    cat = Catalog(db)
+    ingest_har(cat, str(har))
+    cat.close()
+    assert main(["snihunt", "--db", db, "--no-net"]) == 0
+    out = capsys.readouterr().out
+    assert "0.facebook.com" in out

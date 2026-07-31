@@ -1,15 +1,19 @@
-"""`glyph snihunt` — discover SNI bug-host candidates (ADR-10).
+"""`glyph snihunt [target]` — discover SNI bug-host candidates (ADR-10).
 
-Runs the bounded active-recon stage over the captured catalog: reverse-IP
-lookup, certificate-transparency subdomain enumeration, Cloudflare/CDN
-frontable-edge detection, zero-rating heuristics, and an optional active
-SNI probe. Discovers NEW candidates — does NOT scrape published bughost
-lists. Auto-runs after `sensitive` in `glyph run live`/`run har`; this
-command re-runs it on an existing catalog.
+Two modes:
+  - Direct target: ``glyph snihunt google.com`` — hunt a hostname directly,
+    no capture needed. DNS resolve + CT logs + reverse-IP + CDN/zero-rate.
+  - Catalog: ``glyph snihunt --db catalog.db`` — re-run over hosts already
+    captured in a catalog (the mode `glyph run live` leaves behind).
+
+Discovers NEW candidates — does NOT scrape published bughost lists. Auto-
+runs after `sensitive` in `glyph run live`/`run har`; this command is the
+standalone entry point.
 """
 from __future__ import annotations
 
 import argparse
+import sys
 
 from glyph.cli import _console as C
 from glyph.cli._format import sev_line
@@ -27,8 +31,15 @@ _CAT_LABEL = {
 def add_parser(sub) -> None:
     sp = with_json(with_db(sub.add_parser(
         "snihunt", help="discover SNI bug-host candidates (reverse-IP, CT logs, CDN)")))
-    sp.add_argument("--target", metavar="HOST",
-                    help="override the primary capture host")
+    sp.add_argument("target", nargs="?", default=None,
+                    help="a hostname to hunt directly (e.g. 'google.com'). "
+                         "If given, the hunt runs against this target WITHOUT "
+                         "needing a capture first — DNS resolve + CT logs + "
+                         "reverse-IP + CDN/zero-rate heuristics. If omitted, "
+                         "runs over the hosts already in the catalog.")
+    sp.add_argument("--target", dest="target_flag", metavar="HOST",
+                    help="override the primary capture host (alternative to "
+                         "the positional target)")
     sp.add_argument("--no-net", action="store_true",
                     help="skip ALL network hunters (local heuristics only — "
                          "extract + embedded CDN ranges + zero-rating patterns)")
@@ -46,13 +57,32 @@ def add_parser(sub) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
+    from glyph.catalog import Flow
     from glyph.snihunt import run_hunt
+    # Positional target (glyph snihunt google.com) takes precedence; fall back
+    # to --target. Either seeds the hunt directly without a prior capture.
+    target = args.target or getattr(args, "target_flag", None)
     cat = catalog(args)
     try:
-        if getattr(args, "target", None):
-            cat.set_target(args.target)
+        if target:
+            # Normalize: strip scheme + path, keep just the host.
+            t = target.strip()
+            for pfx in ("https://", "http://", "www."):
+                if t.startswith(pfx):
+                    t = t[len(pfx):]
+            t = t.split("/")[0].split(":")[0].strip(".")
+            if not t:
+                print(f"error: invalid target {target!r}", file=sys.stderr)
+                return 1
+            # Seed the catalog with a synthetic flow so extract_hosts picks the
+            # target up. Reuses the full hunt pipeline (CT/reverse-IP/CDN/zero-
+            # rate) without a separate code path — no refactor of run_hunt.
+            cat.reset()  # fresh hunt — don't mix with a prior capture's hosts
+            cat.set_target(t)
+            cat.add_flow(Flow(method="GET", url=f"https://{t}/", host="", path="",
+                              source="snihunt:seed"))
         summary = run_hunt(
-            cat, target=args.target,
+            cat, target=target,
             net=not args.no_net, probe=args.probe,
             max_domains=args.max_domains,
         )
