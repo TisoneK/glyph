@@ -549,3 +549,21 @@ but the tab-lineage filter means it only hooks target + popups), review section 
 + "existing tabs NOT hooked" logic), tasks/current.md Q7 (marked ANSWERED). 4 open questions
 remain for the build session (TUI mode, stop-signal confirmation, request-side capture,
 cookie storage, launch-helper). No product code — research/planning session.
+
+### Update (2026-07-31, Session 19 cont. 3) — all-traffic fallback when no target given
+User: "If target is not specified it captures every traffic." Refined ADR-14 point 7 again:
+the target `<url>` is now OPTIONAL (not required). Two modes — (a) url present (default):
+target-tab + popups only (the tab-lineage filter from cont. 2); (b) url absent: all-traffic
+— on CDP-attach, iterate `context.pages` (every existing tab) + `context.on("page")` (every
+new tab), register hooks on each; no active target (uses the "(unassigned)" bucket, id=0 —
+ADR-12); flows tagged by actual host, queryable via `--target <host>` later or
+`glyph target list`. The CLI MUST print a stderr banner
+"⚠ browse-all mode: capturing EVERY tab in your browser (email, social, other-banking —
+everything). Ctrl+C to stop." so all-traffic is never accidental. Launch fallback with no
+url: opens a blank page + hooks popups, or refuses (launch mode owns the browser, so
+"all tabs" = "the one tab Glyph opened" — all-traffic is really an attach-mode concept).
+Updated ADR-14 points 3 + 7 (rewritten with the two modes), review section 7 Q7 (added the
+all-traffic fallback), backlog implement item (url now OPTIONAL via argparse `nargs="?"` +
+the `context.pages`/`context.on("page")` all-traffic path + the stderr banner), tasks/current.md
+Q7 (noted both halves of the user's answer). Still no product code — research/planning
+session. 4 open questions remain for the build session.

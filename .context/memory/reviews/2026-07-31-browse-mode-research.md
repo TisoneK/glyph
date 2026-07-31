@@ -505,15 +505,27 @@ guidance is ~100-150 LOC, deferred.
    filter capture to the target host (drop non-target flows), or capture
    everything and let the catalog's first/third-party tagging handle it?
    **ANSWERED by the user:** "it needs target so that we can easily filter
-   non-relevant tabs or targets." Decision (in ADR-14 point 7): filter by **tab
-   lineage**, not by per-flow host inspection. `--browse` requires the target
-   `<url>`; Glyph opens a fresh tab in the attached context (`context.new_page()`
-   → `page.goto(url)`), hooks that tab + `page.on("popup")` (new tabs opened FROM
-   the target tab — payment providers, SSO, `target="_blank"`). Existing tabs +
-   manually-opened new tabs are NOT hooked → the user's email/social/other-banking
-   tabs are invisible by construction. Navigations within the target tab to other
-   hosts (SSO redirect to `accounts.google.com`) ARE captured (the tab is still
-   the target tab) and tagged by host; `glyph sensitive --target <host>` scopes
-   reads later. No allowlist/denylist needed; no per-flow host inspection at
-   capture time. A future `--browse-scope all` could relax this; v1 is
-   target-tab + popups only.
+   non-relevant tabs or targets" → then refined: "If target is not specified it
+   captures every traffic." Decision (in ADR-14 point 7): the target `<url>` is
+   OPTIONAL — present = target-tab + popups only (filtered); absent = all-traffic
+   (hook every tab). Two modes:
+   - **Default (target given, e.g. `glyph run live --browse https://betika.com`):**
+     filter by **tab lineage**, not per-flow host inspection. Glyph opens a fresh tab
+     in the attached context (`context.new_page()` → `page.goto(url)`), hooks that
+     tab + `page.on("popup")` (new tabs opened FROM the target — payment providers,
+     SSO, `target="_blank"`). Existing tabs + manually-opened new tabs are NOT hooked
+     → the user's email/social/other-banking tabs are invisible by construction.
+     Navigations within the target tab to other hosts (SSO redirect to
+     `accounts.google.com`) ARE captured and tagged by host; `glyph sensitive
+     --target <host>` scopes reads later. No allowlist/denylist needed; no per-flow
+     host inspection at capture time.
+   - **All-traffic fallback (no target, e.g. `glyph run live --browse`):** hook every
+     tab — iterate `context.pages` (existing) + `context.on("page")` (new), register
+     hooks on each. No active target set (uses the "(unassigned)" bucket, id=0 —
+     ADR-12); flows tagged by actual host, queryable via `--target <host>` later or
+     `glyph target list`. The CLI MUST warn clearly (stderr banner) so it's never
+     accidental: "⚠ browse-all mode: capturing EVERY tab in your browser (email,
+     social, other-banking — everything). Ctrl+C to stop."
+   - The choice is a CLI-level UX decision (url present vs absent), not a separate
+     flag — simplest mental model. A future `--browse-scope all|target` flag could
+     make it explicit if the url-absent = all-traffic rule proves surprising.

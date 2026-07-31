@@ -555,13 +555,13 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
      `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser`, Linux
      `/usr/bin/brave-browser`, Windows `%ProgramFiles%\BraveSoftware\Brave-Browser\
      \Application\brave.exe`) or `--browser-path <path>`.
-  3. **`--browse` flag** on `glyph run live` and `glyph capture live`. **Requires the target
-     `<url>`** (already required by `with_live()`, but now load-bearing — the URL is the
-     anchor for the tab-lineage capture filter, point 7). When set, Glyph TRIES CDP-attach
-     first (default `http://localhost:9222`, overridable via `--cdp-port` / `--cdp-host` /
-     `GLYPH_CDP_URL` env). If no CDP endpoint reachable, falls back to the launch path with
-     a clear stderr message ("No browser on :9222 — launching <browser> with a dedicated
-     profile; log in once, it persists at ~/.glyph/profiles/<host>/"). `--browser
+  3. **`--browse` flag** on `glyph run live` and `glyph capture live`. The target `<url>`
+     is OPTIONAL — present = target-tab + popups capture (point 7 default); absent =
+     all-traffic capture (point 7 fallback). When set, Glyph TRIES CDP-attach first
+     (default `http://localhost:9222`, overridable via `--cdp-port` / `--cdp-host` /
+     `GLYPH_CDP_URL` env). If no CDP endpoint reachable, falls back to the launch path
+     with a clear stderr message ("No browser on :9222 — launching <browser> with a
+     dedicated profile; log in once, it persists at ~/.glyph/profiles/<host>/."). `--browser
      chrome|edge|brave` picks the fallback browser (default: chrome). `--incognito` forces
      an ephemeral context. `--no-browse` is implicit (current behavior).
   4. **Browser-launch helper (recommended).** `glyph browse --launch <browser> [--url <url>]`
@@ -583,34 +583,45 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
      (schema → rosetta → sensitive → snihunt), THEN open the dashboard as a post-capture
      exploration view (or print the summary if `--no-tui`). Split-pane (browser + dashboard
      side-by-side) is a future enhancement; defer.
-  7. **Capture scoping — target-tab + popups only (the user's filter requirement).**
-     `--browse` REQUIRES the target `<url>` (already required by `with_live()`, but now
-     load-bearing for filtering). The target URL is the anchor; Glyph captures ONLY the
-     target tab + tabs opened FROM it — not every tab in the user's browser:
-     - On CDP-attach: `context.new_page()` → `page.goto(url)` opens a fresh tab in the
-       user's attached browser (shares their session: cookies, saved logins, password
-       manager — the whole point of attach mode). This is **the target tab**.
-     - Hook `page.on("response")` / `"request"` / `"websocket"` / `"framenavigated"` on
-       the target tab.
-     - Hook `page.on("popup")` — fires when a new tab is opened FROM the target tab
-       (`window.open`, `target="_blank"`, Ctrl+click). Hook those popup pages too. This
-       is how payment providers / SSO that open in a new tab get captured.
-     - **Existing tabs are NOT hooked.** The user's email, social, other-banking tabs —
-       invisible to Glyph by construction. No flow inspection needed.
-     - **Manually-opened new tabs** (Ctrl+T, address bar) are NOT hooked — they're not
-       popups from the target tab.
-     - Navigations WITHIN the target tab to other hosts (SSO redirect to
+  7. **Capture scoping — target-tab + popups by default; ALL tabs if no target
+     (the user's filter requirement, with an explicit all-traffic fallback).**
+     `--browse` takes the target `<url>` as OPTIONAL (not required). Two modes:
+     - **Default (target given, e.g. `glyph run live --browse https://betika.com`):**
+       target-tab + popups only. Glyph opens a fresh tab in the attached context
+       (`context.new_page()` → `page.goto(url)`, shares the user's session: cookies,
+       saved logins, password manager), hooks that tab + `page.on("popup")` (new tabs
+       opened FROM it — payment providers, SSO, `target="_blank"`). Existing tabs +
+       manually-opened new tabs are NOT hooked → the user's email/social/other-banking
+       tabs are invisible by construction. This is the user's "filter non-relevant tabs"
+       default.
+     - **All-traffic fallback (no target, e.g. `glyph run live --browse` with no url):
+       hook every tab.** On CDP-attach: iterate `context.pages` (every existing tab) +
+       `context.on("page")` (every new tab), register the response/request/websocket/
+       framenavigated hooks on each. The catalog has no active target set (or uses the
+       reserved "(unassigned)" bucket, id=0 — ADR-12) since there's no anchor host;
+       flows are tagged by their actual host and queryable via `--target <host>` later
+       or `glyph target list` to see every host captured. Use this when the user wants
+       a firehose capture of whatever they're doing across tabs (rare, but the user
+       explicitly wants it available). The CLI MUST warn clearly when this mode is
+       active: stderr banner "⚠ browse-all mode: capturing EVERY tab in your browser
+       (email, social, other-banking — everything). Ctrl+C to stop." so it's never
+       accidental.
+     - **Launch fallback:** target given → same target-tab + popups model (Glyph owns
+       the browser, opens the URL, hooks page + popups). No target → opens a blank page,
+       hooks it + popups (the user navigates manually from there); or refuses with a
+       clear message if all-traffic in a Glyph-launched browser doesn't make sense
+       (likely refuses — launch mode owns the browser, so "all tabs" = "the one tab
+       Glyph opened"; the all-traffic fallback is really an attach-mode concept).
+     - **Navigations within a hooked tab** to other hosts (SSO redirect to
        `accounts.google.com`, payment redirect to `flutterwave.com`) ARE captured (the
-       tab is still the target tab) and tagged by their actual host; `glyph sensitive
-       --target <host>` scopes reads later. The target host is set via
-       `catalog.set_target(urlparse(url).hostname)` (ADR-12).
-     - Launch fallback: same model — Glyph owns the browser, opens the target URL, hooks
-       the page + popups.
-     - This filters by **tab lineage** (target tab + its popups), which is exactly the
-       user's "filter non-relevant tabs" requirement — unrelated tabs never get hooks.
-       No allowlist/denylist needed; no per-flow host inspection at capture time. A
-       future `--browse-scope all` flag could relax this (hook every tab), but v1 is
-       target-tab + popups only.
+       tab is still hooked) and tagged by their actual host. When a target is set, the
+       target host is registered via `catalog.set_target(urlparse(url).hostname)`
+       (ADR-12) so per-target read filtering works.
+     - This gives the user both: the clean filtered default (target-tab + popups) AND
+       the explicit all-traffic fallback (no target). The choice is a CLI-level UX
+       decision (url present vs absent), not a separate flag — simplest mental model.
+       A future `--browse-scope all|target` flag could make it explicit if the
+       url-absent = all-traffic rule proves surprising.
   8. **Captured flows tagged `source = "playwright:<type>"`** (same as today). Add a
      `capture_mode` meta (`"auto"` vs `"browse-attach"` vs `"browse-launch"`) so the
      catalog/UI can distinguish.
