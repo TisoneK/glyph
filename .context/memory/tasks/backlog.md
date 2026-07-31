@@ -97,3 +97,20 @@ don't remove the line.
       indicators (secrets-in-URL, unauthenticated sensitive data, wildcard CORS, missing
       security headers, verbose errors, guessable-id IDOR). Passive only. RESEARCH.md §6j.
       Follow-up: optional redacted-EXPORT command (redaction is export-only, never at rest).
+- [ ] **Extend the tracking-vendor list** (added 2026-07-31 by Claude Code, Session 10) —
+      `glyph/sensitive/party.py` `_TRACKING_VENDORS` misses pixel/ad hosts seen live (tapad,
+      snapchat `tr.`, eskimi, inmobi, decibelinsight) — they show as generic third-party
+      instead of noise. Safe direction (shows more), but extend the set. Low.
+- [ ] **guessable_object_id: skip static-asset paths** (added 2026-07-31 by Claude Code,
+      Session 10) — fired on `collection.decibelinsight.net/i/{id}/{id}/di.js` (a static JS
+      asset, not an API/object). In `glyph/sensitive/risk.py::_guessable_ids`, skip endpoints
+      whose path ends in `.js/.css/.png/...` or is clearly a static asset. Low-Medium.
+- [ ] **Related-domain (same-org) heuristic** (added 2026-07-31 by Claude Code, Session 10) —
+      `flashscore.com`/`lsapp.eu`/`flashscore.ninja` are one org but different registrable
+      domains, so reference-join won't cross them and party tags them third-party. A shared
+      brand-label heuristic (e.g. `flashscore` appears in both) could recover them. Medium,
+      false-positive risk — design carefully. Affects `rosetta` scoping + `sensitive/party`.
+- [ ] **build_dictionary --fresh / clear stale entries** (added 2026-07-31 by Claude Code,
+      Session 10) — `glyph.rosetta.build_dictionary` upserts but never removes rows no longer
+      produced, so a re-decode after a logic change keeps stale decodings. Add a fresh/clear
+      option (respect human-reviewed rows). Low-Medium.
