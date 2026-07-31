@@ -164,3 +164,10 @@ open for the package to address.
 - **Outcome:** done. New modular stage: detectors (PII/secrets/financial incl. Kenyan/M-Pesa + Luhn cards + entropy-gated secrets), path-based endpoint classification, and passive risk indicators (secrets-in-URL, unauthenticated-sensitive-data, wildcard CORS, missing security headers, verbose errors, guessable-id IDOR). Catalog `findings` table (kept value, idempotent re-scan). **88 tests pass.** Verified live on demoblaze: flagged `demo@blazemeter.com` + missing security headers on a real capture. Passive only — no active scanning/exploitation.
 - **Open items:** live test to exercise `glyph sensitive` against a richer real target (in progress); consider tightening enum deny-list (`desc`/`img`, noted Session 9); optional redacted-export command.
 - **Report:** none (feature session; commit + this entry carry it).
+
+### Update (2026-07-31, Session 10 cont.) — sensitive hooked into `run` by default
+Per user ("shouldn't the sensitive be by default hooked in run live?"), the sensitive/risk
+scan now runs automatically at the end of `glyph run live` and `glyph run har` (passive, on
+already-captured data), with a one-line summary and a `--no-sensitive` opt-out. Also fixed a
+credit-card false positive surfaced by the Juice Shop live test (Luhn-valid ms timestamp) via
+a card-network-prefix gate. 90 tests.
