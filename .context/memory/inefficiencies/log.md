@@ -199,3 +199,81 @@ never harvested.
   list-of-N. (2) Always use `git -C <abs-repo-path>` in this sandbox; never rely on `cd`
   persisting across Bash calls. The Session 7 note "use absolute paths in Bash" now covers
   git's repo dir too.
+
+---
+## 2026-07-31 — Super Z / unknown (Session 16, self-critique)
+
+- **Problem:** I shipped the `glyph.snihunt` feature (Session 16) without
+  stepping back to critique my own work. The user called it out: "You did not
+  think about inefficiencies and flaws?" On review, EIGHT real issues made it
+  into the committed code — two are data-correctness bugs, the rest are design
+  and code-quality flaws I should have caught before `feat(snihunt)` landed.
+- **Cost:** A follow-up fix session (this one) + the user's trust that the
+  autonomous workflow self-checks. The bugs were latent (the normal `run live`
+  path masks them because sensitive runs BEFORE snihunt), so they would have
+  bitten the first user who ran `glyph sensitive` standalone after `glyph snihunt`.
+- **The 8 flaws (honest list):**
+  1. **`sensitive/scan.py::run_scan` wipes SNI findings.** It calls
+     `catalog.clear_findings()` (no kind) — clears ALL findings including
+     `sni_bug_host`. If a user runs `glyph sensitive` after `glyph snihunt`,
+     the SNI findings are destroyed. The normal `_gather` order (sensitive
+     before snihunt) masks this, but the standalone `glyph sensitive` re-run
+     is a real path.
+  2. **`sensitive/scan.py::summarize` counts SNI findings.** It calls
+     `catalog.findings()` (no kind filter) — iterates ALL findings. So the
+     sensitive summary's `actionable_total` / `by_severity` are inflated
+     whenever SNI findings exist. `glyph sensitive` would report wrong counts.
+  3. **Active recon runs by default on `glyph run live`.** ADR-4 established
+     "passive only"; I made the ONE active stage run automatically. Every live
+     capture now leaks the target to Google DoH, Cloudflare DoH, certspotter,
+     and hackertarget. For a tool used for authorized assessment, silently
+     making outbound calls is an OpSec concern. (The user DID ask for it to
+     auto-run — "if a user enters target on live run then it runs also sni
+     hunting" — so this is a noted tradeoff, not a bug. But I should have
+     added a `--snihunt-no-net` opt-out so users CAN skip the network portion,
+     and a notice in the run output that SNI hunt makes outbound calls.)
+  4. **66s runtime on the live path.** My real-world test took 66s. The TUI
+     `_finalize` runs `run_hunt` synchronously in a worker thread — the user
+     sees "✓ captured" but the SNI tab stays empty for a minute with no
+     indicator. Bad UX.
+  5. **Score stored in the evidence *string*, parsed back out in 3 places.**
+     `glyph/cli/snihunt.py::_score`, `glyph/tui/data.py::_sni_score`, and
+     `glyph/snihunt/hunt.py::summarize` all `split("·")` the evidence string
+     and look for tokens starting with "score " or ending in "-fronted". If
+     the evidence format changes, all three break silently. The score should
+     be a structured field on Finding, not a substring.
+  6. **`reverseip.py` line 25: ugly inline `__import__` hack.**
+     `fetch = http_get or (lambda u, t: __import__("glyph.snihunt._net",
+     fromlist=["default_http_get"]).default_http_get(u, t))` — should be a
+     clean module-level import or just use `get_text`'s default.
+  7. **`probe.py` has ZERO test coverage.** The active SNI probe (opt-in) is
+     completely untested — would need to mock `ssl.wrap_socket` / `socket`.
+  8. **"429-aware" claimed in ADR-10 but not implemented.** `get_json` swallows
+     ALL errors (including HTTP 429) and returns None. No backoff, no
+     Retry-After respect, no rate-limit tracking. certspotter has a documented
+     rate limit; hitting it silently degrades to the crt.sh fallback.
+- **Cause:** I treated "tests pass + feature works on one live target" as
+  sufficient. I did not run the standalone `glyph sensitive` after `glyph
+  snihunt` to check the cross-stage interaction, did not review the evidence-
+  string parsing for fragility, and did not step back to ask "what does this
+  look like to a user who runs the stages in a different order?" The protocol's
+  review phase exists for exactly this; I rushed it.
+- **Workaround / fix (this session):**
+  - (1) `run_scan` clears only its own kinds (sensitive_data, sensitive_endpoint,
+    risk) — NOT sni_bug_host.
+  - (2) `summarize` filters to sensitive-stage kinds only.
+  - (3) Add `--snihunt-no-net` passthrough to `run live`/`run har` + a notice.
+  - (5) Add a `score` column to the findings table (additive migration); Finding
+    model gets `score: Optional[int]`; CLI/TUI/summarize read `f.score` directly.
+  - (6) Clean up the `__import__` hack.
+  - (7) + (8) logged as backlog items (probe tests; 429 handling).
+  - (4) addressed by (3) — `--snihunt-no-net` makes the live path fast when the
+    user doesn't want network recon.
+- **Prevent next time:** Before committing a feature that touches a shared
+  table (findings), run the OTHER stages that read/write that table in
+  isolation to confirm no cross-stage contamination. Specifically: after
+  adding a new Finding kind, run `glyph <other-stage>` standalone and verify
+  (a) it doesn't wipe the new kind, (b) its summary doesn't count the new kind.
+  And: never store structured data (score, category) inside a human-readable
+  string field and parse it back out — use a real column. The protocol's review
+  phase is not optional; "tests pass" is not "correct."

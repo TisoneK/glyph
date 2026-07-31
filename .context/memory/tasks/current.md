@@ -11,9 +11,12 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 16 (2026-07-31) shipped the `glyph.snihunt` stage
-  (SNI bug-host hunting, ADR-10). See `agents/sessions.md` Session 16,
-  `reviews/2026-07-31-sni-bug-host-hunt.md`, and the backlog follow-ups
-  (live carrier verification, zero-rating pattern enrichment, third CT source).
-- **Status:** idle
+- **Session:** 2026-07-31 — Super Z / unknown (cloud sandbox)
+- **Task:** (1) Fix the flaws in Session 16's snihunt work that I shipped without
+  self-critiquing — the two data-correctness bugs (sensitive scan wipes SNI
+  findings; sensitive summary counts SNI findings), the fragile score-in-string
+  parsing, the reverseip __import__ hack, and the missing --no-net passthrough on
+  run live/har. (2) Then start the VPN-Config Decoder/Sniffer feature (new ADR,
+  reference InjectX for algorithms, decrypt user-supplied config files online or
+  offline, new TUI tab).
+- **Status:** in-progress
