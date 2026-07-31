@@ -185,17 +185,28 @@ _SNI_CAT_LABEL = {
 
 
 def snihunt_rows(cat: Catalog) -> Rows:
-    """SNI bug-host candidates ranked by score (ADR-10)."""
-    headers = ["SEV", "SCORE", "TYPE", "SNI HOST", "EVIDENCE"]
+    """SNI bug-host candidates ranked by score (ADR-10). Compact columns —
+    HOST / IP / CDN / TYPE / SIGNALS — not the old wall-of-prose evidence."""
+    from glyph.snihunt import parse_evidence
+    headers = ["SEV", "SCR", "SNI HOST", "IP", "CDN", "TYPE", "SIGNALS"]
     rows: List[List[str]] = []
     findings = cat.findings(kind="sni_bug_host")
-    # Sort by score desc (a real column now, Session 16 fix — no longer
-    # parsed out of the evidence string).
     findings = sorted(findings, key=lambda f: -(f.score or 0))
     for f in findings:
-        rows.append([f.severity.upper(), str(f.score or 0),
-                     _SNI_CAT_LABEL.get(f.category, f.category),
-                     f.host or "", (f.evidence or "")[:100]])
+        ev = parse_evidence(f.evidence or "")
+        ip = ev.get("ip", "") or "—"
+        cdn = ev.get("cdn", "") or "—"
+        sigs = []
+        if ev.get("captured"): sigs.append(f"cap×{ev['captured']}")
+        if ev.get("zero_rating"): sigs.append("zero:" + ",".join(ev["zero_rating"][:2]))
+        if ev.get("wildcard"): sigs.append("wildcard")
+        if ev.get("shared_cert"): sigs.append(f"shared:{ev['shared_cert']}")
+        if ev.get("reverse_siblings"): sigs.append(f"rip+{ev['reverse_siblings']}")
+        if ev.get("reverse_sourced"): sigs.append("rip-sourced")
+        if ev.get("probe_ok"): sigs.append("probe✓")
+        rows.append([f.severity.upper(), str(f.score or 0), f.host or "",
+                     ip, cdn, _SNI_CAT_LABEL.get(f.category, f.category),
+                     " ".join(sigs) or "—"])
     return headers, rows
 
 

@@ -71,26 +71,42 @@ def _category(signals: Dict[str, Any]) -> str:
 
 
 def _evidence(host: str, score: int, signals: Dict[str, Any]) -> str:
-    parts = [f"score {score}"]
-    if signals.get("captured"):
-        parts.append(f"captured ({signals['captured']} flows)")
-    if signals.get("cdn"):
-        parts.append(f"{signals['cdn']}-fronted")
-    if signals.get("zero_rating"):
-        parts.append("zero-rated: " + ", ".join(signals["zero_rating"]))
-    if signals.get("wildcard"):
-        parts.append("wildcard cert")
-    if signals.get("shared_cert"):
-        parts.append(f"shared cert ({signals['shared_cert']} subdomains)")
-    if signals.get("reverse_siblings"):
-        parts.append(f"{signals['reverse_siblings']} siblings on IP")
-    if signals.get("reverse_sourced"):
-        parts.append("shares IP with captured host")
-    if signals.get("probe_ok"):
-        parts.append("probe OK")
-    if signals.get("probe_sans"):
-        parts.append(f"probe SANs: {signals['probe_sans']}")
-    return " · ".join(parts)
+    """Compact, parseable evidence line. Format: ``ip=X cdn=Y sig=…``.
+
+    The full signal detail lives in the structured ``signals`` dict at hunt
+    time; the evidence string is a compact summary for the table + a fallback
+    for `--json`. Kept short so the CLI/TUI table can show real columns
+    (HOST / IP / CDN / TYPE) instead of a wall of prose.
+    """
+    import json
+    summary = {
+        "score": score,
+        "ip": (signals.get("ips") or [""])[0] or "",
+        "cdn": signals.get("cdn") or "",
+        "captured": signals.get("captured") or 0,
+        "zero_rating": signals.get("zero_rating") or [],
+        "wildcard": bool(signals.get("wildcard")),
+        "shared_cert": signals.get("shared_cert") or 0,
+        "reverse_siblings": signals.get("reverse_siblings") or 0,
+        "reverse_sourced": bool(signals.get("reverse_sourced")),
+        "probe_ok": bool(signals.get("probe_ok")),
+    }
+    return json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
+
+
+def parse_evidence(evidence: str) -> Dict[str, Any]:
+    """Parse an SNI finding's evidence back into a structured dict.
+
+    The evidence is stored as compact JSON (see ``_evidence``). Returns an
+    empty dict on any parse failure — callers default gracefully."""
+    import json
+    if not evidence:
+        return {}
+    try:
+        data = json.loads(evidence)
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
 
 
 def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
@@ -356,18 +372,12 @@ def summarize(catalog: Catalog, discovered: Optional[int] = None,
     for f in findings:
         by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
         by_cat[f.category] = by_cat.get(f.category, 0) + 1
-        # CDN name lives in the signals dict at hunt time, but at read time
-        # we only have the finding. Parse it from the evidence string (the
-        # only place the CDN name is recorded) — bounded, not load-bearing.
-        # The SCORE is a real column now (Session 16 fix); this CDN parse is
-        # best-effort summary cosmetics only.
-        if "-fronted" in (f.evidence or ""):
-            for tok in f.evidence.split("·"):
-                tok = tok.strip()
-                if tok.endswith("-fronted"):
-                    name = tok.replace("-fronted", "").strip()
-                    by_cdn[name] = by_cdn.get(name, 0) + 1
-                    break
+        # CDN name is now structured JSON in evidence (parse_evidence); no
+        # more fragile string-split on "-fronted".
+        ev = parse_evidence(f.evidence or "")
+        cdn = ev.get("cdn")
+        if cdn:
+            by_cdn[cdn] = by_cdn.get(cdn, 0) + 1
 
     def sevmap(src):
         return {s: src[s] for s in ("critical", "high", "medium", "low")

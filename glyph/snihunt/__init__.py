@@ -15,6 +15,6 @@ only and names no tunneling tool (ADR-3).
 """
 from __future__ import annotations
 
-from glyph.snihunt.hunt import run_hunt, summarize
+from glyph.snihunt.hunt import parse_evidence, run_hunt, summarize
 
-__all__ = ["run_hunt", "summarize"]
+__all__ = ["run_hunt", "summarize", "parse_evidence"]

@@ -126,8 +126,12 @@ def test_hunt_offline_local_heuristics_only():
     fb = [f for f in findings if f.host == "0.facebook.com"][0]
     assert fb.category == "sni_zero_rated"  # zero-rating beats CDN
     assert fb.severity == "high"  # zero-rate (30) + captured (10) + cdn (30) = 70
-    assert "zero-rated" in fb.evidence
-    assert "Cloudflare-fronted" in fb.evidence
+    # Evidence is now structured JSON (parse_evidence), not prose.
+    from glyph.snihunt import parse_evidence
+    ev = parse_evidence(fb.evidence)
+    assert ev["zero_rating"]  # facebook_free_basics fired
+    assert ev["cdn"] == "Cloudflare"  # captured IP 104.16.1.2
+    assert ev["score"] == 70
     cat.close()
 
 
@@ -163,19 +167,22 @@ def test_hunt_with_mocked_network_discovers_new_hosts():
     # The wildcard cert signal fired. api.shop.ke wasn't captured and has no
     # DoH route (only www.shop.ke does), so it scores shared+wildcard = 25
     # (low) — still surfaced as a candidate, which is the point.
+    from glyph.snihunt import parse_evidence
     api = [f for f in findings if f.host == "api.shop.ke"][0]
-    assert "wildcard cert" in api.evidence
-    assert "shared cert" in api.evidence
+    ev = parse_evidence(api.evidence)
+    assert ev["wildcard"] is True
+    assert ev["shared_cert"] >= 5
     assert api.severity == "low"  # 25 = shared(15) + wildcard(10); no CDN/IP
     # The reverse-IP sibling is also promoted to a candidate (one level deep;
     # siblings-of-siblings aren't chased). It scores via "reverse_sourced"
     # (shares an IP with a captured host) — the fronting signal.
     assert "sibling-other.com" in hosts
     sib = [f for f in findings if f.host == "sibling-other.com"][0]
-    assert "shares IP with captured host" in sib.evidence
+    sev = parse_evidence(sib.evidence)
+    assert sev["reverse_sourced"] is True
     # reverse_sourced (10) + Cloudflare CDN via the shared IP (30) = 40 medium.
     assert sib.severity == "medium"
-    assert "Cloudflare-fronted" in sib.evidence
+    assert sev["cdn"] == "Cloudflare"
     cat.close()
 
 
@@ -278,8 +285,9 @@ def test_tui_snihunt_rows(tmp_path):
     cat.add_flow(Flow(method="GET", url="https://0.facebook.com/x", host="", path=""))
     run_hunt(cat, net=False)
     headers, rows = D.snihunt_rows(cat)
-    assert headers == ["SEV", "SCORE", "TYPE", "SNI HOST", "EVIDENCE"]
-    assert any(r[3] == "0.facebook.com" for r in rows)
+    # Compact columns: SEV / SCR / SNI HOST / IP / CDN / TYPE / SIGNALS
+    assert headers == ["SEV", "SCR", "SNI HOST", "IP", "CDN", "TYPE", "SIGNALS"]
+    assert any("0.facebook.com" in r for r in rows)
     cat.close()
 
 
