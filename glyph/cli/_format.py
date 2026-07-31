@@ -26,10 +26,34 @@ _SEV_STYLE = {
 }
 
 
+def _enable_windows_ansi() -> None:
+    """Turn on ANSI/VT processing so colors render in legacy Windows consoles
+    (Windows Terminal already supports it; conhost needs this)."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        k = ctypes.windll.kernel32
+        handle = k.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if k.GetConsoleMode(handle, ctypes.byref(mode)):
+            k.SetConsoleMode(handle, mode.value | 0x0004)  # +VT_PROCESSING
+    except Exception:
+        pass
+
+
+_enable_windows_ansi()
+
+
 def use_color() -> bool:
     return (sys.stdout.isatty()
             and os.environ.get("NO_COLOR") is None
             and os.environ.get("TERM") != "dumb")
+
+
+def num(n) -> str:
+    """A value emphasized (bold)."""
+    return style(n, "bold")
 
 
 def style(text, *names: str) -> str:
