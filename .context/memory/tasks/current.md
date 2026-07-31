@@ -11,7 +11,10 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 14 (2026-07-31) shipped the TUI dashboard Phase 1 (ADR-9). Next:
-  Phase 2 live streaming. See `agents/sessions.md` Session 14 and `plans/decisions.md` ADR-9.
-- **Status:** idle
+- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 15)
+- **Task:** TUI Phase 2 — live status + real-time data. Capture driver writes flows/DOM
+  incrementally (+ capture_status meta); catalog on WAL for concurrent read/write; the
+  dashboard runs the capture in a worker and refreshes flows/DOM/summary on a timer with a
+  ● LIVE header + elapsed clock, re-running analysis periodically. Headless path (--no-tui)
+  unchanged. Playwright live path verified on-device (user's Windows box). See ADR-9 Phase 2.
+- **Status:** in-progress
