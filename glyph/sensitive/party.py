@@ -12,29 +12,15 @@ resolves to `foo.co.ke`, not `co.ke`.
 """
 from __future__ import annotations
 
-import re
 from typing import Optional
+
+# registrable_domain lives in catalog.normalize (shared with rosetta, which
+# scopes reference-joins to a domain) — re-exported here for convenience.
+from glyph.catalog.normalize import registrable_domain
 
 PARTY_FIRST = "first_party"
 PARTY_THIRD = "third_party"
 PARTY_UNKNOWN = "unknown"
-
-# Two-label public suffixes we treat as a TLD (registrable domain = label+this).
-_MULTI_SUFFIX = {
-    # Kenya + East Africa (project priority)
-    "co.ke", "or.ke", "ne.ke", "go.ke", "ac.ke", "sc.ke", "me.ke", "mobi.ke",
-    "info.ke", "co.tz", "or.tz", "co.ug", "or.ug", "co.rw",
-    # UK
-    "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk", "net.uk", "ltd.uk",
-    # AU / NZ
-    "com.au", "net.au", "org.au", "co.nz", "org.nz",
-    # ZA / other Africa
-    "co.za", "org.za", "com.ng", "org.ng", "com.gh",
-    # Asia / America
-    "co.in", "net.in", "org.in", "com.br", "com.mx", "co.jp", "or.jp",
-    "com.sg", "com.hk", "com.tr",
-}
-_IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
 # Known analytics / advertising / tracking / session-replay vendors. These
 # are pure infrastructure noise — a target's own data never lives here, so
@@ -69,19 +55,6 @@ def is_tracking_vendor(host: Optional[str]) -> bool:
     if registrable_domain(host) in _TRACKING_VENDORS:
         return True
     return any(host == v or host.endswith("." + v) for v in _TRACKING_VENDORS)
-
-
-def registrable_domain(host: Optional[str]) -> str:
-    """Return the eTLD+1 for a host ('' if it has none / is an IP)."""
-    host = (host or "").split(":")[0].strip(".").lower()
-    if not host or _IPV4.match(host) or ":" in host:  # bare host, IPv4, IPv6
-        return host
-    labels = host.split(".")
-    if len(labels) <= 2:
-        return host
-    if ".".join(labels[-2:]) in _MULTI_SUFFIX:
-        return ".".join(labels[-3:])
-    return ".".join(labels[-2:])
 
 
 def classify(host: Optional[str], target: Optional[str]) -> str:

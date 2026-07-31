@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from glyph.catalog import Catalog
+from glyph.catalog.normalize import registrable_domain
 from glyph.rosetta import confidence as C
 
 # Sibling suffixes that turn a code field into its label field.
@@ -187,13 +189,22 @@ def _attr_tokens(attr_val: str) -> List[str]:
 
 
 def reference_join(catalog: Catalog) -> List[Candidate]:
-    """Strategy 3 — resolve ``*_id`` fields against named objects elsewhere."""
-    # Build an id -> (name, source_path) index from all named objects.
-    index: Dict[str, List[Tuple[str, str]]] = {}
+    """Strategy 3 — resolve ``*_id`` fields against named objects elsewhere.
+
+    Scoped to the **same registrable domain**: an id is only resolved against
+    named objects served from the same site. Without this, an integer id
+    collides across unrelated hosts — e.g. a sports ``eventStageId=12`` would
+    resolve to a cookie-consent ``purposeId=12`` from a third-party consent
+    CDN. This is a domain-neutral rule, not a per-site fix.
+    """
+    # Per-domain index: registrable_domain -> {id_value: [(name, source_path)]}.
+    index: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(
+        lambda: defaultdict(list))
     endpoints = {e.id: e for e in catalog.endpoints()}
-    for ep_id in list(endpoints):
+    for ep_id, ep in endpoints.items():
         if ep_id is None:
             continue
+        dom = registrable_domain(ep.host)
         for doc in _json_docs(catalog, ep_id):
             for obj_path, obj in _walk_objects(doc, "$"):
                 if "id" not in obj:
@@ -203,15 +214,17 @@ def reference_join(catalog: Catalog) -> List[Candidate]:
                             None)
                 if name is None:
                     continue
-                src = endpoints[ep_id].path_template if ep_id in endpoints else ""
-                index.setdefault(str(obj["id"]), []).append((name, src))
+                index[dom][str(obj["id"])].append((name, ep.path_template))
 
     if not index:
         return []
 
     out: List[Candidate] = []
-    for ep_id in list(endpoints):
+    for ep_id, ep in endpoints.items():
         if ep_id is None:
+            continue
+        dom_index = index.get(registrable_domain(ep.host), {})
+        if not dom_index:
             continue
         for doc in _json_docs(catalog, ep_id):
             for obj_path, obj in _walk_objects(doc, "$"):
@@ -220,7 +233,7 @@ def reference_join(catalog: Catalog) -> List[Candidate]:
                     if not (kl.endswith("_id") or kl.endswith("id")) or kl == "id":
                         continue
                     base = re.sub(r"_?id$", "", kl)
-                    hits = index.get(str(value))
+                    hits = dom_index.get(str(value))  # same-domain only
                     if not hits:
                         continue
                     hinted = [h for h in hits if base and base in h[1].lower()]

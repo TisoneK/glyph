@@ -14,6 +14,33 @@ _UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
 _HEX = re.compile(r"^[0-9a-fA-F]{16,}$")
 _INT = re.compile(r"^\d+$")
 _MIXED_ID = re.compile(r"^(?=.*\d)[A-Za-z0-9_\-]{8,}$")
+_IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
+
+# Two-label public suffixes treated as a TLD, so ``foo.co.ke`` -> ``foo.co.ke``
+# (not ``co.ke``) and ``x.betika.com`` / ``betika.com`` share a domain. A
+# compact set (incl. East-African, Kenya-priority) rather than a full PSL.
+_MULTI_SUFFIX = {
+    "co.ke", "or.ke", "ne.ke", "go.ke", "ac.ke", "sc.ke", "me.ke", "mobi.ke",
+    "info.ke", "co.tz", "or.tz", "co.ug", "or.ug", "co.rw",
+    "co.uk", "org.uk", "me.uk", "ac.uk", "gov.uk", "net.uk", "ltd.uk",
+    "com.au", "net.au", "org.au", "co.nz", "org.nz",
+    "co.za", "org.za", "com.ng", "org.ng", "com.gh",
+    "co.in", "net.in", "org.in", "com.br", "com.mx", "co.jp", "or.jp",
+    "com.sg", "com.hk", "com.tr",
+}
+
+
+def registrable_domain(host):
+    """Return the eTLD+1 for a host ('' if none / an IP). Domain-neutral."""
+    host = (host or "").split(":")[0].strip(".").lower()
+    if not host or _IPV4.match(host) or ":" in host:
+        return host
+    labels = host.split(".")
+    if len(labels) <= 2:
+        return host
+    if ".".join(labels[-2:]) in _MULTI_SUFFIX:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
 
 
 def _placeholder(segment: str) -> str:
