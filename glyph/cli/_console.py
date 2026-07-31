@@ -62,3 +62,19 @@ def table(title: Optional[str] = None) -> "Table":
         header_style="bold", title_style="bold", expand=False,
         pad_edge=False, border_style="grey37",
     )
+
+
+def print_rows(title, headers, rows, cyan_cols=()) -> None:
+    """Render a (headers, rows) view as a table (rich, or plain fallback)."""
+    if not HAS_RICH:
+        from glyph.cli._format import table as plain_table
+        print(title)
+        print(plain_table(rows, headers))
+        return
+    t = table(title=title)
+    for i, h in enumerate(headers):
+        t.add_column(h, style="cyan" if i in cyan_cols else None,
+                     no_wrap=(h in ("URL", "HOST", "PATH", "VALUE")))
+    for r in rows:
+        t.add_row(*[str(c) for c in r])
+    con().print(t)

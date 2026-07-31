@@ -33,8 +33,10 @@ live = ["mitmproxy>=10", "playwright>=1.40"]
 schema = ["genson>=1.2"]
 # Columnar catalog store for drift analytics (post-MVP promotion path, ADR-2).
 analytics = ["duckdb>=0.10"]
+# Interactive terminal dashboard (Textual TUI over the catalog).
+tui = ["textual>=0.60"]
 # Everything, plus test tooling.
-dev = ["glyph-re[live,schema,analytics]", "pytest>=7"]
+dev = ["glyph-re[live,schema,analytics,tui]", "pytest>=7"]
 
 [project.scripts]
 glyph = "glyph.cli:main"

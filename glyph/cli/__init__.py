@@ -18,9 +18,12 @@ from glyph.cli import (
     capture,
     catalog,
     codegen,
+    dashboard,
     dict as dict_cmd,
+    dom,
     drift,
     fingerprint,
+    flows,
     gating,
     init,
     mobile,
@@ -34,8 +37,9 @@ from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
 
 # Registration order = help-listing order.
 _COMMANDS = [
-    init, capture, schema, rosetta, dict_cmd, review, sensitive,
-    fingerprint, auth, gating, codegen, drift, mobile, catalog, run,
+    init, capture, run, dashboard,
+    flows, dom, schema, rosetta, dict_cmd, sensitive, review,
+    fingerprint, auth, gating, codegen, drift, mobile, catalog,
 ]
 
 

@@ -34,9 +34,11 @@ def add_parser(sub) -> None:
                       help="skip the sensitive/risk scan")
     rhar.set_defaults(func=run_har)
     rlive = with_live(with_db(rsub.add_parser(
-        "live", help="live-capture a page, then schema + rosetta + sensitive")))
+        "live", help="live-capture a page, then open the dashboard")))
     rlive.add_argument("--no-sensitive", action="store_true",
                        help="skip the sensitive/risk scan")
+    rlive.add_argument("--no-tui", action="store_true",
+                       help="print the summary instead of opening the dashboard")
     rlive.set_defaults(func=run_live)
 
 
@@ -59,14 +61,28 @@ def _gather(cat, args, cap: dict) -> dict:
     return d
 
 
-def _print_summary(cat, args, header: str, cap: dict) -> None:
-    """Render the whole pipeline as one designed block (rich panel, or a
-    plain aligned block without rich)."""
-    r = _gather(cat, args, cap)
+def _render(args, header: str, r: dict) -> None:
+    """Render the pipeline as one designed block (rich panel or plain)."""
     if C.HAS_RICH:
         _print_rich(args, header, r)
     else:
         _print_plain(args, header, r)
+
+
+def _open_dashboard(args) -> bool:
+    """Open the TUI dashboard when interactive + textual present. Returns
+    True if it took over the screen (so we skip the printed summary)."""
+    import sys
+    if getattr(args, "no_tui", False) or not sys.stdout.isatty():
+        return False
+    try:
+        from glyph.tui import HAS_TEXTUAL, run_dashboard
+    except Exception:
+        return False
+    if not HAS_TEXTUAL:
+        return False
+    run_dashboard(args.db)
+    return True
 
 
 def _cap_value(cap: dict) -> str:
@@ -147,9 +163,10 @@ def run_har(args: argparse.Namespace) -> int:
     cat = catalog(args)
     try:
         cap = ingest_har(cat, args.file, harvest_html=not args.no_html)
-        _print_summary(cat, args, args.file, cap)
+        r = _gather(cat, args, cap)
     finally:
         cat.close()
+    _render(args, args.file, r)
     return 0
 
 
@@ -158,7 +175,11 @@ def run_live(args: argparse.Namespace) -> int:
     cat = catalog(args)
     try:
         cap = capture_live(cat, args.url, **live_kwargs(args))
-        _print_summary(cat, args, args.url, cap)
+        r = _gather(cat, args, cap)
     finally:
         cat.close()
+    # Leave the user inside the interactive dashboard (ADR-9); fall back to
+    # the printed summary in a pipe/CI or with --no-tui / no textual.
+    if not _open_dashboard(args):
+        _render(args, args.url, r)
     return 0
