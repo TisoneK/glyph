@@ -186,9 +186,10 @@ _SNI_CAT_LABEL = {
 
 def snihunt_rows(cat: Catalog) -> Rows:
     """SNI bug-host candidates ranked by score (ADR-10). Compact columns —
-    HOST / IP / CDN / TYPE / SIGNALS — not the old wall-of-prose evidence."""
+    HOST / STATUS / IP / CDN / TYPE / SIGNALS — not the old wall-of-prose
+    evidence. STATUS is the HTTP code from the probe (— when not probed)."""
     from glyph.snihunt import parse_evidence
-    headers = ["SEV", "SCR", "SNI HOST", "IP", "CDN", "TYPE", "SIGNALS"]
+    headers = ["SEV", "SCR", "SNI HOST", "STATUS", "IP", "CDN", "TYPE", "SIGNALS"]
     rows: List[List[str]] = []
     findings = cat.findings(kind="sni_bug_host")
     findings = sorted(findings, key=lambda f: -(f.score or 0))
@@ -196,6 +197,8 @@ def snihunt_rows(cat: Catalog) -> Rows:
         ev = parse_evidence(f.evidence or "")
         ip = ev.get("ip", "") or "—"
         cdn = ev.get("cdn", "") or "—"
+        status = ev.get("http_status")
+        status_str = str(status) if status is not None else "—"
         sigs = []
         if ev.get("captured"): sigs.append(f"cap×{ev['captured']}")
         if ev.get("zero_rating"): sigs.append("zero:" + ",".join(ev["zero_rating"][:2]))
@@ -203,9 +206,10 @@ def snihunt_rows(cat: Catalog) -> Rows:
         if ev.get("shared_cert"): sigs.append(f"shared:{ev['shared_cert']}")
         if ev.get("reverse_siblings"): sigs.append(f"rip+{ev['reverse_siblings']}")
         if ev.get("reverse_sourced"): sigs.append("rip-sourced")
-        if ev.get("probe_ok"): sigs.append("probe✓")
+        if ev.get("probe_ok"): sigs.append("cert✓")
         rows.append([f.severity.upper(), str(f.score or 0), f.host or "",
-                     ip, cdn, _SNI_CAT_LABEL.get(f.category, f.category),
+                     status_str, ip, cdn,
+                     _SNI_CAT_LABEL.get(f.category, f.category),
                      " ".join(sigs) or "—"])
     return headers, rows
 

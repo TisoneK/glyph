@@ -90,6 +90,7 @@ def _evidence(host: str, score: int, signals: Dict[str, Any]) -> str:
         "reverse_siblings": signals.get("reverse_siblings") or 0,
         "reverse_sourced": bool(signals.get("reverse_sourced")),
         "probe_ok": bool(signals.get("probe_ok")),
+        "http_status": signals.get("http_status"),
     }
     return json.dumps(summary, ensure_ascii=False, separators=(",", ":"))
 
@@ -314,7 +315,8 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
         signals["ips"] = ips[:3]
 
         # Optional active probe (only for the already-strong candidates, to
-        # keep the probe budget tiny).
+        # keep the probe budget tiny). Does a TLS handshake + HTTP GET to
+        # capture the cert CN/SAN AND the HTTP status code.
         if probe and score >= 40:
             res = probe_mod.probe_sni(host, ip=ips[0] if ips else None)
             if res.ok:
@@ -324,6 +326,8 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
                 if res.sans:
                     signals["probe_sans"] = len(res.sans)
                     signals["probe_subject"] = res.subject
+                if res.http_status is not None:
+                    signals["http_status"] = res.http_status
             else:
                 signals["probe_error"] = res.error
 

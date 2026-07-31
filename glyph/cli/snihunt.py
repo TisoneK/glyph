@@ -137,8 +137,9 @@ def _render_rich(summary, findings, args) -> None:
 
     t = C.table(title=title)
     t.add_column("SEV")
-    t.add_column("SCORE", justify="right")
+    t.add_column("SCR", justify="right")
     t.add_column("SNI HOST", style="cyan", no_wrap=True)
+    t.add_column("STATUS", justify="center")
     t.add_column("IP", style="grey58", no_wrap=True)
     t.add_column("CDN", no_wrap=True)
     t.add_column("TYPE")
@@ -148,6 +149,9 @@ def _render_rich(summary, findings, args) -> None:
         ev = parse_evidence(f.evidence or "")
         ip = ev.get("ip", "") or "—"
         cdn = ev.get("cdn", "") or "—"
+        # HTTP status from the probe (only populated with --probe).
+        status = ev.get("http_status")
+        status_str = str(status) if status is not None else "—"
         # Compact signal summary — only what fired, short tokens.
         sigs = []
         if ev.get("captured"):
@@ -163,19 +167,22 @@ def _render_rich(summary, findings, args) -> None:
         if ev.get("reverse_sourced"):
             sigs.append("rip-sourced")
         if ev.get("probe_ok"):
-            sigs.append("probe✓")
+            sigs.append("cert✓")
         sig_str = " ".join(sigs) if sigs else "—"
         t.add_row(C.sev_cell(f.severity), str(score), f.host or "",
-                  ip, cdn, cat, sig_str)
+                  status_str, ip, cdn, cat, sig_str)
     con.print(t)
     net = "off" if args.no_net else "on"
     probe = "on" if args.probe else "off"
-    con.print(f"[grey58](net {net} · probe {probe} · "
-              "score = fronting likelihood, NOT free-internet confirmation · "
-              "authorization is yours)[/]")
-    con.print("[grey58](high score = 'worth testing on your SIM'; the only "
-              "proof of free internet is a real tunnel test on the target "
-              "carrier — see ADR-10)[/]")
+    if not args.probe:
+        con.print("[grey58](STATUS shows — because --probe is off. Run with "
+                  "--probe to get the HTTP status code + cert for each "
+                  "candidate.)[/]")
+    con.print(f"[grey58](net {net} · probe {probe} · score ranks how usable "
+              "the host is as an SNI — it is NOT a guarantee of free internet)[/]")
+    con.print("[grey58](To confirm a host works for free internet, test it "
+              "with your tunneling app on your SIM — only a real tunnel test "
+              "on the target carrier proves zero-rating.)[/]")
 
 
 def _render_plain(summary, findings, args) -> None:
@@ -187,11 +194,16 @@ def _render_plain(summary, findings, args) -> None:
     if not findings:
         print("(no candidates match the filter)")
         return
-    print(f"{'SEV':8} {'SCR':>3}  {'HOST':30} {'IP':16} {'CDN':10} {'TYPE':12} SIGNALS")
+    if not args.probe:
+        print("(STATUS shows — because --probe is off. Run with --probe to "
+              "get the HTTP status code + cert for each candidate.)")
+    print(f"{'SEV':6} {'SCR':>3}  {'HOST':30} {'STATUS':6} {'IP':16} {'CDN':10} {'TYPE':12} SIGNALS")
     for f, score, cat in _rows(findings):
         ev = parse_evidence(f.evidence or "")
         ip = ev.get("ip", "") or "—"
         cdn = ev.get("cdn", "") or "—"
+        status = ev.get("http_status")
+        status_str = str(status) if status is not None else "—"
         sigs = []
         if ev.get("captured"): sigs.append(f"cap×{ev['captured']}")
         if ev.get("zero_rating"): sigs.append("zero:" + ",".join(ev["zero_rating"][:2]))
@@ -199,8 +211,9 @@ def _render_plain(summary, findings, args) -> None:
         if ev.get("shared_cert"): sigs.append(f"shared:{ev['shared_cert']}")
         if ev.get("reverse_siblings"): sigs.append(f"rip+{ev['reverse_siblings']}")
         if ev.get("reverse_sourced"): sigs.append("rip-sourced")
-        if ev.get("probe_ok"): sigs.append("probe✓")
+        if ev.get("probe_ok"): sigs.append("cert✓")
         print(f"[{f.severity.upper():6}] {score:>3}  {(f.host or ''):30} "
-              f"{ip:16} {cdn:10} {cat:12} {' '.join(sigs) or '—'}")
-    print("(score = fronting likelihood, NOT free-internet confirmation; "
-          "high = 'worth testing on your SIM'. Authorization is yours — ADR-10)")
+              f"{status_str:6} {ip:16} {cdn:10} {cat:12} {' '.join(sigs) or '—'}")
+    print("(score ranks how usable the host is as an SNI — NOT a guarantee "
+          "of free internet. To confirm, test with your tunneling app on "
+          "your SIM — only a real tunnel test on the carrier proves it.)")

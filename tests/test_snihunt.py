@@ -285,8 +285,8 @@ def test_tui_snihunt_rows(tmp_path):
     cat.add_flow(Flow(method="GET", url="https://0.facebook.com/x", host="", path=""))
     run_hunt(cat, net=False)
     headers, rows = D.snihunt_rows(cat)
-    # Compact columns: SEV / SCR / SNI HOST / IP / CDN / TYPE / SIGNALS
-    assert headers == ["SEV", "SCR", "SNI HOST", "IP", "CDN", "TYPE", "SIGNALS"]
+    # Compact columns: SEV / SCR / SNI HOST / STATUS / IP / CDN / TYPE / SIGNALS
+    assert headers == ["SEV", "SCR", "SNI HOST", "STATUS", "IP", "CDN", "TYPE", "SIGNALS"]
     assert any("0.facebook.com" in r for r in rows)
     cat.close()
 
