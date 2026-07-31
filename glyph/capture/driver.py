@@ -404,20 +404,20 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
     mode: str
     nav_error: Optional[str] = None
     done = threading.Event()
-    cookie_thread: Optional[threading.Thread] = None
 
-    def _cookie_loop(ctx_holder, interval: float = 5.0) -> None:
-        """Periodic context.cookies() snapshot — document.cookie reads are
-        invisible to the response hook (ADR-14 point 1). v1: JSON blob in meta."""
-        while not done.is_set():
-            ctx = ctx_holder[0]
-            if ctx is not None:
-                try:
-                    cookies = ctx.cookies()
-                    catalog.set_meta("capture_cookies", json.dumps(cookies))
-                except Exception:
-                    pass
-            done.wait(interval)
+    def _snapshot_cookies(ctx) -> None:
+        """context.cookies() snapshot — document.cookie reads are invisible to
+        the response hook (ADR-14 point 1). v1: JSON blob in meta. MUST run on
+        the main thread: Playwright's sync API is NOT thread-safe (its objects
+        are greenlet-bound to the thread that created them; calling ctx.cookies()
+        from a daemon thread corrupts the greenlet state and floods shutdown
+        with 'cannot switch to a different thread' + TargetClosedError)."""
+        if ctx is None:
+            return
+        try:
+            catalog.set_meta("capture_cookies", json.dumps(ctx.cookies()))
+        except Exception:
+            pass  # context closing/closed — best-effort
 
     try:
         with sync_playwright() as pw:
@@ -498,15 +498,13 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 except Exception:
                     pass
 
-            # cookie snapshot thread (daemon; exits when `done` is set)
-            cookie_thread = threading.Thread(
-                target=_cookie_loop, args=(ctx_holder,), daemon=True)
-            cookie_thread.start()
-
             # --- block until Ctrl+C or the browser disconnects ---------------
             # Poll with a short timeout (not a bare done.wait()) so Ctrl+C /
             # KeyboardInterrupt is delivered promptly — a C-level indefinite
-            # wait can swallow the signal on some Python builds.
+            # wait can swallow the signal on some Python builds. The periodic
+            # cookie snapshot runs INLINE here on the main thread (every ~5s);
+            # a daemon thread would call Playwright's sync API cross-thread,
+            # which is unsafe and floods shutdown with greenlet errors.
             try:
                 if browser_obj is not None:
                     try:
@@ -520,9 +518,14 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                         context.on("close", lambda: done.set())
                     except Exception:
                         pass
+                _last_cookie_snap = 0.0
                 while not done.wait(0.2):
-                    pass
+                    now = time.time()
+                    if now - _last_cookie_snap >= 5.0:
+                        _snapshot_cookies(context)
+                        _last_cookie_snap = now
             except KeyboardInterrupt:
+                done.set()  # stop the poll loop first; no more cookie snaps
                 if mode == "browse-attach":
                     _say("Ctrl+C — detaching (browser stays open)…")
                     # Do NOT call browser_obj.close() — that closes the user's
@@ -536,16 +539,9 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                         else:
                             context.close()
                     except Exception:
-                        pass
-                done.set()
+                        pass  # greenlet noise during shutdown — already done
             finally:
-                # final cookie snapshot
-                try:
-                    if ctx_holder[0] is not None:
-                        catalog.set_meta("capture_cookies",
-                                         json.dumps(ctx_holder[0].cookies()))
-                except Exception:
-                    pass
+                _snapshot_cookies(context)  # final cookie snapshot (main thread)
     finally:
         done.set()
         catalog.set_meta("capture_status", "done")
