@@ -182,6 +182,10 @@ if HAS_TEXTUAL:
             self.live = live
             self._start = None
             self._done = live is None
+            self._analyzing = False   # guard: never overlap analysis passes
+            self._live_timers = []
+
+        _MAX_ROWS = 800  # cap table rows so live refresh stays snappy
 
         def compose(self) -> "ComposeResult":
             yield Header(show_clock=True)
@@ -199,8 +203,9 @@ if HAS_TEXTUAL:
             if self.live:
                 self._start = time.monotonic()
                 self.app.run_worker(self._capture_worker, thread=True, name="capture")
-                self.set_interval(1.0, self._tick)
-                self.set_interval(3.0, self._analyze_tick)
+                # Light 1s tick (summary + visible tab) + guarded analysis.
+                self._live_timers.append(self.set_interval(1.0, self._tick))
+                self._live_timers.append(self.set_interval(4.0, self._analyze_tick))
             else:
                 cat = Catalog(self.db_path)
                 try:
@@ -213,6 +218,7 @@ if HAS_TEXTUAL:
             from glyph.capture.driver import capture_url
             cat = Catalog(self.db_path)
             try:
+                cat.reset()  # fresh catalog — show only THIS target
                 capture_url(cat, self.live["url"], **self.live["kwargs"])
             except Exception as exc:
                 try:
@@ -232,20 +238,23 @@ if HAS_TEXTUAL:
 
         def _tick(self) -> None:
             import time
-            self.action_reload()
+            self._refresh_live()  # summary + visible tab only (cheap)
             elapsed = int(time.monotonic() - (self._start or time.monotonic()))
             mm, ss = divmod(elapsed, 60)
             if self._status() == "done":
+                self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
                 if not self._done:
                     self._done = True
-                    self.app.run_worker(self._analyze_once, thread=True)
-                self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
+                    # one final analysis + full reload, then stop polling.
+                    self.app.run_worker(self._finalize, thread=True, name="final")
             else:
                 self.app.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
 
         def _analyze_tick(self) -> None:
-            if not self._done:
-                self.app.run_worker(self._analyze_once, thread=True, name="analyze")
+            if self._done or self._analyzing:
+                return  # never let analysis passes overlap and pile up
+            self._analyzing = True
+            self.app.run_worker(self._analyze_once, thread=True, name="analyze")
 
         def _analyze_once(self) -> None:
             from glyph.rosetta import build_dictionary
@@ -260,8 +269,32 @@ if HAS_TEXTUAL:
                 pass  # transient lock while capture writes: retry next tick
             finally:
                 cat.close()
+                self._analyzing = False
+
+        def _finalize(self) -> None:
+            self._analyze_once()
+            # stop the live timers now that capture is done (no more polling).
+            for t in self._live_timers:
+                try:
+                    t.stop()
+                except Exception:
+                    pass
+            self._live_timers = []
+            self.app.call_from_thread(self.action_reload)  # one full refresh
 
         # -- rendering ---------------------------------------------------
+        def _refresh_live(self) -> None:
+            """Cheap refresh: summary + only the visible tab's table."""
+            cat = Catalog(self.db_path)
+            try:
+                self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
+                active = self.query_one(TabbedContent).active
+                fn = dict((v[0], v[2]) for v in _VIEWS).get(active)
+                if fn:
+                    self._fill(f"#t_{active}", fn(cat))
+            finally:
+                cat.close()
+
         def action_reload(self) -> None:
             cat = Catalog(self.db_path)
             try:
@@ -273,6 +306,8 @@ if HAS_TEXTUAL:
 
         def _fill(self, selector: str, rows) -> None:
             headers, data = rows
+            if len(data) > self._MAX_ROWS:
+                data = data[-self._MAX_ROWS:]  # keep the latest, stay snappy
             t = self.query_one(selector, DataTable)
             t.clear(columns=True)
             t.add_columns(*headers)
@@ -282,6 +317,18 @@ if HAS_TEXTUAL:
 
         def action_show(self, tab: str) -> None:
             self.query_one(TabbedContent).active = tab
+
+        def on_tabbed_content_tab_activated(self, event) -> None:
+            # Refresh a tab's data the moment it becomes visible (since the
+            # live tick only refreshes the active tab).
+            active = self.query_one(TabbedContent).active
+            fn = dict((v[0], v[2]) for v in _VIEWS).get(active)
+            if fn:
+                cat = Catalog(self.db_path)
+                try:
+                    self._fill(f"#t_{active}", fn(cat))
+                finally:
+                    cat.close()
 
         def action_back(self) -> None:
             # Pop back to the home screen if we came from it; otherwise quit.

@@ -52,6 +52,25 @@ def test_codegen_json_to_file(tmp_path, make_entry, capsys):
     assert "/v1/o" in spec["paths"]
 
 
+def test_run_resets_catalog_between_targets(tmp_path, make_entry):
+    # The user's bug: `run` was appending, so a new capture showed old targets.
+    import json
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "c.db")
+    first = tmp_path / "a.har"
+    first.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://old.example/api/x")]}}))
+    second = tmp_path / "b.har"
+    second.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://new.example/api/y")]}}))
+    main(["run", "har", str(first), "--db", db])
+    main(["run", "har", str(second), "--db", db])
+    cat = Catalog(db)
+    hosts = {e.host for e in cat.endpoints()}
+    cat.close()
+    assert hosts == {"new.example"}  # only the latest run, not accumulated
+
+
 def test_missing_file_reports_error(tmp_path, capsys):
     rc = main(["capture", "har", str(tmp_path / "nope.har"),
                "--db", str(tmp_path / "c.db")])

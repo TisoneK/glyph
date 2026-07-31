@@ -471,6 +471,15 @@ class Catalog:
         self.conn.execute("DELETE FROM findings")
         self.conn.commit()
 
+    def reset(self) -> None:
+        """Empty the catalog — a fresh start for a new target/run. Keeps the
+        schema; clears all captured data, analysis, and meta (except version)."""
+        for tbl in ("flows", "endpoints", "fields", "dictionary",
+                    "page_observations", "findings"):
+            self.conn.execute("DELETE FROM " + tbl)
+        self.conn.execute("DELETE FROM meta WHERE key != 'schema_version'")
+        self.conn.commit()
+
     # -- convenience ------------------------------------------------------
     def summary(self) -> Dict[str, int]:
         def count(table: str) -> int:

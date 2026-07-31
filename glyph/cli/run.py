@@ -162,6 +162,7 @@ def run_har(args: argparse.Namespace) -> int:
     from glyph.capture import ingest_har
     cat = catalog(args)
     try:
+        cat.reset()  # a run is a fresh analysis of this source
         cap = ingest_har(cat, args.file, harvest_html=not args.no_html)
         r = _gather(cat, args, cap)
     finally:
@@ -180,6 +181,7 @@ def run_live(args: argparse.Namespace) -> int:
     from glyph.capture import capture_live
     cat = catalog(args)
     try:
+        cat.reset()  # a run is a fresh capture of this target
         cap = capture_live(cat, args.url, **live_kwargs(args))
         r = _gather(cat, args, cap)
     finally:
