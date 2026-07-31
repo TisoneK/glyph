@@ -4,7 +4,9 @@ Runs every hunter over the captured host surface, scores each candidate
 0-100, and persists the top candidates as ``Finding(kind="sni_bug_host")``
 rows. Idempotent: a re-run clears the stage's findings first.
 
-Scoring weights (additive, capped at 100):
+Scoring weights (additive, capped at 100) — this is a FRONTING-LIKELIHOOD
+score, NOT a free-internet-confirmation. It ranks candidates by how likely
+they are to be usable as an SNI for tunnelling, based on observable signals:
   - captured in this session (vs discovered):       +10  (we know it's live)
   - CDN-frontable edge (Cloudflare/Fastly/Akamai):  +30  (SNI/Host splittable)
   - zero-rating pattern matched:                    +30  (highest-value signal)
@@ -12,6 +14,13 @@ Scoring weights (additive, capped at 100):
   - CT logs: wildcard cert:                         +10  (*.domain coverage)
   - reverse-IP: sibling hostnames on the same IP:   +10  (multi-tenant edge)
   - optional probe confirmed the SNI serves a cert: +10  (live verification)
+
+WHAT THE SCORE DOES NOT TELL YOU: whether the host is actually zero-rated
+by YOUR carrier. The definitive signal — "bytes flow through the carrier's
+DPI without deducting data balance" — needs the user's SIM on the target
+network with a real tunnel test. Glyph surfaces CANDIDATES ranked by
+fronting likelihood; the user confirms free-internet viability on-device
+(RESEARCH.md §10, ADR-10). A high score means "worth testing," not "works."
 
 Severity: >= 70 high, >= 40 medium, else low.
 """
@@ -158,12 +167,19 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
             _prog(f"  [{i}/{len(regs)}] crt.sh/certspotter ← {reg}")
             subs = ct_mod.subdomains(reg, http_get=http_get)
             ct_results[reg] = subs
+            new_here = 0
             for sub in subs:
                 if sub not in candidates:
+                    new_here += 1
                     candidates[sub] = {
                         "host": sub, "captured": 0, "captured_ips": set(),
                         "registrable": reg, "ips": [],
                     }
+            # Surface the NEW subdomains CT found (not just the total) —
+            # these are the "find a NEW host" results the user asked for.
+            if new_here:
+                preview = ", ".join(sorted(subs)[:3]) + ("…" if len(subs) > 3 else "")
+                _prog(f"    → +{new_here} new subdomain(s) under {reg}: {preview}")
         _prog(f"CT logs: {sum(len(s) for s in ct_results.values())} subdomains found")
 
     # --- DISCOVERY PHASE: resolve IPs + reverse-IP for every candidate, so
@@ -185,19 +201,25 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
         from glyph.catalog.normalize import registrable_domain
         rip_targets = [c for c in list(candidates.values()) if c.get("ips")]
         _prog(f"reverse-IP: looking up siblings for {len(rip_targets)} host(s)…")
+        rip_discovered = 0  # running total of NEW hosts found via reverse-IP
+        rip_empty = 0       # calls that returned 0 siblings (rate-limit signal)
         for i, cand in enumerate(rip_targets, 1):
             if i % 10 == 1 or i == len(rip_targets):
-                _prog(f"  [{i}/{len(rip_targets)}] reverse-IP {cand['host']}")
+                _prog(f"  [{i}/{len(rip_targets)}] reverse-IP {cand['host']}"
+                      + (f"  (+{rip_discovered} new so far)" if rip_discovered else ""))
             ips = cand.get("ips") or []
             if not ips:
                 continue
             for ip in ips[:1]:
                 sibs = rip_mod.reverse_ip(ip, http_get=http_get)
+                if not sibs:
+                    rip_empty += 1
                 new_sibs = [s for s in sibs if s != cand["host"]
                             and s not in candidates]
                 if new_sibs:
                     cand.setdefault("reverse_siblings", []).extend(new_sibs[:20])
-                    for sib in new_sibs[:20]:
+                    kept = new_sibs[:20]
+                    for sib in kept:
                         candidates[sib] = {
                             "host": sib, "captured": 0,
                             "captured_ips": set(ips),
@@ -205,7 +227,23 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
                             "ips": list(ips),
                             "reverse_sourced": True,
                         }
+                    rip_discovered += len(kept)
+                    # Show the discovery AS it happens — the names, not just
+                    # the count, so the user can spot interesting siblings.
+                    preview = ", ".join(kept[:3]) + ("…" if len(kept) > 3 else "")
+                    _prog(f"    → +{len(kept)} new via {cand['host']}: {preview}")
                     break
+        if rip_discovered:
+            _prog(f"reverse-IP: +{rip_discovered} new host(s) discovered "
+                  f"({len(candidates)} total candidates)")
+        # Heuristic: if MOST reverse-IP calls came back empty, the free
+        # HackerTarget API likely rate-limited (HTTP 200 + "API count
+        # exceeded" body — undetectable per-call). Surface it so the user
+        # knows the 0-siblings result is suspect, not definitive.
+        if len(rip_targets) >= 5 and rip_empty >= len(rip_targets) * 0.8:
+            _prog("reverse-IP: WARNING — most lookups returned empty; the free "
+                  "HackerTarget API may be rate-limited (try again later, or "
+                  "set a different reverse-IP source)")
 
     # --- SCORING PHASE: score every candidate (snapshot — no mutation now). ---
     _prog(f"scoring {len(candidates)} candidate(s)…")

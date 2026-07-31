@@ -19,15 +19,21 @@ _ENDPOINT = "https://api.hackertarget.com/reverseiplookup/?q={ip}"
 
 def reverse_ip(ip: str, http_get: Optional[HttpGet] = None,
                timeout: int = 8) -> List[str]:
-    """Return the hostnames that share ``ip``, or ``[]`` on any error."""
+    """Return the hostnames that share ``ip``, or ``[]`` on any error.
+
+    HackerTarget's free API rate-limits after ~50 calls/day. When that
+    happens it returns HTTP 200 with the body ``API count exceeded - …``
+    (not an error code), so we detect it by text and return ``[]`` — the
+    caller can't distinguish "genuinely 0 siblings" from "rate-limited"
+    from this return value alone. See ``run_hunt``'s reverse-IP loop for
+    the heuristic that surfaces a rate-limit warning.
+    """
     if not ip:
         return []
     fetch = http_get or default_http_get
     text = get_text(_ENDPOINT.format(ip=ip), http_get=fetch, timeout=timeout)
     if not text:
         return []
-    # HackerTarget returns a newline-separated list of hostnames (no JSON).
-    # An error message starts with "API count exceeded" or "error" — drop those.
     out: List[str] = []
     for line in text.splitlines():
         h = line.strip().lower()
@@ -35,3 +41,8 @@ def reverse_ip(ip: str, http_get: Optional[HttpGet] = None,
             continue
         out.append(h)
     return out
+
+
+def is_rate_limited(text: str) -> bool:
+    """True if a raw HackerTarget response indicates rate-limiting."""
+    return bool(text) and "api count exceeded" in text.lower()

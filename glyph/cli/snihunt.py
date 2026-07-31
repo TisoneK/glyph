@@ -148,7 +148,11 @@ def _render_rich(summary, findings, args) -> None:
     net = "off" if args.no_net else "on"
     probe = "on" if args.probe else "off"
     con.print(f"[grey58](net {net} · probe {probe} · "
-              "candidates are advisory — authorization is yours)[/]")
+              "score = fronting likelihood, NOT free-internet confirmation · "
+              "authorization is yours)[/]")
+    con.print("[grey58](high score = 'worth testing on your SIM'; the only "
+              "proof of free internet is a real tunnel test on the target "
+              "carrier — see ADR-10)[/]")
 
 
 def _render_plain(summary, findings, args) -> None:
@@ -162,3 +166,5 @@ def _render_plain(summary, findings, args) -> None:
     for f, score, cat in _rows(findings):
         print(f"[{f.severity.upper():8}] {score:>3}  {cat:<11} {f.host}  "
               f"— {f.evidence}")
+    print("(score = fronting likelihood, NOT free-internet confirmation; "
+          "high = 'worth testing on your SIM'. Authorization is yours — ADR-10)")
