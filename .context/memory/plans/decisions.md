@@ -68,3 +68,32 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   is owned by the separate InjectX project") — that clause is void. Product docs (RESEARCH.md,
   RESEARCH-DEEP-DIVE.md) are edited to drop InjectX naming. Append-only history that mentions
   InjectX (past session/review logs) is left intact as an accurate record of what was true then.
+
+---
+## ADR-4: Sensitive flagging — flag-and-keep, de-noise by tracking-vendor (2026-07-31)
+- **Status:** accepted
+- **Context:** The `glyph.sensitive` stage flags sensitive data, sensitive endpoints, and
+  passive risk indicators. Two wrong instincts were corrected by the user during Session 10:
+  (1) an initial plan to *redact* detected values by default — backwards for a
+  reverse-engineering tool, where the captured value is the whole point; (2) a first noise
+  model that hid *third-party* findings — wrong, because targets routinely store their own
+  data on third-party CDNs/object stores (S3, `storage.googleapis.com`, Cloudinary), so
+  hiding by party would bury real data exposure.
+- **Decision:**
+  1. **Flag and locate; keep the value intact at rest.** Findings store the real matched
+     value. Glyph NEVER redacts captured data as a default. Redaction is an opt-in EXPORT
+     concern only (for sharing a sanitized catalog/report), never a mutation of the working
+     catalog.
+  2. **De-noise by known tracking/ad vendor, never by first/third-party.** Sensitive-data
+     findings (and unauthenticated-data / data-in-URL / verbose-error) are NEVER hidden, on
+     any host. Only hygiene chatter (CORS, missing security headers) on a KNOWN analytics/ad/
+     tracking vendor is hidden by default (`--all` shows it). CDNs and object stores are
+     explicitly NOT vendors. First/third-party is retained as metadata, not a filter.
+  3. **Passive only.** The stage analyzes already-captured traffic for authorized assessment.
+     No active scanning, probing, or exploitation.
+- **Consequences:** The catalog `findings` table holds live values — treat catalogs as
+  sensitive artifacts (the user handles per-target legal/authorization, RESEARCH.md §10).
+  `is_noise()` (host is a tracking vendor) drives the default view, not `party`. The vendor
+  list (`sensitive/party.py::_TRACKING_VENDORS`) is the noise gate and is extensible. Related:
+  Rosetta's reference-join is scoped to the same registrable domain so integer ids don't
+  collide across unrelated hosts (`registrable_domain` in `catalog/normalize.py`).
