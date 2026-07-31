@@ -11,13 +11,11 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-07-31 — Super Z / unknown (cloud sandbox)
-- **Task:** Implement the VPN-Config Decoder/Sniffer feature (ADR-11) — a new
-  `glyph.vpndec` stage that decrypts VPN config files (.hc/.ehi/.dark/.ziv/.tls)
-  the user supplies. Borrows algorithms from InjectX (cloned separately at
-  /home/z/my-project/injectx-work/InjectX), NOT coupled to it. New `glyph vpndec
-  <file>` CLI command, new `vpn_configs` catalog table, new TUI tab (key 7 "VPN
-  Dec"). `[crypto]` extra (pycryptodome) with HAS_CRYPTO fallback. File-triggered,
-  not auto-run. Prior to this: fixed the 8 flaws from Session 16 (committed
-  fff1f18 + 34e3d6a).
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — Session 17 (2026-07-31) shipped (1) the Session 16 flaw
+  fixes (5 of 8 fixed, 3 backlog) and (2) the `glyph.vpndec` VPN-Config
+  Decoder stage (ADR-11). See `agents/sessions.md` Session 17,
+  `reviews/2026-07-31-vpn-config-decoder.md`, and the backlog follow-ups
+  (port HAT/NPV/NSH/VHD decryptors; port HC v2.7+/EHI v2 ChaCha20 schemes;
+  snihunt probe tests + 429 handling).
+- **Status:** idle

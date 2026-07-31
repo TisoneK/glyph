@@ -314,3 +314,28 @@ attr `_timers` on a Textual DOMNode — it shadows Textual's internal timer set 
   TLD/pattern set with Kenya/East-Africa carrier free-pack domains (backlog); third CT-log
   source for failover (backlog). See `tasks/backlog.md` + the review note.
 - **Report:** .context/memory/reviews/2026-07-31-sni-bug-host-hunt.md
+
+---
+## 2026-07-31 — Session 17
+- **Agent:** Super Z | **Model:** unknown (cloud sandbox, Python 3.12.13) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** (1) Fix the 8 flaws shipped in Session 16 without self-critique (user: "You did not
+  think about inefficiencies and flaws?"). (2) Implement the VPN-Config Decoder/Sniffer (ADR-11) —
+  decrypt VPN config files (.hc/.ehi/.dark/.ziv/.tls) the user supplies, borrowing algorithms
+  from InjectX (cloned separately, NOT coupled), new `glyph vpndec <file>` CLI + TUI tab 7.
+- **Commits:** 4 — `8b90756` (chore(context): Session 17 task + ADR-11 proposed) + `fff1f18`
+  (fix(snihunt): 5 Session-16 flaws fixed) + `34e3d6a` (chore(context): self-critique log) +
+  `d076913` (feat(vpndec): the stage + CLI + TUI + tests). Plus this closing `chore(context)`.
+- **Outcome:** done. Part 1: fixed 2 data-correctness bugs (sensitive scan wiping/counting SNI
+  findings), the score-in-string fragility (real `score` column), the reverseip `__import__`
+  hack, and added `--snihunt-no-net` to run live/har. 3 flaws logged as backlog (probe tests,
+  429 handling). Part 2: `glyph/vpndec/` = 8 modules (models, keys, detect, crypto, hc, ehi,
+  dark, ziv, tls, decode). New `vpn_configs` catalog table (additive). `glyph vpndec <file>`
+  CLI (--keyfile/--no-store/--json). TUI tab 7 "VPN Dec". `[crypto]` extra (pycryptodome) with
+  HAS_CRYPTO graceful fallback. **145 tests pass** (was 126; +19 new vpndec), 3 skipped.
+  Real-world verified against all 31 InjectX sample configs: DARK 4/4 partial (envelope
+  decoded, credentials locked by author DRM — protocol+name extracted as InjectX's own test
+  asserts); HC/EHI/TLS/ZIV report failed (key rotation — InjectX's own tests don't assert
+  success on these either). ADR-11 marked accepted/implemented.
+- **Open items:** port remaining InjectX decryptors (HAT/NPV/NSH/VHD); port HC v2.7+ (A5) and
+  EHI v2 (B2) ChaCha20/Argon2 schemes; snihunt probe tests + 429 handling. See `tasks/backlog.md`.
+- **Report:** .context/memory/reviews/2026-07-31-vpn-config-decoder.md

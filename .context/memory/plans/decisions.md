@@ -309,7 +309,7 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 ---
 ## ADR-11: VPN-Config Decoder — borrows InjectX algorithms, file-triggered, [crypto] extra (2026-07-31)
-- **Status:** proposed (implementation in progress, Session 17)
+- **Status:** accepted (implemented 2026-07-31, Session 17)
 - **Context:** The user wants a VPN-Config Decoder/Sniffer: a user supplies a config file
   (.hc / .ehi / .dark / .ziv / .tls / etc.) and Glyph decrypts it (online or offline) into a
   normalized view of the tunnel's host/port/protocol/SNI/bug-host/credentials. The user has

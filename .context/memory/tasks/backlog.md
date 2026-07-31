@@ -143,3 +143,19 @@ don't remove the line.
       — certspotter is the primary CT source (crt.sh is slow/timeout-prone in practice, kept as
       a fallback). If both are down, the stage degrades gracefully (local heuristics only). A
       third source (Google CT search, Censys subdomain API) would harden enumeration. Low. See ADR-10.
+
+---
+- [ ] **Port remaining InjectX decryptors into glyph.vpndec** (added 2026-07-31 by Super Z, Session 17)
+      — HAT (HA Tunnel, scheme E1 AES-128-ECB), NPV (NapsternetV, C1 subtraction cipher), NSH
+      (SocksHTTP, D1 AES-128-GCM+PBKDF2), VHD (G1 AES-128-CBC). The architecture is extensible
+      (one module + one router entry each); the algorithms are in InjectX
+      `backend/decrypt/{hat,npv,nsh,vhd}_decrypt.py`. Medium. See ADR-11.
+- [ ] **Port HC v2.7+ (A5) and EHI v2 (B2) decryptors** (added 2026-07-31 by Super Z, Session 17)
+      — the newer ChaCha20/Argon2 schemes. InjectX has them (`hc_v27_decrypt.py`,
+      `ehi_v2_decrypt.py`); porting is straightforward but the algorithms are more involved
+      (multi-layer ChaCha20 + RST AES-ECB + per-field JKL for A5; Argon2id + XXTEA +
+      ChaCha20-Poly1305 for B2). Medium. See ADR-11.
+- [ ] **snihunt: probe.py test coverage + 429 handling** (added 2026-07-31 by Super Z, Session 16
+      carried to 17) — the active SNI probe (opt-in) has zero test coverage (needs mocked
+      ssl.wrap_socket); "429-aware" is claimed in ADR-10 but get_json swallows 429 with no
+      backoff/Retry-After. Low-Medium. See ADR-10.
