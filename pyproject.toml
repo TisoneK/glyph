@@ -18,10 +18,13 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Software Development :: Libraries",
 ]
-# The base package is pure-stdlib on purpose: catalog, capture (HAR),
-# schema inference, rosetta, and all analysis stages run with zero
-# third-party dependencies. Heavy backends are optional extras below.
-dependencies = []
+# The core library (catalog, capture-HAR, schema, rosetta, sensitive, …) is
+# pure-stdlib and imports with no third-party deps. The only runtime
+# dependency is `rich`, used solely by the CLI presentation layer for
+# tables/panels/color across platforms (incl. Windows); it is lazily
+# imported so `import glyph` still works without it, and the CLI degrades to
+# plain text if it is somehow absent. Heavy backends stay optional (below).
+dependencies = ["rich>=13"]
 
 [project.optional-dependencies]
 # Live capture backends (proxy + browser driver).

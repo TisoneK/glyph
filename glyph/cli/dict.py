@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 
+from glyph.cli import _console as C
 from glyph.cli._format import style
 from glyph.cli._output import emit
 from glyph.cli._shared import catalog, with_db, with_json
@@ -31,13 +32,35 @@ def run(args: argparse.Namespace) -> int:
     if not entries:
         print(_empty_message(args.review, ran, n_flows))
         return 0
+    if C.HAS_RICH:
+        _render_rich(entries)
+    else:
+        _render_plain(entries)
+    return 0
+
+
+def _render_rich(entries) -> None:
+    con = C.con()
+    t = C.table(title=f"Dictionary  ·  [bold]{len(entries)}[/] decoding(s)")
+    t.add_column("PATH", style="cyan", no_wrap=True)
+    t.add_column("CODE", justify="right")
+    t.add_column("MEANING", style="bold")
+    t.add_column("CONF", justify="right")
+    t.add_column("STRATEGY", style="grey58")
+    t.add_column("", style="yellow")
+    for e in entries:
+        t.add_row(e.json_path, repr(e.code), str(e.meaning),
+                  f"{e.confidence:.2f}", e.strategy,
+                  "review" if e.needs_review else "")
+    con.print(t)
+
+
+def _render_plain(entries) -> None:
     for e in entries:
         flag = style(" [REVIEW]", "yellow") if e.needs_review else ""
-        arrow = style("→", "gray")
-        meta = style(f"(conf {e.confidence}, {e.strategy})", "gray")
-        print(f"{style(e.json_path, 'cyan')}  {e.code!r} {arrow} "
-              f"{style(repr(e.meaning), 'bold')}  {meta}{flag}")
-    return 0
+        print(f"{style(e.json_path, 'cyan')}  {e.code!r} -> "
+              f"{style(repr(e.meaning), 'bold')}  "
+              f"{style(f'(conf {e.confidence}, {e.strategy})', 'gray')}{flag}")
 
 
 def _empty_message(review: bool, rosetta_ran, n_flows: int) -> str:
