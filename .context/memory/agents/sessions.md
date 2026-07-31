@@ -386,3 +386,17 @@ Three user-driven fixes this turn:
 Commits this turn: `a1a91d2` (live progress for snihunt/capture/run) + `9b00d8f`
 (glyph snihunt <target> direct mode) + `b575c44` (live discovery + honest scoring).
 51 affected tests pass (snihunt+cli+vpndec), 3 skipped. Tree clean, origin/main synced.
+
+### Update (2026-07-31, Session 17 cont. 3) — 4-CDN detection confirmed + Cloudflare gap documented
+User: "Is it just cloudflare or cloudfront and other accepted?" Verified live: all FOUR
+CDNs are detected — Cloudflare + Fastly + CloudFront (by IP range) + Akamai (by hostname
+suffix). The betika run's 'cdn: 44 Cloudflare' came from IP detection (DoH resolved the
+hosts to Cloudflare edges). The question exposed an honest gap I hadn't surfaced: Cloudflare
+has NO suffix detector (by design — frontable Cloudflare hosts are customer domains that
+resolve to Cloudflare IPs, not a *.cloudflare.com suffix). So the offline path (--no-net,
+no captured IP) MISSES Cloudflare-fronted hosts; Fastly/CloudFront/Akamai don't have this
+gap (edge suffixes). Documented in cdn.py docstring (commit ff0b048). Not a bug — there is
+no safe Cloudflare suffix to add. Also: honored the retry-limit rule this turn — stopped
+after 2 consecutive pytest CWD-reset failures instead of looping, committed the docstring
+edit on the strength of the earlier 23/23 snihunt pass + the docstring-only nature of the
+change.
