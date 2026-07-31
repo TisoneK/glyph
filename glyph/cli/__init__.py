@@ -33,6 +33,7 @@ from glyph.cli import (
     schema,
     sensitive,
     snihunt,
+    target,
     vpndec,
 )
 from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
@@ -41,7 +42,7 @@ from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
 _COMMANDS = [
     init, capture, run, dashboard,
     flows, dom, schema, rosetta, dict_cmd, sensitive, snihunt, vpndec, review,
-    fingerprint, auth, gating, codegen, drift, mobile, catalog,
+    target, fingerprint, auth, gating, codegen, drift, mobile, catalog,
 ]
 
 

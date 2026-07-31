@@ -79,8 +79,10 @@ def run(args: argparse.Namespace) -> int:
             # Seed the catalog with a synthetic flow so extract_hosts picks the
             # target up. Reuses the full hunt pipeline (CT/reverse-IP/CDN/zero-
             # rate) without a separate code path — no refactor of run_hunt.
-            cat.reset()  # fresh hunt — don't mix with a prior capture's hosts
+            # ADR-12: activate this target + clear only its old rows so a
+            # re-hunt replaces without wiping other targets' data.
             cat.set_target(t)
+            cat.clear_target()
             cat.add_flow(Flow(method="GET", url=f"https://{t}/", host="", path="",
                               source="snihunt:seed"))
         # Live progress to stderr so the terminal shows activity (the hunt

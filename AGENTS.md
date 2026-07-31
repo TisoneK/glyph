@@ -150,3 +150,35 @@ all three are rendered from the same core version. A weak agent
 following only tier 1 does less, but nothing **wrong** — it cannot
 clobber `core/`, cannot miss the entry point, and cannot pick the wrong
 edition.
+
+---
+
+## Product context: the catalog is multi-target (ADR-12, Session 18)
+
+The `glyph` catalog (SQLite, `glyph/catalog/store.py`) is **multi-target**.
+A `targets` table holds every host ever captured, and every data row
+(flows, endpoints, fields, dictionary, page_observations, findings,
+vpn_configs) carries a `target_id`. Capturing `betika.com` then
+`sportybet.com` leaves BOTH in the catalog, each queryable via
+`glyph target show <host>` and filterable via `--target`.
+
+Key invariants a future agent must respect:
+- **`set_target(host)` activates; `clear_target()` wipes only that
+  target's rows.** A run calls both — it does NOT call `reset()` (that's
+  a full wipe, reserved for tests + a future `--reset` flag).
+- **Every write stamps a NON-NULL `target_id`** (explicit > active > the
+  reserved "(unassigned)" bucket, id=0). This is required: SQLite treats
+  `NULL != NULL` in UNIQUE constraints, so nullable `target_id` would
+  break upsert dedup.
+- **Reads filter to the active target by default** (fall back to "all
+  targets" when no target is active). Pass `all_targets=True` to force
+  all, or an explicit `target_id` for a specific one.
+- **`capture` accumulates; `run` clears.** `glyph capture har/live` adds
+  traffic to the active (or unassigned) target; `glyph run har/live`
+  activates + clears one target first (fresh analysis).
+- The "(unassigned)" target (id=0) is where rows land when no target is
+  set (legacy tests, REPL scratch). It's visible in `glyph target list`
+  and clearable with `glyph target rm 0`.
+
+Full design + migration notes: `.context/memory/plans/decisions.md` ADR-12,
+`.context/memory/reviews/2026-07-31-multi-target-schema.md`.

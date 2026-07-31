@@ -234,9 +234,16 @@ if HAS_TEXTUAL:
         # -- live capture + refresh --------------------------------------
         def _capture_worker(self) -> None:
             from glyph.capture.driver import capture_url
+            from urllib.parse import urlparse
             cat = Catalog(self.db_path)
             try:
-                cat.reset()  # fresh catalog — show only THIS target
+                # ADR-12: activate this target + clear only its old rows.
+                # Other targets in the catalog coexist; a re-run of the
+                # same target replaces its data.
+                host = urlparse(self.live["url"]).hostname
+                if host:
+                    cat.set_target(host)
+                    cat.clear_target()
                 capture_url(cat, self.live["url"], **self.live["kwargs"])
             except Exception as exc:
                 try:

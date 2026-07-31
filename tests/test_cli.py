@@ -53,8 +53,11 @@ def test_codegen_json_to_file(tmp_path, make_entry, capsys):
     assert "/v1/o" in spec["paths"]
 
 
-def test_run_resets_catalog_between_targets(tmp_path, make_entry):
-    # The user's bug: `run` was appending, so a new capture showed old targets.
+def test_run_coexists_across_targets(tmp_path, make_entry):
+    # ADR-12 (multi-target): `run har` for a NEW target does NOT wipe a
+    # prior target — both coexist in the catalog, each tagged with its own
+    # target_id. A re-run of the SAME target replaces only that target's
+    # rows (clear_target, not reset).
     import json
     from glyph.catalog import Catalog
     db = str(tmp_path / "c.db")
@@ -67,9 +70,25 @@ def test_run_resets_catalog_between_targets(tmp_path, make_entry):
     main(["run", "har", str(first), "--db", db, "--no-snihunt"])
     main(["run", "har", str(second), "--db", db, "--no-snihunt"])
     cat = Catalog(db)
-    hosts = {e.host for e in cat.endpoints()}
-    cat.close()
-    assert hosts == {"new.example"}  # only the latest run, not accumulated
+    try:
+        # Both targets' hosts are present — multi-target coexistence.
+        all_hosts = {e.host for e in cat.endpoints(all_targets=True)}
+        assert all_hosts == {"old.example", "new.example"}, all_hosts
+        # Two real targets registered (plus the reserved unassigned bucket).
+        real = [t for t in cat.targets() if t["host"] != "(unassigned)"]
+        assert {t["host"] for t in real} == {"old.example", "new.example"}
+        # A re-run of the FIRST har replaces only old.example's rows —
+        # new.example's rows survive untouched.
+        main(["run", "har", str(first), "--db", db, "--no-snihunt"])
+        hosts_after_rerun = {e.host for e in cat.endpoints(all_targets=True)}
+        assert hosts_after_rerun == {"old.example", "new.example"}, hosts_after_rerun
+        # And old.example still has exactly one endpoint (the re-run replaced,
+        # not appended).
+        old_eps = [e for e in cat.endpoints(all_targets=True)
+                   if e.host == "old.example"]
+        assert len(old_eps) == 1, old_eps
+    finally:
+        cat.close()
 
 
 def test_missing_file_reports_error(tmp_path, capsys):

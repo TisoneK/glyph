@@ -225,8 +225,10 @@ def run_har(args: argparse.Namespace) -> int:
     _progress(f"ingesting HAR: {args.file}")
     cat = catalog(args)
     try:
-        cat.reset()  # a run is a fresh analysis of this source
-        cap = ingest_har(cat, args.file, harvest_html=not args.no_html)
+        # ingest_har infers + activates the target, then (clear=True) wipes
+        # only THAT target's old rows — other targets in the catalog are
+        # untouched (ADR-12 multi-target).
+        cap = ingest_har(cat, args.file, harvest_html=not args.no_html, clear=True)
         _progress(f"ingested {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
     finally:
@@ -243,11 +245,18 @@ def run_live(args: argparse.Namespace) -> int:
     # Headless fallback (pipe / CI / --no-tui / no textual): capture
     # synchronously, then print the designed summary.
     from glyph.capture import capture_live
+    from urllib.parse import urlparse
     _progress(f"launching browser → {args.url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)
     try:
-        cat.reset()  # a run is a fresh capture of this target
+        # Activate this target + clear its old rows — a re-run replaces,
+        # other targets coexist (ADR-12). capture_live → driver.capture_url
+        # calls set_target again (idempotent).
+        host = urlparse(args.url).hostname
+        if host:
+            cat.set_target(host)
+            cat.clear_target()
         cap = capture_live(cat, args.url, **live_kwargs(args))
         _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
