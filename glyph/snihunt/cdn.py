@@ -4,10 +4,24 @@ A host that resolves to a CDN edge IP is "frontable" — the TLS SNI can be
 set to one hostname while the actual tunneled destination is another host
 served by the same edge. This is the "cloudflare" technique the user named.
 
+Four CDNs are detected:
+  - Cloudflare (AS13335) — by IP range only (IPv4 + IPv6). NO suffix
+    detector: Cloudflare doesn't own a *.cloudflare.com edge suffix the way
+    Akamai owns *.akamai.net; frontable Cloudflare hosts are CUSTOMER
+    domains that resolve to Cloudflare IPs. So Cloudflare detection REQUIRES
+    a resolved/captured IP — the online path (DoH) catches it; the offline
+    path (--no-net, no captured IP) MISSES Cloudflare-fronted hosts.
+  - Fastly (AS54113) — by IP range + suffix (*.fastly.net, *.fastlylb.net).
+  - CloudFront (AS16509) — by IP range + suffix (*.cloudfront.net).
+  - Akamai (AS20940) — by suffix only (no IP range; Akamai's rotates).
+
+Net: offline detection covers Fastly/CloudFront/Akamai via suffix; Cloudflare
+needs the online path. This is a known limitation, not a bug — there is no
+safe Cloudflare suffix to add (cloudflare.com is Cloudflare's own property,
+not a fronting target).
+
 Ranges are the well-known published sets, embedded so detection works
 offline (``--no-net`` over a captured catalog that already recorded IPs).
-Cloudflare is the headline case (AS13335); Fastly, Akamai, and AWS
-CloudFront ranges are included as the same fronting technique applies.
 
 Sources (consulted at implementation time, not at runtime):
   - https://www.cloudflare.com/ips/  (IPv4 + IPv6)
