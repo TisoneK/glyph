@@ -259,3 +259,12 @@ rich tables too. Lesson: for polished cross-platform CLI output, use rich — do
 - **Outcome:** done (Phase 1). `glyph.tui.data` = pure catalog adapters (unit-tested); `glyph.tui.app` = Textual app (summary header + 5 tabbed DataTables via keys 1-5 + flow request/response drill-in + reload). `glyph dashboard` opens it on any catalog; `glyph run live` opens it when interactive (TTY+textual), else prints the rich summary or `--no-tui`. New `glyph flows`/`glyph dom` table commands. Textual is a `[tui]` extra; engine stays headless (ADR-9). Textual app verified via `App.run_test()` (mounts, tabs switch). **104 tests.**
 - **Open items:** Phase 2 = live streaming (driver writes flows incrementally + TUI auto-refresh — needs capture-driver concurrency); DOM harvest under-captures inputs/forms (capture enhancement); migrate fingerprint/auth/gating/catalog to rich tables (ADR-8 follow-up); Session 10 sensitive follow-ups.
 - **Report:** none (ADR-9 + this entry carry it).
+
+---
+## 2026-07-31 — Session 15
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** TUI Phase 2 — live status + real-time data (ADR-9 Phase 2).
+- **Commits:** 2 — `feat(tui)` (live) + this `chore(context)`. See `git log`.
+- **Outcome:** done. Driver writes flows/WS/DOM incrementally + `capture_status` meta; catalog on WAL+busy_timeout; dashboard live mode runs capture in a worker thread, refreshes flows/DOM/summary every 1s + analysis every 3s, `● LIVE mm:ss` → `✓ captured` header. `glyph run live` opens the live dashboard interactively; `--no-tui`/pipe = synchronous headless path. **107 tests** incl. an async `run_test` proving flows stream 0→N and the header flips. NOTE: the real Playwright browser live path (sync Playwright in a Textual worker thread; two concurrent DB writers under WAL) is implemented but NOT verified on this box (no playwright in `.venv`) — **must be confirmed on the user's Windows machine** (`.venv` there has playwright). Fallbacks: if a worker hits a transient lock, analysis retries next tick; capture writes wait up to busy_timeout.
+- **Open items:** verify live browser path on-device; consider resetting the catalog at the start of a live run (currently appends to `--db`); optimize the 1s full-table reload to append-only for large captures; richer DOM capture (inputs/forms); migrate remaining commands to rich tables.
+- **Report:** none (ADR-9 Phase 2 note + this entry carry it).

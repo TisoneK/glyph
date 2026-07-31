@@ -224,3 +224,11 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   address in Phase 2: DOM harvest only captures elements with *direct text*, so forms/inputs
   are under-represented (a capture enhancement); flow byte sizes fall back to response-body
   length when Content-Length is absent.
+
+- **Phase 2 implemented (2026-07-31, Session 15):** live/real-time. The capture driver writes
+  flows/WS frames + DOM snapshots to `glyph.db` incrementally and sets a `capture_status` meta;
+  the catalog runs on WAL + busy_timeout for concurrent read/write; the dashboard runs the
+  capture in a worker thread and refreshes flows/DOM/summary every 1s (+ analysis every 3s) with
+  a `● LIVE`/`✓ captured` header. `glyph run live` opens the live dashboard when interactive;
+  `--no-tui`/pipe keeps the synchronous headless path. Verified via async `run_test` (flows
+  stream 0→N, header flips); the Playwright browser live path is confirmed on-device.
