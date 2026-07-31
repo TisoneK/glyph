@@ -91,3 +91,9 @@ don't remove the line.
       confirm it actually stores frame *payloads* (not just the handshake) end-to-end against
       a live WS target (e.g. live-odds streams). This is the one area mitmproxy would clearly
       capture more if the driver doesn't. Medium.
+- [x] **Sensitive data / endpoint / risk flagging** (added+done 2026-07-31 by Claude Code,
+      Session 10) — `glyph.sensitive` + `glyph sensitive` CLI: PII/secret/financial detection
+      (kept, not redacted), path-based sensitive-endpoint classification, and passive risk
+      indicators (secrets-in-URL, unauthenticated sensitive data, wildcard CORS, missing
+      security headers, verbose errors, guessable-id IDOR). Passive only. RESEARCH.md §6j.
+      Follow-up: optional redacted-EXPORT command (redaction is export-only, never at rest).

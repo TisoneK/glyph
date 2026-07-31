@@ -20,4 +20,5 @@ check its session entry and backlog before starting.
   (user correction: redaction is NOT a default, only an opt-in export). New
   catalog `findings` table + `glyph sensitive` CLI. Passive analysis only —
   no active scanning/exploitation.
-- **Status:** in-progress
+- **Status:** done (sensitive stage shipped, 88 tests) — now running a live
+  test to exercise `glyph sensitive` against a real target.
