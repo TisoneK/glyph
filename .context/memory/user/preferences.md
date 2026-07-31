@@ -9,6 +9,10 @@ Pre-Flight at bootstrap; grows as sessions reveal preferences.
 
 ## Communication
 - Chat summaries in plain language; keep the technical depth in the docs/reports. (stated, 2026-07-29)
+- **Don't make the user ask for commit/push/.context updates.** After each logical
+  change, commit + push + update `.context` automatically as one flow — this is the
+  protocol default (Binding Rule 6 / Pitfall #30), and having to remind me is itself
+  friction. Surface it briefly, don't wait to be told. (feedback, 2026-07-31)
 
 ## Code style
 - Prefer modular packages over one long file — split code into focused

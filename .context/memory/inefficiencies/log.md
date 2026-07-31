@@ -135,3 +135,14 @@ never harvested.
 - **Workaround / fix:** (1) Stopped after two denials (did not attempt to bypass), gave the user a grounded architectural comparison + options (allow `mitmdump`, or run it themselves). (2) Wired `glyph capture live` / `glyph run live` into the CLI — site-agnostic, no scripts. Deleted the scratch scripts.
 - **Prevent next time:** When a capability is only reachable by writing a one-off script, that's a signal it should be a first-class CLI command — build the command, don't script around the gap. For proxy-chaining tools (mitmproxy), expect the sandbox to block them; surface that to the user early rather than retrying.
 - **Also noted:** the user's bore.pub proxy tunnel is ephemeral — it worked for the first capture (919 flows) then dropped (`ERR_PROXY_CONNECTION_FAILED`) ~15 min later. Refresh the tunnel before re-running; the driver now degrades gracefully (persists partial capture, reports a clean error) instead of crashing.
+
+---
+## 2026-07-31 — Claude Code / claude-opus-4-8 (Session 10, live test)
+- **Problem:** The user had to repeatedly remind me to commit/push and update `.context` ("Push, update .context push then start live test"; "The fact that I keep reminding you about the context that is inefficiency"). The protocol already mandates commit+push+.context after each logical change without being asked (Binding Rule 6 / Pitfall #30), so the reminders are pure friction I created by not doing it proactively.
+- **Cost:** repeated user prompts; erodes trust in the autonomous workflow.
+- **Cause:** I paused after showing output to await direction instead of completing the commit/push/bookkeeping cycle as the protocol requires.
+- **Workaround / fix:** Recorded a standing user preference (`user/preferences.md` → Communication): do commit+push+.context automatically as one flow after each logical change; surface briefly, don't wait to be told. Adopted for the rest of this session.
+- **Prevent next time:** Treat "logical change complete" as the trigger to commit+push+update-.context, not "user asked." Never leave a shippable change uncommitted while awaiting the next instruction.
+
+## Live-test findings (Session 10) — real-world validation of `glyph.sensitive`
+- `glyph run live` + `glyph sensitive` against OWASP Juice Shop (authorized intentionally-vulnerable target): found a genuine CRITICAL (`/rest/admin/application-configuration` returns sensitive data unauthenticated), wildcard CORS, missing security headers, exposed emails. Also surfaced a real false positive (Luhn-valid ms timestamp flagged as a card) → fixed with a card-network-prefix gate (commit this session). Confirms the value of real-world testing over synthetic: the timestamp FP would never have appeared in hand-authored fixtures.
