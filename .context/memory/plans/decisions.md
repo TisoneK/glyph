@@ -428,7 +428,7 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 ---
 ## ADR-13: Browse Mode — Playwright visible, user-driven, persistent context (2026-07-31)
-- **Status:** proposed (research complete 2026-07-31, Session 19; awaiting build session)
+- **Status:** proposed → **superseded by ADR-14 before implementation** (2026-07-31, Session 19 cont.). ADR-14 switches the PRIMARY technique from Playwright-launched Chromium to CDP-attach to the user's real browser (Brave/Edge/Chrome). ADR-13's launch-persistent-context design is retained as the FALLBACK in ADR-14. Read ADR-14 for the authoritative decision; this entry is kept for the research trail.
 - **Context:** `glyph run live <url>` today launches Chromium **headless** and auto-drives
   the page via `_explore_round` (scroll + pseudo-random generic clicks on `a, button,
   [role=button], [class*='item']` etc.). This captures anything reachable by generic
@@ -518,3 +518,113 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   post-capture in browse mode), ADR-12 (multi-target — browse mode still respects
   `set_target` + `clear_target`). The build session must NOT change ADR-9's live-dashboard
   takeover for the non-browse path; browse mode is a sibling path, not a replacement.
+
+---
+## ADR-14: Browse Mode — CDP-attach to the user's real browser is primary; Playwright-launched Chromium is fallback (2026-07-31)
+- **Status:** proposed (research complete 2026-07-31, Session 19 cont.; awaiting build session)
+- **Context:** ADR-13 (proposed, unimplemented) chose Playwright-launched Chromium
+  (`launch_persistent_context`, headless=False, dedicated Glyph-managed profile) as the
+  browse-mode technique. User feedback: they want their **real browser** (Brave primary,
+  Edge secondary — both Chromium) with saved logins, password manager, extensions,
+  bookmarks, autofill. For auth/payment flows, the real browser already has the credentials
+  saved; re-entering them in a Glyph-managed isolated profile defeats the point and is a
+  security smell (credentials typed into an unfamiliar profile). ADR-13's analysis also
+  under-weighted "use the user's real browser" as an axis — it compared Playwright-Chromium
+  vs mitmproxy vs hybrid, but not "attach to the user's running browser via CDP" vs "launch
+  a real-browser binary". The refined research (review section 7) evaluates all three
+  real-browser techniques: mitmproxy system proxy, Playwright `connect_over_cdp` attach,
+  Playwright `launch_persistent_context(channel=...)` real-binary launch.
+- **Decision:**
+  1. **PRIMARY: CDP-attach to the user's real browser.** Glyph calls
+     `playwright.chromium.connect_over_cdp("http://localhost:<port>")` to ATTACH to the
+     user's already-running Chromium browser (Chrome/Edge/Brave) launched with
+     `--remote-debugging-port=9222`. Glyph does NOT own the browser lifecycle — it observes.
+     Registers `page.on("response")` / `page.on("request")` (additive — captures the request
+     side, including requests whose responses never arrive) / `page.on("websocket")` /
+     `page.on("framenavigated")` (refresh DOM snapshot on nav) on every existing tab;
+     `context.on("page")` for new tabs. DOM via `page.content()`. Periodic
+     `context.cookies()` snapshot (every ~5s + on detach). The user browses normally with
+     their real session — saved logins, extensions, password manager, all of it.
+  2. **FALLBACK: Playwright launches a real-browser binary.** When CDP-attach isn't
+     available (no debug port reachable, or user wants a clean dedicated profile), Glyph
+     spawns the installed browser via `launch_persistent_context(headless=False,
+     user_data_dir=~/.glyph/profiles/<host>/, channel=<chrome|msedge>)`. This is ADR-13's
+     original design, refined to use the real browser binary (`channel="chrome"` or
+     `channel="msedge"`) instead of bundled Chromium. For Brave: `executable_path` to the
+     Brave binary (Playwright has no `channel="brave"`) — auto-detect per OS (macOS
+     `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser`, Linux
+     `/usr/bin/brave-browser`, Windows `%ProgramFiles%\BraveSoftware\Brave-Browser\
+     \Application\brave.exe`) or `--browser-path <path>`.
+  3. **`--browse` flag** on `glyph run live` and `glyph capture live`. When set, Glyph
+     TRIES CDP-attach first (default `http://localhost:9222`, overridable via `--cdp-port`
+     / `--cdp-host` / `GLYPH_CDP_URL` env). If no CDP endpoint reachable, falls back to the
+     launch path with a clear stderr message ("No browser on :9222 — launching <browser>
+     with a dedicated profile; log in once, it persists at ~/.glyph/profiles/<host>/").
+     `--browser chrome|edge|brave` picks the fallback browser (default: chrome).
+     `--incognito` forces an ephemeral context. `--no-browse` is implicit (current behavior).
+  4. **Browser-launch helper (recommended).** `glyph browse --launch <browser> [--url <url>]`
+     spawns the chosen browser with `--remote-debugging-port=9222`, resolving the binary
+     per OS. If the browser is already running on that profile (profile-lock), it prints the
+     attach instruction instead of failing. This is UX sugar; the manual path (user launches
+     their own browser with the flag) is documented and works.
+  5. **Stop signal differs by mode.**
+     - CDP-attach: **Ctrl+C in the terminal detaches** (`cdp_connection.close()`) — the
+       browser stays open, the user's session (all their tabs) is preserved. Closing the
+       browser also stops capture. Detach-not-close is the default because closing the
+       user's whole browser is disruptive.
+     - Launch fallback: closing the browser stops capture (natural). Ctrl+C calls
+       `browser.close()` as a fallback.
+  6. **TUI integration.** When `--browse` is set, do NOT take over the screen with the
+     dashboard DURING capture (the user needs the actual browser visible). Print a one-line
+     "Attached to <browser> on :9222 — navigate, log in, do your flows. Ctrl+C here when
+     done (browser stays open)." to stderr. AFTER detach/browser-close: run `_gather`
+     (schema → rosetta → sensitive → snihunt), THEN open the dashboard as a post-capture
+     exploration view (or print the summary if `--no-tui`). Split-pane (browser + dashboard
+     side-by-side) is a future enhancement; defer.
+  7. **Capture scoping.** In CDP-attach mode, Glyph sees ALL tabs/sessions in the user's
+     browser, not just the target. Decision: capture everything (the user may navigate
+     across related subdomains / SSO redirects / payment providers), tag by host, surface a
+     "non-target hosts seen" note. Do NOT filter at capture time — the catalog's
+     first/third-party tagging (ADR-12 multi-target) handles it; the user can scope reads
+     with `--target <host>` later.
+  8. **Captured flows tagged `source = "playwright:<type>"`** (same as today). Add a
+     `capture_mode` meta (`"auto"` vs `"browse-attach"` vs `"browse-launch"`) so the
+     catalog/UI can distinguish.
+  9. **Backward compatible.** `--browse` is opt-in; existing `glyph run live` behavior
+     (headless + auto-explore + live dashboard takeover) is unchanged.
+- **Consequences:**
+  - CDP-attach means Glyph does NOT own the browser lifecycle — it observes the user's real
+    session. This is the user's explicit preference (Brave primary, Edge secondary). Both
+    are Chromium → CDP-attach works for both. Firefox/Safari are NOT supported by this path
+    (not Chromium, no CDP) — those users use `glyph run har` (exists today) until a future
+    `glyph capture proxy` (mitmproxy) lands.
+  - **Brave:** CDP-attach works (Brave is Chromium). Launch fallback needs `executable_path`
+    (no `channel="brave"`) — auto-detect per OS or `--browser-path`. Brave's built-in
+    Shields may block some requests; document that the user can disable Shields for the
+    target site if a capture looks incomplete.
+  - **Stop signal is Ctrl+C (detach) in CDP-attach mode**, NOT browser-close — because
+    closing the user's whole browser (all tabs) is disruptive. This differs from ADR-13's
+    launch-mode "close the browser to stop". The build session must implement BOTH stop
+    paths and pick the right one per mode.
+  - **Security:** attaching to the user's real browser means Glyph sees their real
+    cookies/tokens for ALL tabs/sessions, not just the target. Capture scoping (point 7)
+    captures everything and tags by host — the catalog's multi-target model (ADR-12)
+    handles per-host filtering. Document this clearly so the user knows what's captured.
+  - ADR-13's `launch_persistent_context` design is RETAINED as the fallback. ADR-14 adds
+    CDP-attach as the PRIMARY. The build session reads ADR-14 (not ADR-13) for the
+    authoritative implementation.
+  - mitmproxy (`glyph capture proxy`) stays a FUTURE mode for Firefox/Safari or wire-level
+    capture — NOT v1. The existing `glyph/capture/mitm.py` addon is the foundation; a
+    `glyph capture proxy` CLI + WebSocket addon support + browser-proxy-config guidance is
+    ~100-150 LOC, deferred (backlog).
+  - The live capture path stays the SAME when `--browse` is NOT set — no regression to the
+    existing headless auto-explore + dashboard-takeover flow.
+- **Research backing:** `.context/memory/reviews/2026-07-31-browse-mode-research.md`
+  section 7 (real-browser analysis). CDP-attach works for the user's Brave + Edge (both
+  Chromium); gives the real daily session; no cert/QUIC/pinning friction; DOM works for
+  Rosetta; decrypted bodies for free (browser does TLS). mitmproxy rejected for v1 (the
+  user's browsers are Chromium → CDP-attach is strictly better; mitmproxy's cert-install +
+  QUIC-disable + DOM-loss are unnecessary costs for them).
+- **Supersedes:** ADR-13 (proposed, unimplemented). ADR-13's launch-persistent-context
+  technique becomes the FALLBACK in ADR-14; ADR-14's CDP-attach is the PRIMARY. ADR-13 is
+  kept for the research trail.

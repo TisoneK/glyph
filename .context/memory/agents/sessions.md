@@ -497,3 +497,32 @@ probe=False explicitly; --no-net CLI tests don't fire the probe).
   `tasks/current.md` (the build session must NOT guess — ask the user). ADR-13 stays
   `proposed` until the build session implements + verifies, then flips to `accepted`.
 - **Report:** .context/memory/reviews/2026-07-31-browse-mode-research.md
+
+### Update (2026-07-31, Session 19 cont.) — ADR-14 supersedes ADR-13: CDP-attach to the real browser is primary
+User feedback on ADR-13: "What I have not heard you talk about is if we can use user's
+real browser instead. eg capture mitmproxy." Fair gap — ADR-13 compared Playwright-
+Chromium vs mitmproxy vs hybrid but did NOT seriously analyze "use the user's REAL
+browser" (their actual Brave/Edge/Chrome with saved logins, password manager,
+extensions). The user wants their real browser (Brave primary, Edge secondary — both
+Chromium); re-entering credentials in a Glyph-managed isolated profile defeats the
+point and is a security smell. Wrote review section 7 (real-browser analysis): three
+techniques — (A) mitmproxy system proxy (any browser, but cert-install + QUIC-disable
++ no DOM for SPAs), (B) Playwright `connect_over_cdp` ATTACH to the user's running
+Chromium browser (real session, no cert/QUIC/pinning friction, DOM works, decrypted
+bodies, WebSocket, multi-tab), (C) Playwright `launch_persistent_context(channel=...)`
+LAUNCH a real-browser binary with a dedicated Glyph profile (ADR-13's original design).
+Recommendation: (B) CDP-attach PRIMARY, (C) launch-fallback, (A) mitmproxy deferred
+(Firefox/Safari future). Appended ADR-14 (proposed) as the authoritative decision;
+marked ADR-13 "superseded by ADR-14 before implementation" (one-line status edit —
+ADR-13's launch-persistent-context is retained as the FALLBACK inside ADR-14).
+Brave+Edge specifics: both Chromium → CDP-attach works for both. Brave launch-fallback
+needs `executable_path` (no `channel="brave"`) — auto-detect per OS or `--browser-path`;
+Brave Shields may block some requests (document). Edge launch-fallback uses native
+`channel="msedge"`. Stop signal differs by mode: CDP-attach → Ctrl+C DETACHES (browser
+stays open, user's session preserved — closing the whole browser is disruptive);
+launch → close browser or Ctrl+C. 5 new ADR-14 backlog items (implement, `glyph browse
+--launch` helper, tests, Brave+Edge real-world verification, mitmproxy future). Open
+questions refined to 7 in tasks/current.md (Q2 answered by the user's choice; Q3, Q6, Q7
+new). No product code — research/planning session. Honored the honest-gap rule: ADR-14's
+consequences explicitly call out that CDP-attach sees ALL the user's tabs/sessions (not
+just the target) → capture everything, tag by host, document it.

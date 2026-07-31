@@ -234,3 +234,73 @@ concrete build items + open questions. See
       alongside the browser, streaming flows in real time as the user navigates. Needs
       Textual + visible-Chromium window-management work. Low — defer until v1 proves the
       capture path is solid. See ADR-13.
+
+---
+## 2026-07-31 — Session 19 cont. — ADR-14 supersedes ADR-13 (CDP-attach primary)
+
+User feedback on ADR-13: wants their REAL browser (Brave primary, Edge secondary,
+both Chromium) with saved logins/extensions/password manager — not a Glyph-managed
+isolated profile. ADR-14 (proposed) switches the PRIMARY technique to CDP-attach
+(`connect_over_cdp` to the user's running browser on `--remote-debugging-port=9222`);
+ADR-13's `launch_persistent_context` becomes the FALLBACK. See ADR-14 + review
+section 7. The build-session items below SUPERSEDE the ADR-13 build items above
+for the authoritative implementation — read ADR-14, not ADR-13.
+
+- [ ] **Implement ADR-14: `--browse` with CDP-attach primary + launch fallback**
+      (added 2026-07-31 by Super Z, Session 19 cont.) — `capture_url` gains
+      `browse: str|bool = False` + `cdp_url: Optional[str] = None` +
+      `browser: str = "chrome"` + `user_data_dir: Optional[str] = None`. When `browse`:
+      TRY `playwright.chromium.connect_over_cdp(cdp_url or "http://localhost:9222")` first.
+      On success → attach mode: register `page.on("response")`/`"request"`/`"websocket"`/
+      `"framenavigated"` on every existing `context.pages`, `context.on("page")` for new
+      tabs, periodic `context.cookies()` snapshot (~5s + on detach), block on
+      Ctrl+C→`cdp_connection.close()` (browser stays open) OR `browser.on("disconnected")`.
+      On CDP failure → launch fallback: `launch_persistent_context(channel=<chrome|msedge>,
+      headless=False, user_data_dir=~/.glyph/profiles/<host>/)`; for Brave use
+      `executable_path` (auto-detect per OS: macOS `/Applications/Brave Browser.app/...`,
+      Linux `/usr/bin/brave-browser`, Windows `%ProgramFiles%\BraveSoftware\...`); block on
+      `browser.on("disconnected")` or Ctrl+C→`browser.close()`. Skip `_explore_round` in
+      both browse modes. Add `page.on("request")` (additive — captures request side).
+      Add `--browse`, `--cdp-port` (default 9222), `--cdp-host` (default localhost),
+      `--browser chrome|edge|brave`, `--browser-path <path>`, `--incognito` to `with_live()`
+      in `glyph/cli/_shared.py`; thread through `live_kwargs()`. `GLYPH_CDP_URL` env
+      override. Update `glyph/cli/run.py` `run_live`: when `--browse`, do NOT take over the
+      screen with the dashboard during capture — print "Attached to <browser> on :9222 —
+      navigate, log in, do your flows. Ctrl+C here when done (browser stays open)." (attach
+      mode) or "Launched <browser> with a dedicated profile; log in once. Close the browser
+      when done." (launch mode) to stderr; AFTER detach/browser-close run `_gather` + `_render`,
+      THEN open dashboard as post-capture view (or print summary if `--no-tui`). Same
+      plumbing for `glyph capture live --browse`. Add `capture_mode` meta
+      (`auto`/`browse-attach`/`browse-launch`). Update README. Medium-High. See ADR-14.
+- [ ] **Browse Mode: `glyph browse --launch <browser>` helper** (added 2026-07-31 by Super Z,
+      Session 19 cont.) — UX sugar. Spawns the chosen browser (chrome/edge/brave) with
+      `--remote-debugging-port=9222 [--user-data-dir <profile>]`, resolving the binary per
+      OS. If the browser is already running on that profile (profile-lock), print the attach
+      instruction instead of failing. Optional `--url <url>` opens the target. The manual
+      path (user launches their own browser with the flag) is documented and works without
+      this. Low-Medium. See ADR-14.
+- [ ] **Browse Mode: tests for CDP-attach + launch-fallback paths** (added 2026-07-31 by
+      Super Z, Session 19 cont.) — `tests/test_capture_live.py`: mock Playwright. Assert
+      `browse=True` + CDP reachable → `connect_over_cdp` called + hooks registered on
+      existing pages + `context.on("page")` for new tabs + Ctrl+C path calls
+      `connection.close()` (not `browser.close()`). Assert `browse=True` + CDP unreachable →
+      `launch_persistent_context(channel=<chrome|msedge>, headless=False)` + Brave
+      `executable_path` auto-detect + block on `browser.on("disconnected")`. Assert
+      `_explore_round` NOT called in either browse mode. Assert `page.on("request")`
+      records the request side. Follow the existing mock-playwright pattern. Low-Medium.
+      See ADR-14.
+- [ ] **Browse Mode: real-world verification on Brave + an auth-protected target** (added
+      2026-07-31 by Super Z, Session 19 cont.) — the build session's end-to-end proof on the
+      user's PRIMARY browser. Launch Brave with `--remote-debugging-port=9222`, run
+      `glyph run live --browse <user's-target>`, log in (Brave's saved logins + password
+      manager), navigate to deposit/withdraw/send, Ctrl+C to detach, confirm the captured
+      catalog contains the auth + payment endpoints + `glyph sensitive` flags the
+      credentials/tokens/OTPs. Repeat on Edge as the secondary. Document the result + any
+      Brave-Shields blocks in the session review. Medium. See ADR-14.
+- [ ] **Browse Mode: mitmproxy `glyph capture proxy` for Firefox/Safari (future)** (added
+      2026-07-31 by Super Z, Session 19 cont.) — CDP-attach is Chromium-only; Firefox/Safari
+      users have no browse-mode path today (they use `glyph run har`). A future
+      `glyph capture proxy` command starts `mitmdump -s glyph/capture/mitm.py`, adds a
+      `websocket` handler to the addon (captures WS frames), and documents browser-proxy +
+      cert-install per browser. ~100-150 LOC. Deferred until a Firefox/Safari user asks.
+      Low-Medium. See ADR-14 + review section 7.
