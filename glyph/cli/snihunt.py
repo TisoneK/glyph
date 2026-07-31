@@ -43,9 +43,11 @@ def add_parser(sub) -> None:
     sp.add_argument("--no-net", action="store_true",
                     help="skip ALL network hunters (local heuristics only — "
                          "extract + embedded CDN ranges + zero-rating patterns)")
-    sp.add_argument("--probe", action="store_true",
-                    help="enable the active SNI probe (one TLS handshake per "
-                         "top candidate, to a public CDN edge). Default OFF.")
+    sp.add_argument("--no-probe", action="store_true", dest="no_probe",
+                    help="disable the active SNI probe (TLS handshake + HTTP "
+                         "GET per candidate). Default ON — the probe records "
+                         "the HTTP status code + cert for each candidate. "
+                         "Opt out for a faster, read-only recon pass.")
     sp.add_argument("--min-score", type=int, default=0, dest="min_score",
                     metavar="N",
                     help="show only candidates scoring >= N (0-100)")
@@ -90,7 +92,7 @@ def run(args: argparse.Namespace) -> int:
                 print(f"\r  {msg}", end="", file=sys.stderr, flush=True)
         summary = run_hunt(
             cat, target=target,
-            net=not args.no_net, probe=args.probe,
+            net=not args.no_net, probe=not args.no_probe,
             max_domains=args.max_domains,
             progress=progress,
         )
@@ -173,10 +175,10 @@ def _render_rich(summary, findings, args) -> None:
                   status_str, ip, cdn, cat, sig_str)
     con.print(t)
     net = "off" if args.no_net else "on"
-    probe = "on" if args.probe else "off"
-    if not args.probe:
-        con.print("[grey58](STATUS shows — because --probe is off. Run with "
-                  "--probe to get the HTTP status code + cert for each "
+    probe = "off" if args.no_probe else "on"
+    if args.no_probe:
+        con.print("[grey58](STATUS shows — because --no-probe was passed. "
+                  "Drop the flag to get the HTTP status code + cert for each "
                   "candidate.)[/]")
     con.print(f"[grey58](net {net} · probe {probe} · score ranks how usable "
               "the host is as an SNI — it is NOT a guarantee of free internet)[/]")
@@ -194,9 +196,9 @@ def _render_plain(summary, findings, args) -> None:
     if not findings:
         print("(no candidates match the filter)")
         return
-    if not args.probe:
-        print("(STATUS shows — because --probe is off. Run with --probe to "
-              "get the HTTP status code + cert for each candidate.)")
+    if args.no_probe:
+        print("(STATUS shows — because --no-probe was passed. Drop the flag "
+              "to get the HTTP status code + cert for each candidate.)")
     print(f"{'SEV':6} {'SCR':>3}  {'HOST':30} {'STATUS':6} {'IP':16} {'CDN':10} {'TYPE':12} SIGNALS")
     for f, score, cat in _rows(findings):
         ev = parse_evidence(f.evidence or "")

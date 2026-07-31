@@ -154,7 +154,10 @@ def test_hunt_with_mocked_network_discovers_new_hosts():
                     ["sibling-other.com", "another-site.shop.ke",
                      "www.shop.ke"])  # www.shop.ke is the host itself
 
-    summary = run_hunt(cat, net=True, http_get=fake)
+    # probe=False: the mocked http_get doesn't cover the probe's raw socket
+    # calls, so we disable the probe here (it's tested separately against
+    # real hosts). net=True exercises the DoH/CT/reverse-IP mock.
+    summary = run_hunt(cat, net=True, http_get=fake, probe=False)
 
     findings = cat.findings(kind=FINDING_SNI_BUG_HOST)
     hosts = {f.host for f in findings}

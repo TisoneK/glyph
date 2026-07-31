@@ -111,7 +111,7 @@ def parse_evidence(evidence: str) -> Dict[str, Any]:
 
 
 def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
-             net: bool = True, probe: bool = False,
+             net: bool = True, probe: bool = True,
              http_get: Optional[HttpGet] = None,
              max_domains: int = 25,
              progress=None) -> Dict[str, Any]:
@@ -130,9 +130,11 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
         the local heuristics (extract + embedded CDN ranges + zero-rating
         patterns over the captured surface). Online path is the default.
     probe : bool
-        If True, the active SNI probe runs (one TLS handshake per top
-        candidate). Default False — the stage is read-only recon unless
-        the user opts in.
+        If True (the DEFAULT), the active SNI probe runs — one TLS handshake
+        + HTTP GET per top candidate, recording the cert CN/SAN + the HTTP
+        status code. This is what a browser does on every page load (no port
+        scanning, no exploitation). Opt OUT with ``--no-probe`` for a faster,
+        read-only recon pass (no HTTP status codes).
     http_get : callable, optional
         Swappable network fetch (tests inject a fake). Defaults to the real
         ``urllib`` fetcher.
@@ -314,10 +316,12 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
         score = min(score, 100)
         signals["ips"] = ips[:3]
 
-        # Optional active probe (only for the already-strong candidates, to
-        # keep the probe budget tiny). Does a TLS handshake + HTTP GET to
-        # capture the cert CN/SAN AND the HTTP status code.
-        if probe and score >= 40:
+        # Active probe (default ON; opt out with --no-probe). Does a TLS
+        # handshake + HTTP GET to capture the cert CN/SAN AND the HTTP status
+        # code. Only fires for candidates scoring >= 40 (keeps the probe
+        # budget tiny) AND requires net=True (the probe needs a reachable IP;
+        # --no-net means no network, so no probe).
+        if probe and net and score >= 40:
             res = probe_mod.probe_sni(host, ip=ips[0] if ips else None)
             if res.ok:
                 score += 10
