@@ -277,3 +277,13 @@ flows into the live dashboard; Esc returns home. Restructured the TUI into `Glyp
 or help (pipe). 108 tests (home mount + URL->dashboard covered). Still verify the Playwright browser
 live path on the user's Windows box. Lesson: use App.get_default_screen (not on_mount push) so the
 initial screen is queryable immediately in run_test.
+
+### Fix (2026-07-31, Session 15) — reset-per-run + live dashboard perf
+User's live run showed ALL past targets and hung. Root cause: `run` appended to glyph.db
+(accumulation) and the live TUI reloaded all 5 tables every 1s + re-ran full analysis every 3s
+with overlapping workers over the huge catalog. Fixes: `Catalog.reset()` at the start of every
+run (+ the live capture worker) so a run is fresh per target; live tick refreshes only summary +
+visible tab (others on activation); analysis guarded (no overlap) at 4s; final analysis + full
+reload then STOP timers when capture done; tables cap at 800 rows. Gotcha: don't name an instance
+attr `_timers` on a Textual DOMNode — it shadows Textual's internal timer set (use `_live_timers`).
+109 tests.
