@@ -49,6 +49,48 @@ def test_mask_is_display_only():
     assert mask("supersecret") == "supe*******"
 
 
+# -- first/third party ----------------------------------------------------
+def test_registrable_domain_and_multipart_tld():
+    from glyph.sensitive.party import registrable_domain
+    assert registrable_domain("www.betika.com") == "betika.com"
+    assert registrable_domain("ke-experiment-service.betika.com") == "betika.com"
+    assert registrable_domain("googletagmanager.com") == "googletagmanager.com"
+    assert registrable_domain("foo.betika.co.ke") == "betika.co.ke"  # multi-part TLD
+
+
+def test_classify_party():
+    from glyph.sensitive.party import classify
+    assert classify("api.betika.com", "www.betika.com") == "first_party"
+    assert classify("secure.adnxs.com", "www.betika.com") == "third_party"
+    assert classify("api.betika.com", None) == "unknown"
+
+
+def test_scan_tags_party_from_target():
+    cat = Catalog(":memory:")
+    cat.set_target("www.betika.com")
+    cat.add_flow(Flow(method="GET", url="https://api.betika.com/x", host="", path="",
+                      resp_headers={"Access-Control-Allow-Origin": "*"}))
+    cat.add_flow(Flow(method="GET", url="https://secure.adnxs.com/y", host="", path="",
+                      resp_headers={"Access-Control-Allow-Origin": "*"}))
+    run_scan(cat)
+    cors = {f.evidence.split()[0]: f.party
+            for f in cat.findings(kind="risk") if f.category == "wildcard_cors"}
+    assert cors["api.betika.com"] == "first_party"
+    assert cors["secure.adnxs.com"] == "third_party"
+    cat.close()
+
+
+def test_summary_splits_party():
+    cat = Catalog(":memory:")
+    cat.set_target("www.betika.com")
+    cat.add_flow(Flow(method="GET", url="https://secure.adnxs.com/y", host="", path="",
+                      resp_headers={"Access-Control-Allow-Origin": "*"}))
+    s = run_scan(cat)
+    assert s["by_party"].get("third_party", 0) >= 1
+    assert s["first_party_total"] == s["total"] - s["by_party"]["third_party"]
+    cat.close()
+
+
 # -- scan integration -----------------------------------------------------
 def _scan(flows):
     cat = Catalog(":memory:")

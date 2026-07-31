@@ -8,10 +8,11 @@ are recorded intact — flag and locate, never redact at rest.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from glyph.catalog import FINDING_SENSITIVE_DATA, Catalog, Finding, severity_rank
 from glyph.sensitive import endpoints as endpoints_mod
+from glyph.sensitive import party as party_mod
 from glyph.sensitive import risk as risk_mod
 from glyph.sensitive.detectors import _SECRET_NAME, scan_value
 
@@ -44,15 +45,17 @@ def _parse_json(body: str, mime: str) -> Any:
         return None
 
 
-def scan_data(catalog: Catalog) -> List[Finding]:
+def scan_data(catalog: Catalog, target: Optional[str] = None) -> List[Finding]:
     """Detect sensitive data across queries, headers, and bodies."""
     out: List[Finding] = []
 
-    def add(category: str, sev: str, location: str, ep_id, value: str, where: str):
+    def add(category: str, sev: str, location: str, ep_id, value: str,
+            where: str, host: str):
         out.append(Finding(
             kind=FINDING_SENSITIVE_DATA, category=category, severity=sev,
             location=location, endpoint_id=ep_id,
             evidence=f"{category} in {where}", value_sample=str(value)[:512],
+            party=party_mod.classify(host, target),
         ))
 
     for ep in catalog.endpoints():
@@ -60,14 +63,15 @@ def scan_data(catalog: Catalog) -> List[Finding]:
             # Query parameters.
             for k, v in (flow.query or {}).items():
                 for cat, sev, val in scan_value(k, v):
-                    add(cat, sev, f"query:{k}", ep.id, val, f"query '{k}' of {ep.key}")
+                    add(cat, sev, f"query:{k}", ep.id, val,
+                        f"query '{k}' of {ep.key}", ep.host)
             # Auth-ish headers only (avoid noise on benign headers).
             for hdrs in (flow.req_headers, flow.resp_headers):
                 for hk, hv in (hdrs or {}).items():
                     if hk.lower() in _AUTH_HEADERS or _SECRET_NAME.search(hk):
                         for cat, sev, val in scan_value(hk, hv):
                             add(cat, sev, f"header:{hk.lower()}", ep.id, val,
-                                f"header '{hk}' of {ep.key}")
+                                f"header '{hk}' of {ep.key}", ep.host)
             # Bodies: JSON walked field-by-field; other text scanned raw.
             for body, mime in ((flow.req_body, "application/json"),
                                (flow.resp_body, flow.resp_mime)):
@@ -75,23 +79,25 @@ def scan_data(catalog: Catalog) -> List[Finding]:
                 if doc is not None:
                     for jpath, leaf, val in _walk_scalars(doc, "$"):
                         for cat, sev, mval in scan_value(leaf, val):
-                            add(cat, sev, jpath, ep.id, mval, f"{jpath} of {ep.key}")
+                            add(cat, sev, jpath, ep.id, mval,
+                                f"{jpath} of {ep.key}", ep.host)
                 elif body and (mime or "").startswith("text"):
                     for cat, sev, mval in scan_value("", body):
                         add(cat, sev, f"body:{flow.path}", ep.id, mval,
-                            f"response body of {ep.key}")
+                            f"response body of {ep.key}", ep.host)
     return out
 
 
 def run_scan(catalog: Catalog) -> Dict[str, Any]:
     """Run every flag stage and persist findings. Returns a summary."""
     catalog.clear_findings()
-    data = scan_data(catalog)
+    target = catalog.target()
+    data = scan_data(catalog, target)
     for f in data:
         catalog.add_finding(f)
-    for f in endpoints_mod.classify(catalog):
+    for f in endpoints_mod.classify(catalog, target):
         catalog.add_finding(f)
-    for f in risk_mod.assess(catalog, data):
+    for f in risk_mod.assess(catalog, data, target):
         catalog.add_finding(f)
     return summarize(catalog)
 
@@ -100,13 +106,26 @@ def summarize(catalog: Catalog) -> Dict[str, Any]:
     findings = catalog.findings()
     by_kind: Dict[str, int] = {}
     by_severity: Dict[str, int] = {}
+    by_party: Dict[str, int] = {}
+    first_by_severity: Dict[str, int] = {}
     for f in findings:
         by_kind[f.kind] = by_kind.get(f.kind, 0) + 1
         by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
+        by_party[f.party or "unknown"] = by_party.get(f.party or "unknown", 0) + 1
+        if f.party in (None, "first_party", "unknown"):
+            first_by_severity[f.severity] = first_by_severity.get(f.severity, 0) + 1
+
+    def sevmap(src: Dict[str, int]) -> Dict[str, int]:
+        return {s: src[s] for s in ("critical", "high", "medium", "low")
+                if src.get(s)}
+
     return {
         "total": len(findings),
+        "target": catalog.target(),
         "by_kind": by_kind,
-        "by_severity": {s: by_severity.get(s, 0)
-                        for s in ("critical", "high", "medium", "low")
-                        if by_severity.get(s)},
+        "by_severity": sevmap(by_severity),
+        "by_party": by_party,
+        # First-party (incl. unknown when no target) — the trustworthy view.
+        "first_party_total": sum(v for k, v in by_party.items() if k != "third_party"),
+        "first_party_by_severity": sevmap(first_by_severity),
     }

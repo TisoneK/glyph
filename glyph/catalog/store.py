@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS findings (
     evidence TEXT,
     endpoint_id INTEGER,
     value_sample TEXT,
+    party TEXT,
     UNIQUE (kind, category, endpoint_id, location)
 );
 CREATE INDEX IF NOT EXISTS idx_flows_endpoint ON flows (endpoint_id);
@@ -146,6 +147,10 @@ class Catalog:
             "PRAGMA table_info(dictionary)").fetchall()}
         if "review_state" not in cols:
             self.conn.execute("ALTER TABLE dictionary ADD COLUMN review_state TEXT")
+        fcols = {r["name"] for r in self.conn.execute(
+            "PRAGMA table_info(findings)").fetchall()}
+        if "party" not in fcols:
+            self.conn.execute("ALTER TABLE findings ADD COLUMN party TEXT")
 
     # -- lifecycle --------------------------------------------------------
     def __enter__(self) -> "Catalog":
@@ -382,34 +387,55 @@ class Catalog:
             for r in rows
         ]
 
+    # -- target (the capture's primary host — anchors party classification)
+    def set_target(self, host: Optional[str]) -> None:
+        if not host:
+            return
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('target_host', ?)",
+            (host,))
+        self.conn.commit()
+
+    def target(self) -> Optional[str]:
+        row = self.conn.execute(
+            "SELECT value FROM meta WHERE key='target_host'").fetchone()
+        return row["value"] if row else None
+
     # -- findings ---------------------------------------------------------
     def add_finding(self, f: Finding) -> int:
         cur = self.conn.execute(
             "INSERT INTO findings (kind, category, severity, location, evidence, "
-            "endpoint_id, value_sample) VALUES (?,?,?,?,?,?,?) "
+            "endpoint_id, value_sample, party) VALUES (?,?,?,?,?,?,?,?) "
             "ON CONFLICT (kind, category, endpoint_id, location) DO UPDATE SET "
             "severity=excluded.severity, evidence=excluded.evidence, "
-            "value_sample=excluded.value_sample",
+            "value_sample=excluded.value_sample, party=excluded.party",
             (f.kind, f.category, f.severity, f.location, f.evidence,
-             f.endpoint_id, f.value_sample),
+             f.endpoint_id, f.value_sample, f.party),
         )
         self.conn.commit()
         return int(cur.lastrowid)
 
     def findings(self, kind: Optional[str] = None,
-                 min_severity: Optional[str] = None) -> List[Finding]:
-        sql = "SELECT * FROM findings"
+                 min_severity: Optional[str] = None,
+                 party: Optional[str] = None) -> List[Finding]:
+        clauses: List[str] = []
         params: List[Any] = []
         if kind is not None:
-            sql += " WHERE kind=?"
+            clauses.append("kind=?")
             params.append(kind)
+        if party is not None:
+            clauses.append("party=?")
+            params.append(party)
+        sql = "SELECT * FROM findings"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         rows = self.conn.execute(sql, tuple(params)).fetchall()
         out = [
             Finding(
                 id=r["id"], kind=r["kind"], category=r["category"],
                 severity=r["severity"], location=r["location"],
                 evidence=r["evidence"], endpoint_id=r["endpoint_id"],
-                value_sample=r["value_sample"],
+                value_sample=r["value_sample"], party=r["party"],
             )
             for r in rows
         ]

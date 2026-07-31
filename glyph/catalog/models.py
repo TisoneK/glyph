@@ -124,6 +124,7 @@ class Finding:
     evidence: str      # human-readable justification
     endpoint_id: Optional[int] = None
     value_sample: Optional[str] = None  # the actual matched value, kept intact
+    party: Optional[str] = None  # first_party | third_party | unknown vs the target
     id: Optional[int] = None
 
 

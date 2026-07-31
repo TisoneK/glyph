@@ -216,26 +216,47 @@ _KIND_ALIAS = {"data": "sensitive_data", "endpoints": "sensitive_endpoint",
                "risk": "risk"}
 
 
+def _sev_line(sev: dict) -> str:
+    return ", ".join(f"{n} {s}" for s, n in sev.items()) or "none"
+
+
 def cmd_sensitive(args: argparse.Namespace) -> int:
     from glyph.sensitive import run_scan
     cat = _catalog(args)
     try:
+        if getattr(args, "target", None):
+            cat.set_target(args.target)
         summary = run_scan(cat)
         kind = _KIND_ALIAS.get(args.kind) if args.kind else None
         findings = cat.findings(kind=kind, min_severity=args.severity)
     finally:
         cat.close()
+
+    # Party filter: default hides third-party (analytics/ads/CDN noise) when a
+    # target is known; --all shows everything; --party picks one explicitly.
+    if args.party:
+        want = {"first": "first_party", "third": "third_party"}[args.party]
+        findings = [f for f in findings if f.party == want]
+    elif not args.all:
+        findings = [f for f in findings if f.party != "third_party"]
+
     if args.json:
         _emit({"summary": summary,
                "findings": [f.__dict__ for f in findings]}, True)
         return 0
-    sev = summary.get("by_severity", {})
-    sev_line = ", ".join(f"{n} {s}" for s, n in sev.items()) or "none"
-    print(f"{summary['total']} finding(s): {sev_line}\n")
+
+    tp = summary.get("by_party", {}).get("third_party", 0)
+    head = f"{summary['first_party_total']} first-party finding(s)"
+    head += f": {_sev_line(summary.get('first_party_by_severity', {}))}"
+    if tp and not args.all and not args.party:
+        head += f"   (+{tp} third-party hidden — --all to show)"
+    print(f"target: {summary.get('target') or '(unknown)'}")
+    print(head + "\n")
     for f in findings:
+        tag = "" if f.party in ("first_party", None) else f" ({f.party.replace('_', '-')})"
         val = f"  [value: {f.value_sample}]" if f.value_sample else ""
         loc = f" @ {f.location}" if f.location != "endpoint" else ""
-        print(f"[{f.severity.upper():8}] {f.category}{loc}\n"
+        print(f"[{f.severity.upper():8}] {f.category}{loc}{tag}\n"
               f"           {f.evidence}{val}")
     if not findings:
         print("(no findings match the filter)")
@@ -315,9 +336,12 @@ def _analyze_and_report(cat, args) -> None:
     if not getattr(args, "no_sensitive", False):
         from glyph.sensitive import run_scan
         sens = run_scan(cat)
-        sev = sens.get("by_severity", {})
-        sev_line = ", ".join(f"{n} {s}" for s, n in sev.items()) or "none"
-        print(f"sensitive: {sens['total']} finding(s) ({sev_line})")
+        line = (f"sensitive: {sens['first_party_total']} first-party finding(s) "
+                f"({_sev_line(sens.get('first_party_by_severity', {}))})")
+        tp = sens.get("by_party", {}).get("third_party", 0)
+        if tp:
+            line += f", +{tp} third-party"
+        print(line)
         hint += ", 'glyph sensitive' for findings"
     print(f"\nCatalog: {args.db}  —  {hint}, 'glyph codegen' to export.")
 
@@ -430,6 +454,12 @@ def build_parser() -> argparse.ArgumentParser:
                     help="show only one kind of finding")
     sp.add_argument("--severity", choices=["critical", "high", "medium", "low"],
                     help="show only findings at or above this severity")
+    sp.add_argument("--all", action="store_true",
+                    help="include third-party (analytics/ads/CDN) findings")
+    sp.add_argument("--party", choices=["first", "third"],
+                    help="show only first- or third-party findings")
+    sp.add_argument("--target", metavar="HOST",
+                    help="override the primary host that defines first-party")
     sp.set_defaults(func=cmd_sensitive)
 
     sp = with_db(sub.add_parser("codegen", help="emit OpenAPI 3"))

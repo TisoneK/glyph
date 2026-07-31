@@ -8,7 +8,7 @@ data flowing through them; the risk stage cross-links "sensitive endpoint
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from glyph.catalog import (
     FINDING_SENSITIVE_ENDPOINT,
@@ -17,6 +17,7 @@ from glyph.catalog import (
     Catalog,
     Finding,
 )
+from glyph.sensitive import party as party_mod
 
 # (compiled path regex, category, severity). Matched against the lowercased
 # path template. First-match-wins ordering: most specific / severe first.
@@ -45,7 +46,7 @@ _RULES: List[Tuple["re.Pattern", str, str]] = [
 ]
 
 
-def classify(catalog: Catalog) -> List[Finding]:
+def classify(catalog: Catalog, target: Optional[str] = None) -> List[Finding]:
     """Return sensitive-endpoint findings for the catalog's endpoints."""
     findings: List[Finding] = []
     for ep in catalog.endpoints():
@@ -60,6 +61,7 @@ def classify(catalog: Catalog) -> List[Finding]:
                     evidence=f"{ep.method} {ep.host}{ep.path_template} "
                              f"matches {category.replace('_', ' ')}",
                     endpoint_id=ep.id,
+                    party=party_mod.classify(ep.host, target),
                 ))
                 break  # one classification per endpoint (most severe first)
     return findings

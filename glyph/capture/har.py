@@ -61,10 +61,19 @@ def ingest_har(catalog: Catalog, har_path: str,
     entries = (har.get("log") or {}).get("entries") or []
     flows = 0
     pages = 0
+    from urllib.parse import urlparse
+    from collections import Counter
+    hosts: Counter = Counter()
+    first_doc_host = None
     for entry in entries:
         flow = flow_from_entry(entry)
         if flow is None:
             continue
+        host = urlparse(flow.url).hostname
+        if host:
+            hosts[host] += 1
+            if first_doc_host is None and flow.resp_mime == "text/html":
+                first_doc_host = host
         catalog.add_flow(flow)
         flows += 1
         if harvest_html and flow.resp_mime == "text/html" and flow.resp_body:
@@ -75,4 +84,9 @@ def ingest_har(catalog: Catalog, har_path: str,
                     labels=labels, observed_at=flow.started_at,
                 ))
                 pages += 1
+    # Anchor party classification: prefer the first HTML document's host,
+    # else the most-seen host. Don't clobber a target already set.
+    if not catalog.target():
+        target = first_doc_host or (hosts.most_common(1)[0][0] if hosts else None)
+        catalog.set_target(target)
     return {"flows": flows, "pages": pages}

@@ -9,7 +9,7 @@ defensive assessment.
 from __future__ import annotations
 
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from glyph.catalog import (
     FINDING_RISK,
@@ -20,6 +20,7 @@ from glyph.catalog import (
     Catalog,
     Finding,
 )
+from glyph.sensitive import party as party_mod
 
 _STACK_TRACE = re.compile(
     r"(Traceback \(most recent call last\)|"
@@ -39,14 +40,15 @@ _SEC_HEADERS = {
 _INT = re.compile(r"^\d{1,7}$")
 
 
-def assess(catalog: Catalog, data_findings: List[Finding]) -> List[Finding]:
+def assess(catalog: Catalog, data_findings: List[Finding],
+           target: Optional[str] = None) -> List[Finding]:
     """Return risk findings, cross-referencing the data findings."""
     out: List[Finding] = []
     out += _sensitive_in_url(data_findings)
-    out += _unauthenticated_sensitive_data(catalog, data_findings)
-    out += _cors_and_headers(catalog)
-    out += _verbose_errors(catalog)
-    out += _guessable_ids(catalog)
+    out += _unauthenticated_sensitive_data(catalog, data_findings, target)
+    out += _cors_and_headers(catalog, target)
+    out += _verbose_errors(catalog, target)
+    out += _guessable_ids(catalog, target)
     return out
 
 
@@ -61,12 +63,14 @@ def _sensitive_in_url(data_findings: List[Finding]) -> List[Finding]:
                 evidence=f"{f.category} carried in a URL query parameter "
                          f"({f.location}) — leaks via logs, history, Referer",
                 value_sample=f.value_sample,
+                party=f.party,  # inherit the data finding's party
             ))
     return out
 
 
 def _unauthenticated_sensitive_data(catalog: Catalog,
-                                    data_findings: List[Finding]) -> List[Finding]:
+                                    data_findings: List[Finding],
+                                    target: Optional[str] = None) -> List[Finding]:
     from glyph.auth import analyze
     auth = analyze(catalog)
     endpoints = {e.id: e for e in catalog.endpoints()}
@@ -95,11 +99,13 @@ def _unauthenticated_sensitive_data(catalog: Catalog,
             location="endpoint", endpoint_id=ep_id,
             evidence=f"{ep.key} returns sensitive data ({', '.join(cats)}) "
                      f"with no authentication observed",
+            party=party_mod.classify(ep.host, target),
         ))
     return out
 
 
-def _cors_and_headers(catalog: Catalog) -> List[Finding]:
+def _cors_and_headers(catalog: Catalog,
+                      target: Optional[str] = None) -> List[Finding]:
     out: List[Finding] = []
     seen_html_hosts: set = set()
     header_seen: Dict[str, set] = {}
@@ -118,6 +124,7 @@ def _cors_and_headers(catalog: Catalog) -> List[Finding]:
                 location="header:access-control-allow-origin",
                 evidence=f"{flow.host} returns Access-Control-Allow-Origin: *"
                          + (" WITH credentials" if creds else ""),
+                party=party_mod.classify(flow.host, target),
             ))
         # Track security-header presence on HTML documents per host.
         if (flow.resp_mime or "") == "text/html":
@@ -132,14 +139,16 @@ def _cors_and_headers(catalog: Catalog) -> List[Finding]:
         for header, (slug, sev) in _SEC_HEADERS.items():
             if header not in present:
                 out.append(Finding(
-                    kind=FINDING_RISK, category=f"missing_security_header",
+                    kind=FINDING_RISK, category="missing_security_header",
                     severity=sev, location=f"header:{header}",
                     evidence=f"{host} HTML responses never set {header}",
+                    party=party_mod.classify(host, target),
                 ))
     return out
 
 
-def _verbose_errors(catalog: Catalog) -> List[Finding]:
+def _verbose_errors(catalog: Catalog,
+                    target: Optional[str] = None) -> List[Finding]:
     out = []
     flagged: set = set()
     for flow in catalog.all_flows():
@@ -162,7 +171,8 @@ def _verbose_errors(catalog: Catalog) -> List[Finding]:
     return out
 
 
-def _guessable_ids(catalog: Catalog) -> List[Finding]:
+def _guessable_ids(catalog: Catalog,
+                   target: Optional[str] = None) -> List[Finding]:
     out = []
     for ep in catalog.endpoints():
         if "{id}" not in (ep.path_template or ""):
@@ -179,5 +189,6 @@ def _guessable_ids(catalog: Catalog) -> List[Finding]:
                 evidence=f"{ep.key} uses small sequential-looking numeric ids "
                          f"(e.g. {sorted(ids)[:5]}) — IDOR/BOLA candidate; "
                          f"verify object-level authorization",
+                party=party_mod.classify(ep.host, target),
             ))
     return out

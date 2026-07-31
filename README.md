@@ -185,10 +185,19 @@ analysis for authorized assessment — no active scanning or exploitation.
 
 ```bash
 glyph run live <url>               # the scan runs automatically at the end of a run
-glyph sensitive                    # (re-)scan and list findings, most severe first
+glyph sensitive                    # (re-)scan; first-party findings, most severe first
 glyph sensitive --severity high    # only high/critical
 glyph sensitive --kind risk        # just the risk indicators
+glyph sensitive --all              # include third-party (analytics/ads/CDN)
 ```
+
+**First-party vs third-party.** A page load pulls in analytics, ad, and CDN hosts alongside
+the target, and flagging *their* CORS or headers as the target's risk is misleading. Glyph
+records the capture's primary host and tags every finding by registrable domain
+(`api.betika.com` and `www.betika.com` are both first-party; `googletagmanager.com` is not,
+and multi-part TLDs like `.co.ke` are handled). `glyph sensitive` shows first-party findings
+by default; `--all` or `--party third` reveal the rest, and `--target HOST` overrides which
+host counts as first-party.
 
 Three kinds of finding:
 

@@ -133,6 +133,7 @@ def capture_url(catalog: Catalog, url: str,
             "  pip install 'glyph-re[live]' && playwright install chromium"
         ) from exc
 
+    catalog.set_target(urlparse(url).hostname)  # anchors first/third-party
     captured: List[Flow] = []
     launch_kwargs = {"headless": True}
     if proxy:
