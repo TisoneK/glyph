@@ -69,9 +69,9 @@ def _render(args, header: str, r: dict) -> None:
         _print_plain(args, header, r)
 
 
-def _open_dashboard(args) -> bool:
-    """Open the TUI dashboard when interactive + textual present. Returns
-    True if it took over the screen (so we skip the printed summary)."""
+def _open_live_dashboard(args) -> bool:
+    """Open the live TUI dashboard (it runs the capture itself, in a worker,
+    and refreshes in real time). Returns True if it took over the screen."""
     import sys
     if getattr(args, "no_tui", False) or not sys.stdout.isatty():
         return False
@@ -81,7 +81,7 @@ def _open_dashboard(args) -> bool:
         return False
     if not HAS_TEXTUAL:
         return False
-    run_dashboard(args.db)
+    run_dashboard(args.db, live={"url": args.url, "kwargs": live_kwargs(args)})
     return True
 
 
@@ -171,6 +171,12 @@ def run_har(args: argparse.Namespace) -> int:
 
 
 def run_live(args: argparse.Namespace) -> int:
+    # Interactive: the live dashboard runs the capture itself and streams it
+    # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
+    if _open_live_dashboard(args):
+        return 0
+    # Headless fallback (pipe / CI / --no-tui / no textual): capture
+    # synchronously, then print the designed summary.
     from glyph.capture import capture_live
     cat = catalog(args)
     try:
@@ -178,8 +184,5 @@ def run_live(args: argparse.Namespace) -> int:
         r = _gather(cat, args, cap)
     finally:
         cat.close()
-    # Leave the user inside the interactive dashboard (ADR-9); fall back to
-    # the printed summary in a pipe/CI or with --no-tui / no textual.
-    if not _open_dashboard(args):
-        _render(args, args.url, r)
+    _render(args, args.url, r)
     return 0

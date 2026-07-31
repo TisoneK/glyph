@@ -134,6 +134,13 @@ class Catalog:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # WAL + a busy timeout let the live capture thread write flows while
+        # the TUI reads concurrently (Phase 2) without "database is locked".
+        try:
+            self.conn.execute("PRAGMA journal_mode = WAL")
+            self.conn.execute("PRAGMA busy_timeout = 5000")
+        except sqlite3.Error:
+            pass
         self.conn.executescript(_SCHEMA)
         self._migrate()
         self.conn.execute(

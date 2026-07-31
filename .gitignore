@@ -24,3 +24,5 @@ scripts/capture-out-*/
 *.db
 # Reusable scripts ARE tracked; their output is not.
 .venv-*/
+*.db-wal
+*.db-shm

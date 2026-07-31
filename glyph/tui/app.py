@@ -107,9 +107,12 @@ if HAS_TEXTUAL:
             Binding("q", "quit", "Quit"),
         ]
 
-        def __init__(self, db_path: str) -> None:
+        def __init__(self, db_path: str, live: Optional[dict] = None) -> None:
             super().__init__()
             self.db_path = db_path
+            self.live = live  # {"url":.., "kwargs":..} for a live capture, else None
+            self._start = None
+            self._done = live is None
 
         def compose(self) -> "ComposeResult":
             yield Header(show_clock=True)
@@ -121,9 +124,70 @@ if HAS_TEXTUAL:
             yield Footer()
 
         def on_mount(self) -> None:
+            import time
             self.title = "GLYPH"
-            self.sub_title = "Live Capture"
+            self.sub_title = "catalog"
             self.action_reload()
+            if self.live:
+                self._start = time.monotonic()
+                # capture runs in a worker thread, writing flows to glyph.db as
+                # they arrive; the UI just polls and refreshes (ADR-9 Phase 2).
+                self.run_worker(self._capture_worker, thread=True, name="capture")
+                self.set_interval(1.0, self._tick)       # flows/DOM/counts live
+                self.set_interval(3.0, self._analyze_tick)  # schema/rosetta/sensitive
+
+        # -- live capture + refresh --------------------------------------
+        def _capture_worker(self) -> None:
+            from glyph.capture.driver import capture_url
+            cat = Catalog(self.db_path)
+            try:
+                capture_url(cat, self.live["url"], **self.live["kwargs"])
+            except Exception as exc:
+                try:
+                    cat.set_meta("capture_status", "done")
+                    cat.set_meta("capture_error", str(exc).splitlines()[0])
+                except Exception:
+                    pass
+            finally:
+                cat.close()
+
+        def _status(self) -> Optional[str]:
+            cat = Catalog(self.db_path)
+            try:
+                return cat.get_meta("capture_status")
+            finally:
+                cat.close()
+
+        def _tick(self) -> None:
+            import time
+            self.action_reload()
+            elapsed = int(time.monotonic() - (self._start or time.monotonic()))
+            mm, ss = divmod(elapsed, 60)
+            if self._status() == "done":
+                if not self._done:
+                    self._done = True
+                    self.run_worker(self._analyze_once, thread=True)  # final pass
+                self.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
+            else:
+                self.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
+
+        def _analyze_tick(self) -> None:
+            if not self._done:
+                self.run_worker(self._analyze_once, thread=True, name="analyze")
+
+        def _analyze_once(self) -> None:
+            from glyph.rosetta import build_dictionary
+            from glyph.schema import infer_all
+            from glyph.sensitive import run_scan
+            cat = Catalog(self.db_path)
+            try:
+                infer_all(cat)
+                build_dictionary(cat)
+                run_scan(cat)
+            except Exception:
+                pass  # transient lock while capture writes: retry next tick
+            finally:
+                cat.close()
 
         def action_reload(self) -> None:
             cat = Catalog(self.db_path)
@@ -165,10 +229,14 @@ if HAS_TEXTUAL:
                 self.push_screen(FlowDetail(detail))
 
 
-def run_dashboard(db_path: str) -> None:
-    """Open the dashboard on a catalog. Requires the `tui` extra."""
+def run_dashboard(db_path: str, live: Optional[dict] = None) -> None:
+    """Open the dashboard on a catalog. Requires the `tui` extra.
+
+    ``live={"url":.., "kwargs":..}`` runs a live capture in a worker and
+    refreshes in real time; ``None`` opens the catalog read-only.
+    """
     if not HAS_TEXTUAL:
         raise RuntimeError(
             "Textual is not installed. Install the tui extra:\n"
             "  pip install 'glyph-re[tui]'")
-    GlyphDashboard(db_path).run()
+    GlyphDashboard(db_path, live=live).run()
