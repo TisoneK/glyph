@@ -17,6 +17,24 @@ REACH_DIRECT = "direct"
 REACH_NEEDS_TUNNEL = "needs_tunnel"
 REACH_UNREACHABLE = "unreachable"
 
+# --- Findings: sensitive data / sensitive endpoints / risk indicators. ---
+# Glyph FLAGS and LOCATES; it never removes the value it found (this is a
+# reverse-engineering tool — the value is the point). Severity is advisory.
+FINDING_SENSITIVE_DATA = "sensitive_data"
+FINDING_SENSITIVE_ENDPOINT = "sensitive_endpoint"
+FINDING_RISK = "risk"
+
+SEV_LOW = "low"
+SEV_MEDIUM = "medium"
+SEV_HIGH = "high"
+SEV_CRITICAL = "critical"
+_SEV_ORDER = {SEV_CRITICAL: 0, SEV_HIGH: 1, SEV_MEDIUM: 2, SEV_LOW: 3}
+
+
+def severity_rank(sev: str) -> int:
+    """Sort key — lower is more severe."""
+    return _SEV_ORDER.get(sev, 99)
+
 
 @dataclass
 class Flow:
@@ -89,6 +107,23 @@ class DictionaryEntry:
     evidence: str  # human-readable justification
     needs_review: bool = False
     review_state: Optional[str] = None  # None | confirmed | edited | rejected
+    id: Optional[int] = None
+
+
+@dataclass
+class Finding:
+    """A flagged observation — sensitive data, a sensitive endpoint, or a
+    passive risk indicator. The matched value is KEPT in ``value_sample``
+    (never redacted at rest); redaction is an opt-in export concern only.
+    """
+
+    kind: str          # FINDING_SENSITIVE_DATA | _ENDPOINT | _RISK
+    category: str      # e.g. "email", "jwt", "admin_endpoint", "wildcard_cors"
+    severity: str      # SEV_LOW | SEV_MEDIUM | SEV_HIGH | SEV_CRITICAL
+    location: str      # where it is: json_path, "query:<k>", "header:<h>", "endpoint"
+    evidence: str      # human-readable justification
+    endpoint_id: Optional[int] = None
+    value_sample: Optional[str] = None  # the actual matched value, kept intact
     id: Optional[int] = None
 
 

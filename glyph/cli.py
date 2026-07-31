@@ -212,6 +212,36 @@ def cmd_gating(args: argparse.Namespace) -> int:
     return 0
 
 
+_KIND_ALIAS = {"data": "sensitive_data", "endpoints": "sensitive_endpoint",
+               "risk": "risk"}
+
+
+def cmd_sensitive(args: argparse.Namespace) -> int:
+    from glyph.sensitive import run_scan
+    cat = _catalog(args)
+    try:
+        summary = run_scan(cat)
+        kind = _KIND_ALIAS.get(args.kind) if args.kind else None
+        findings = cat.findings(kind=kind, min_severity=args.severity)
+    finally:
+        cat.close()
+    if args.json:
+        _emit({"summary": summary,
+               "findings": [f.__dict__ for f in findings]}, True)
+        return 0
+    sev = summary.get("by_severity", {})
+    sev_line = ", ".join(f"{n} {s}" for s, n in sev.items()) or "none"
+    print(f"{summary['total']} finding(s): {sev_line}\n")
+    for f in findings:
+        val = f"  [value: {f.value_sample}]" if f.value_sample else ""
+        loc = f" @ {f.location}" if f.location != "endpoint" else ""
+        print(f"[{f.severity.upper():8}] {f.category}{loc}\n"
+              f"           {f.evidence}{val}")
+    if not findings:
+        print("(no findings match the filter)")
+    return 0
+
+
 def cmd_codegen(args: argparse.Namespace) -> int:
     from glyph.codegen import to_openapi_json
     cat = _catalog(args)
@@ -385,6 +415,14 @@ def build_parser() -> argparse.ArgumentParser:
               ).set_defaults(func=cmd_auth)
     with_json(with_db(sub.add_parser("gating", help="rate-limit + bot mgmt"))
               ).set_defaults(func=cmd_gating)
+
+    sp = with_json(with_db(sub.add_parser(
+        "sensitive", help="flag sensitive data / endpoints / risk indicators")))
+    sp.add_argument("--kind", choices=["data", "endpoints", "risk"],
+                    help="show only one kind of finding")
+    sp.add_argument("--severity", choices=["critical", "high", "medium", "low"],
+                    help="show only findings at or above this severity")
+    sp.set_defaults(func=cmd_sensitive)
 
     sp = with_db(sub.add_parser("codegen", help="emit OpenAPI 3"))
     sp.add_argument("--out", help="write spec to this file")

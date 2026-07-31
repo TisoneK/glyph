@@ -150,6 +150,7 @@ them.
 | `glyph fingerprint` | identify the backend stack |
 | `glyph auth` | authentication and request signing |
 | `glyph gating` | rate-limiting and bot-management signals |
+| `glyph sensitive` | flag sensitive data, sensitive endpoints, and risk indicators |
 | `glyph drift <a.db> <b.db>` | diff two catalog snapshots |
 | `glyph mobile <app.apk>` | mine endpoints from a mobile package |
 | `glyph catalog` | summarize the catalog |
@@ -174,6 +175,30 @@ build_dictionary(cat)
 for entry in cat.dictionary():
     print(entry.json_path, entry.code, "→", entry.meaning)
 ```
+
+## Sensitive & risk flagging
+
+`glyph sensitive` scans what you've already captured and **flags and locates** — it never
+removes the values it finds (this is a reverse-engineering tool; the value is the point).
+Redaction, if you ever want it, is an opt-in *export* concern, never a default. It's passive
+analysis for authorized assessment — no active scanning or exploitation.
+
+```bash
+glyph sensitive                    # all findings, most severe first
+glyph sensitive --severity high    # only high/critical
+glyph sensitive --kind risk        # just the risk indicators
+```
+
+Three kinds of finding:
+
+- **Sensitive data** — PII, secrets, and financial values in payloads/queries/headers
+  (email, phone, JWT, API keys, private keys, passwords, credit cards via Luhn). The matched
+  value is kept, with its exact location.
+- **Sensitive endpoints** — classified by path (auth, admin, payment, account, credential,
+  export, debug/internal).
+- **Risk indicators** — secrets/PII carried in URLs, sensitive data on unauthenticated
+  endpoints, wildcard CORS, missing security headers, verbose errors, and guessable object
+  ids (IDOR/BOLA candidates).
 
 ## Architecture
 

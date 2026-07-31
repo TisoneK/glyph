@@ -14,9 +14,11 @@ from typing import Any, Dict, Iterable, List, Optional
 from glyph.catalog.models import (
     DictionaryEntry,
     Endpoint,
+    Finding,
     Flow,
     ObservedField,
     PageObservation,
+    severity_rank,
 )
 from glyph.catalog.normalize import split_url, template_path
 
@@ -84,11 +86,22 @@ CREATE TABLE IF NOT EXISTS page_observations (
     labels TEXT,
     observed_at TEXT
 );
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    category TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    location TEXT NOT NULL,
+    evidence TEXT,
+    endpoint_id INTEGER,
+    value_sample TEXT,
+    UNIQUE (kind, category, endpoint_id, location)
+);
 CREATE INDEX IF NOT EXISTS idx_flows_endpoint ON flows (endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_fields_endpoint ON fields (endpoint_id);
 """
 
-SCHEMA_VERSION = "2"
+SCHEMA_VERSION = "3"
 
 # Human review outcomes stored in dictionary.review_state (NULL = not reviewed).
 REVIEW_CONFIRMED = "confirmed"
@@ -369,6 +382,48 @@ class Catalog:
             for r in rows
         ]
 
+    # -- findings ---------------------------------------------------------
+    def add_finding(self, f: Finding) -> int:
+        cur = self.conn.execute(
+            "INSERT INTO findings (kind, category, severity, location, evidence, "
+            "endpoint_id, value_sample) VALUES (?,?,?,?,?,?,?) "
+            "ON CONFLICT (kind, category, endpoint_id, location) DO UPDATE SET "
+            "severity=excluded.severity, evidence=excluded.evidence, "
+            "value_sample=excluded.value_sample",
+            (f.kind, f.category, f.severity, f.location, f.evidence,
+             f.endpoint_id, f.value_sample),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def findings(self, kind: Optional[str] = None,
+                 min_severity: Optional[str] = None) -> List[Finding]:
+        sql = "SELECT * FROM findings"
+        params: List[Any] = []
+        if kind is not None:
+            sql += " WHERE kind=?"
+            params.append(kind)
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
+        out = [
+            Finding(
+                id=r["id"], kind=r["kind"], category=r["category"],
+                severity=r["severity"], location=r["location"],
+                evidence=r["evidence"], endpoint_id=r["endpoint_id"],
+                value_sample=r["value_sample"],
+            )
+            for r in rows
+        ]
+        if min_severity is not None:
+            cutoff = severity_rank(min_severity)
+            out = [f for f in out if severity_rank(f.severity) <= cutoff]
+        out.sort(key=lambda f: (severity_rank(f.severity), f.kind, f.category))
+        return out
+
+    def clear_findings(self) -> None:
+        """Drop all findings so a re-scan is idempotent."""
+        self.conn.execute("DELETE FROM findings")
+        self.conn.commit()
+
     # -- convenience ------------------------------------------------------
     def summary(self) -> Dict[str, int]:
         def count(table: str) -> int:
@@ -379,6 +434,7 @@ class Catalog:
             "endpoints": count("endpoints"),
             "flows": count("flows"),
             "fields": count("fields"),
+            "findings": count("findings"),
             "enum_candidates": int(self.conn.execute(
                 "SELECT COUNT(*) AS n FROM fields WHERE is_enum_candidate=1"
             ).fetchone()["n"]),
