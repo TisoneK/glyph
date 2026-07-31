@@ -159,3 +159,23 @@ don't remove the line.
       carried to 17) — the active SNI probe (opt-in) has zero test coverage (needs mocked
       ssl.wrap_socket); "429-aware" is claimed in ADR-10 but get_json swallows 429 with no
       backoff/Retry-After. Low-Medium. See ADR-10.
+
+---
+## 2026-07-31 — Session 18 follow-ups (ADR-12 multi-target)
+
+- **TUI target picker.** The dashboard (`glyph dashboard`) opens a fresh
+  `Catalog` with no active target, so every tab shows ALL targets' rows
+  mixed. Add a target picker (key `t`? a sidebar?) that calls
+  `set_active_target(id)` and re-renders all tabs filtered to it. MVP
+  workaround: `glyph target show <host>` for per-target counts.
+- **`glyph --target <host>` global flag.** Scope `glyph sensitive`/`dict`/
+  `flows`/`catalog`/`schema` to one target without passing `--target` per
+  command (only `glyph sensitive` has it today). Implement as a top-level
+  `--target` that sets the active target on the opened Catalog.
+- **Guard `glyph target rm 0`.** Removing the unassigned target is allowed
+  (deletes scratch rows), but `__init__` re-creates the id=0 row on next
+  open. Document this, or guard it with a `--force` if users find it
+  confusing.
+- **`set_reachability` target scoping.** `set_reachability(endpoint_id, ...)`
+  doesn't take a target filter — works because `endpoint_id` is already
+  per-target under ADR-12, but worth a docstring note.

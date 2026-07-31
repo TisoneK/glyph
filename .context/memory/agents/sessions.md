@@ -434,3 +434,12 @@ on net=True too (--no-net disables it). Real-world verified: 'glyph snihunt
 betika.com' (no flags) now probes every candidate — betika.com → 302,
 subdomains → 403. Commit 4f84812. 23 snihunt tests pass (mocked test passes
 probe=False explicitly; --no-net CLI tests don't fire the probe).
+
+---
+## 2026-07-31 — Session 18
+- **Agent:** Super Z | **Model:** unknown (cloud sandbox, Python 3.12.13) | **Platform:** Z.ai cloud sandbox (Linux, workspace `/home/z/my-project/glyph`) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Multi-target catalog schema (ADR-12). The user's directive: "the db should have rows of target in the tables (target id)" — replace the single-target `meta.target_host` + per-run `Catalog.reset()` wipe with a `targets` table + `target_id` on every data row, so multiple targets coexist and a re-run only clears THAT target's rows. Plus a `glyph target list|show|rm` CLI to manage them.
+- **Commits:** 2 planned — `feat(catalog): multi-target schema (ADR-12)` (product) + `chore(context): Session 18 log + ADR-12` (.context).
+- **Outcome:** done. Schema v3 → v4. New `targets` table; `target_id` column on every data table (flows/endpoints/fields/dictionary/page_observations/findings/vpn_configs); every UNIQUE updated to include `target_id`. Reserved "(unassigned)" target (id=0) so writes always stamp a NON-NULL target_id (SQLite's NULL!=NULL in UNIQUE would break upsert dedup otherwise). `Catalog._active_target_id` instance state: `set_target` upserts+activates, `clear_target` wipes one target's rows (replaces `reset()` at all 4 run sites), `reset()` retained for tests. Reads filter to active by default (fall back to all). `glyph target list|show|rm` CLI. v3→v4 migration rebuilds tables, ports legacy NULL rows to unassigned, ports old `meta.target_host` into a real targets row. **146 tests pass** (was 144; +2 new multi-target tests, 1 rewritten — `test_run_resets_catalog_between_targets` → `test_run_coexists_across_targets` since the old "run wipes between targets" assertion is wrong by design now). Verified migration with a hand-built v3 catalog.
+- **Open items:** TUI target picker (dashboard shows all targets mixed — MVP); `glyph --target <host>` global flag to scope reads; see backlog.
+- **Report:** .context/memory/reviews/2026-07-31-multi-target-schema.md

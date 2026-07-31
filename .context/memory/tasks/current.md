@@ -12,10 +12,10 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 17 (2026-07-31) shipped (1) the Session 16 flaw
-  fixes (5 of 8 fixed, 3 backlog) and (2) the `glyph.vpndec` VPN-Config
-  Decoder stage (ADR-11). See `agents/sessions.md` Session 17,
-  `reviews/2026-07-31-vpn-config-decoder.md`, and the backlog follow-ups
-  (port HAT/NPV/NSH/VHD decryptors; port HC v2.7+/EHI v2 ChaCha20 schemes;
-  snihunt probe tests + 429 handling).
+- **Task:** none — Session 18 (2026-07-31) shipped the multi-target catalog
+  schema (ADR-12): `targets` table + `target_id` on every data row,
+  `clear_target` replacing the per-run `reset()` wipe, and a `glyph target
+  list|show|rm` CLI. See `agents/sessions.md` Session 18,
+  `reviews/2026-07-31-multi-target-schema.md`, and the backlog follow-ups
+  (TUI target picker; `glyph --target <host>` global flag; guard `rm 0`).
 - **Status:** idle

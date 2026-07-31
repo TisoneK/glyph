@@ -363,3 +363,65 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   - InjectX is credited in the code comments as the algorithm source; no InjectX code is
     imported, and InjectX remains a separate project (per the user's explicit instruction).
 - **Supersedes:** nothing.
+
+---
+## ADR-12: Multi-target catalog — `targets` table + `target_id` on every data row (2026-07-31)
+- **Status:** accepted (implemented 2026-07-31, Session 18)
+- **Context:** Through Session 17 the catalog was single-target: `meta.target_host` held the
+  one host, and every `glyph run`/`run live`/`snihunt`/TUI-capture called `Catalog.reset()`
+  which wiped ALL data tables + meta (except `schema_version`). Re-capturing a different
+  target destroyed the previous one. The user's directive (Session 18): "the db should have
+  rows of target in the tables (target id)" — i.e. multi-target coexistence with a `targets`
+  table and a `target_id` on every data row, instead of wiping the DB each run.
+- **Decision:**
+  1. **New `targets` table** — registry of every host ever captured (`id`, `host` UNIQUE,
+     `label`, `notes`, `created_at`). `id INTEGER PRIMARY KEY` (no AUTOINCREMENT) so the
+     reserved id=0 "(unassigned)" sentinel is insertable; real targets get ids >= 1.
+  2. **`target_id` column on every data table** — flows, endpoints, fields, dictionary,
+     page_observations, findings, vpn_configs. Every UNIQUE constraint now includes
+     `target_id` (e.g. endpoints → `UNIQUE (target_id, method, host, path_template)`,
+     findings → `UNIQUE (target_id, kind, category, endpoint_id, location)`,
+     vpn_configs → `UNIQUE (target_id, filepath)`).
+  3. **Reserved "(unassigned)" target (id=0).** Every write stamps a NON-NULL `target_id`
+     (explicit > active > unassigned=0). This is required because SQLite treats `NULL != NULL`
+     in UNIQUE constraints, so nullable `target_id` would break upsert dedup (two flows with
+     NULL target_id + the same endpoint shape would NOT collapse). Rows written without
+     `set_target` (legacy tests, REPL scratch) land in unassigned and still dedup correctly.
+  4. **`Catalog._active_target_id` instance state.** `set_target(host)` upserts into `targets`
+     + activates (returns the id); writes stamp it; reads filter to it by default (fall back
+     to "all targets" when no target is active). `clear_active_target()` / `set_active_target(id)`
+     switch without creating.
+  5. **`clear_target(target_id=None)` replaces `reset()` at every run site.** Wipes ONLY the
+     active (or specified) target's rows; keeps the target row in `targets`; keeps every other
+     target's data. `reset()` is retained for tests + a future `--reset` flag (full wipe).
+  6. **Reads take `target_id` + `all_targets` params.** Default: filter to active if set, else
+     all. `all_targets=True` forces all. This means `glyph sensitive` (no `--target`) scans
+     every target's flows; `glyph sensitive --target <host>` scans one. The TUI shows all
+     targets' data mixed (a future target picker can filter — out of scope here).
+  7. **`glyph target list|show|rm` CLI** — the management surface. `list` shows every target
+     + its flow count; `show <host|id>` prints per-target row counts; `rm <host|id> --yes`
+     deletes a target AND every row that belongs to it.
+  8. **Schema v3 → v4 migration.** `_migrate_to_v4` rebuilds each data table that lacks
+     `target_id` (SQLite can't ALTER a UNIQUE) via create-copy-drop-rename, ports legacy
+     NULL `target_id` rows to the unassigned bucket (id=0), and ports the old
+     `meta.target_host` into a real `targets` row (label="migrated"). Idempotent + per-table
+     (a mixed old/new DB rebuilds only the old tables). Indexes split out of `_SCHEMA` into
+     `_INDEXES` so the `target_id` indexes don't fire before migration adds the column.
+- **Consequences:**
+  - `glyph run har`/`run live`/`snihunt`/TUI-capture no longer nuke the catalog — they
+    activate + clear ONE target. Capturing betika.com then sportybet.com leaves both in the
+    DB, each queryable via `glyph target show <host>` and filterable via `--target`.
+  - `glyph capture har`/`capture live` keep ACCUMULATE semantics (no clear) — `capture` is
+    "add traffic," `run` is "fresh analysis of this target." The split is explicit.
+  - The "(unassigned)" target is visible in `glyph target list` (label="unassigned"). It's
+    the bucket for rows written without `set_target`; users can `glyph target rm 0` to clear
+    scratch rows. `target()`'s fallback skips it so the TUI sub_title doesn't read
+    "(unassigned)" when only scratch rows exist.
+  - `endpoints` are now per-target (two targets hitting `GET api.x.com/users/{id}` get two
+    endpoint rows). This is slightly less normalized than the old shared-endpoint model but
+    matches the user's "every row has target_id" framing and makes per-target cleanup trivial.
+  - Tests: `test_run_resets_catalog_between_targets` was rewritten to
+    `test_run_coexists_across_targets` (the old "run wipes between targets" assertion is now
+    wrong by design). Two new tests cover multi-target coexistence + the unassigned dedup.
+- **Supersedes:** nothing. Amends the implicit single-target model that ran from Session 1
+  through Session 17 (the `meta.target_host` + `Catalog.reset()` pattern).
