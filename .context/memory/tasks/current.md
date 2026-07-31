@@ -12,7 +12,6 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 13 (2026-07-31) researched + recorded ADR-6 (capture layer) and
-  ADR-7 (mobile packages), with implementation backlog items. See `agents/sessions.md`
-  Session 13 and `reviews/2026-07-31-capture-mobile-scope-research.md`.
+- **Task:** none — Session 14 (2026-07-31) shipped the TUI dashboard Phase 1 (ADR-9). Next:
+  Phase 2 live streaming. See `agents/sessions.md` Session 14 and `plans/decisions.md` ADR-9.
 - **Status:** idle

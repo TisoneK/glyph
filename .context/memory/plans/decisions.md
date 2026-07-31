@@ -199,3 +199,28 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   (rich); the library core remains stdlib-only." `_format.py`'s ANSI helpers are retained for the
   no-rich fallback and for the analyzer commands not yet migrated (fingerprint/auth/gating/catalog
   still use the plain tree renderer — a follow-up could move them to rich tables).
+
+---
+## ADR-9: The TUI is a presentation layer over glyph.db; the engine stays headless (2026-07-31)
+- **Status:** accepted (Phase 1 implemented; live streaming = Phase 2)
+- **Context:** The user wants `glyph run live` to leave you inside an interactive terminal
+  dashboard where captured data is visible and navigable — "watching the site being
+  reverse-engineered," not a printed report. The backend already produces all the data
+  (flows, DOM labels, schema, findings, dictionary in `glyph.db`); the missing piece is a
+  visualization/exploration layer, not more analyzers.
+- **Decision:** Add a **Textual TUI** (`glyph.tui`) that is a *pure presentation/interaction
+  layer over the catalog* — it only reads `glyph.db` and never discovers/analyzes anything.
+  `glyph.tui.data` holds pure catalog adapters (flows/dom/schema/sensitive/rosetta rows +
+  summary); `glyph.tui.app` is the Textual app. Textual is an optional **`[tui]` extra**
+  (depends on rich, already core; `HAS_TEXTUAL`-guarded). Commands: `glyph dashboard [--db]`
+  opens the TUI on any catalog; `glyph run live` opens it after capture when interactive
+  (TTY + textual), else prints the summary (or `--no-tui`); new `glyph flows` / `glyph dom`
+  read-commands mirror `dict`/`sensitive`. **Phasing:** Phase 1 (now) = read-only exploration
+  over a completed catalog — 5 tabbed views + flow request/response drill-in. Phase 2 = true
+  live streaming (the capture driver writes flows incrementally + the TUI auto-refreshes),
+  which needs concurrency changes to `capture/driver.py` and is deferred.
+- **Consequences:** The analysis engine stays usable headless (CLI/CI/scripts/codegen
+  unaffected) — the TUI is a frontend, not a dependency of the pipeline. Data limitations to
+  address in Phase 2: DOM harvest only captures elements with *direct text*, so forms/inputs
+  are under-represented (a capture enhancement); flow byte sizes fall back to response-body
+  length when Content-Length is absent.

@@ -250,3 +250,12 @@ User: hand-rolled ANSI was "still shitty"; wanted real designed tables + a cross
 rich handles Windows/NO_COLOR/non-TTY itself; library core stays dep-free (rich imported only in
 glyph.cli, HAS_RICH fallback). 97 tests. Follow-up: migrate fingerprint/auth/gating/catalog to
 rich tables too. Lesson: for polished cross-platform CLI output, use rich — don't hand-roll ANSI.
+
+---
+## 2026-07-31 — Session 14
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Build the Glyph TUI dashboard (Phase 1) per the user's detailed spec — an interactive Textual dashboard over glyph.db so `glyph run live` leaves you exploring the captured surface, not reading a report.
+- **Commits:** 2 — `feat(tui)` (dashboard + data adapters + dashboard/flows/dom commands + run-live wiring) + this `chore(context)` (ADR-9 + session + task). See `git log`.
+- **Outcome:** done (Phase 1). `glyph.tui.data` = pure catalog adapters (unit-tested); `glyph.tui.app` = Textual app (summary header + 5 tabbed DataTables via keys 1-5 + flow request/response drill-in + reload). `glyph dashboard` opens it on any catalog; `glyph run live` opens it when interactive (TTY+textual), else prints the rich summary or `--no-tui`. New `glyph flows`/`glyph dom` table commands. Textual is a `[tui]` extra; engine stays headless (ADR-9). Textual app verified via `App.run_test()` (mounts, tabs switch). **104 tests.**
+- **Open items:** Phase 2 = live streaming (driver writes flows incrementally + TUI auto-refresh — needs capture-driver concurrency); DOM harvest under-captures inputs/forms (capture enhancement); migrate fingerprint/auth/gating/catalog to rich tables (ADR-8 follow-up); Session 10 sensitive follow-ups.
+- **Report:** none (ADR-9 + this entry carry it).
