@@ -400,3 +400,15 @@ no safe Cloudflare suffix to add. Also: honored the retry-limit rule this turn �
 after 2 consecutive pytest CWD-reset failures instead of looping, committed the docstring
 edit on the strength of the earlier 23/23 snihunt pass + the docstring-only nature of the
 change.
+
+### Update (2026-07-31, Session 17 cont. 4) — compact SNI table columns
+User: evidence string 'wildcard cert · shared cert (144 subdomains)' eats
+space and hides useful info (IP, CDN, status). Fixed: evidence is now compact
+JSON (parse_evidence), not prose. CLI/TUI tables show SEV | SCR | SNI HOST |
+IP | CDN | TYPE | SIGNALS — the IP and CDN columns surface data that was
+buried, and SIGNALS is short tokens (cap×N zero:fb wildcard shared:144 rip+3
+rip-sourced probe✓) instead of a wall of text. Same anti-pattern I fixed for
+score in Session 16 (structured data in a string field, parsed back out) —
+this time I caught the CDN-name parse too. Commit e94a6e4. 23 snihunt tests
+pass. Honored the retry-limit rule: stopped after 2 CWD-reset failures on the
+live CLI verify (tests already proved the parse works).
