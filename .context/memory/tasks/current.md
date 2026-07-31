@@ -11,8 +11,13 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 15 (2026-07-31) shipped TUI Phase 2 (live) + the home/splash screen.
-  VERIFY on the user's Windows box: the Playwright browser live path (sync Playwright in a Textual
-  worker + concurrent WAL writers). See `agents/sessions.md` Session 15, ADR-9.
-- **Status:** idle
+- **Session:** 2026-07-31 — Super Z / unknown (cloud sandbox, Python 3.12.13)
+- **Task:** Implement the SNI bug-host hunting feature — a new `glyph.snihunt`
+  stage that finds NEW SNI bug-host candidates (reverse-IP lookup, certificate-
+  transparency subdomain enumeration, Cloudflare/CDN frontable-edge detection,
+  zero-rating heuristics, optional active SNI probe). NOT scraping existing
+  bughost.txt lists — only the *process* of discovering new hosts. Auto-runs
+  after `sensitive` in `glyph run live`/`run har` (`--no-snihunt` to skip).
+  New `glyph snihunt` CLI command + new TUI tab (key 6, "SNI Hunt"). See
+  ADR-10 (proposed this session) for the bounded active-recon scope decision.
+- **Status:** in-progress

@@ -239,3 +239,70 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   `FlowDetail` modal). Subcommand is optional — bare `glyph` opens home when interactive, else
   prints help. `dashboard`/`run live`/`flows`/`dom` jump straight to their views. Still a pure
   presentation layer over glyph.db.
+
+---
+## ADR-10: SNI bug-host hunting is a bounded active-recon stage, post-sensitive (2026-07-31)
+- **Status:** proposed (implementation in progress, Session 16)
+- **Context:** The user wants Glyph to hunt for "SNI bug hosts" — hostnames that, when used as
+  the TLS SNI, are zero-rated or otherwise pass through a carrier's DPI for free-internet
+  tunneling (HttpInjector / KPN Tunnel / HA Tunnel class of tools, Kenya-priority). The user's
+  explicit framing: "Ignore those that are already found sites eg txt files etc. This is
+  completely how to find a new host by reverse-domain, cloudflare etc." So the stage must
+  DISCOVER new candidates from the live capture, NOT scrape published bughost.txt lists. The
+  existing `sensitive` stage (ADR-4) is strictly passive over the captured catalog; SNI hunting
+  fundamentally requires *active reconnaissance* (DNS resolution, CT log queries, reverse-IP
+  lookups, optional TLS-SNI probe) — it cannot be done from captured traffic alone.
+- **Decision:**
+  1. **New stage `glyph.snihunt`** — bounded active recon over the captured host surface:
+     - `extract` — pull every SNI/host + IP observed in the capture (flow `host`, `:authority`,
+       `Host` header, captured cert CN/SAN when present).
+     - `dns` — DoH resolution (Google `dns.google` + Cloudflare `cloudflare-dns.com`) with a
+       short cache + 5-8s timeouts; falls back to system `socket.getaddrinfo`.
+     - `reverseip` — reverse-IP lookup via the HackerTarget `reverseiplookup` API to find
+       sibling hostnames sharing the same IP (the "reverse-domain" technique the user named).
+     - `ctlogs` — Certificate-Transparency subdomain enumeration via certspotter (primary) and
+       crt.sh (fallback); bounded per-domain cap, 429-aware.
+     - `cdn` — CDN / frontable-edge detection: Cloudflare (AS13335 + the published IPv4/IPv6
+       ranges), Fastly, Akamai, AWS CloudFront. A host on a CDN edge is "frontable" — the SNI
+       can be set independently of the tunnel destination (the "cloudflare" technique the user
+       named).
+     - `zerorate` — zero-rating heuristics: known free/social TLD patterns
+       (`0.facebook.com`, `free.facebook.com`, `0.wikipedia.org`, `*.internet.org`,
+       operator free-pack domains) + wildcard-cert coverage + short TTL signals.
+     - `probe` (optional, default off) — opens ONE TLS handshake with the candidate as SNI to
+       a public CDN edge and records the served cert's CN/SAN. Exactly what a browser does;
+       no port scanning, no exploitation.
+     - `hunt` — orchestrator: runs the hunters, scores each candidate (0-100), persists as
+       `Finding(kind="sni_bug_host", category=...)` with score + evidence.
+  2. **Bounded active-recon rules (the scope fence):**
+     - Read-only public APIs only (DNS, CT logs, reverse-IP). No exploitation, no auth bypass.
+     - The only active connection is ONE TLS handshake per probe candidate, to a public CDN
+       edge — identical to what a browser does on every page load. No port scanning, no
+       fingerprinting beyond the cert CN/SAN.
+     - Per-domain rate limit + short timeouts (5-8s); honors HTTP 429.
+     - `--no-net` disables ALL network hunters; the stage still runs local heuristics over the
+       captured surface (extract + embedded CDN ranges + zero-rating patterns).
+     - `--probe` is opt-in (default OFF); without it the stage is read-only recon.
+  3. **Runs after `sensitive`, opt-out via `--no-snihunt`.** `glyph run live`/`run har` now run
+     capture → schema → rosetta → sensitive → snihunt. `--no-sensitive` and `--no-snihunt` are
+     independent opt-outs.
+  4. **New finding kind** `FINDING_SNI_BUG_HOST = "sni_bug_host"` (free TEXT column — no schema
+     migration). Categories: `sni_candidate`, `sni_frontable_cdn`, `sni_zero_rated`,
+     `sni_shared_cert`. `value_sample` = the candidate SNI hostname; `evidence` = score + the
+     signals that fired.
+  5. **New TUI tab** (key 6, "SNI Hunt") + new `glyph snihunt` CLI command (`--target`,
+     `--no-net`, `--probe`, `--min-score`, `--json`).
+  6. **Authorization stays with the user** (RESEARCH.md §10). Glyph surfaces candidates; it
+     does not build tunnels, does not name a tunneling tool (ADR-3), and does not test against
+     a specific carrier's billing system — that is the user's call.
+- **Consequences:**
+  - `glyph.snihunt` is the ONE active-recon stage; every other stage stays passive. This is a
+    deliberate scope expansion of ADR-4's "passive only" clause, called out here so future
+    agents don't relitigate it.
+  - Tests run fully OFFLINE: each network hunter takes a swappable `http_get` callable, so
+    `test_snihunt.py` injects a fake and asserts on shape, not on the live internet.
+  - The catalog `findings` table gains a new `kind` value; `is_noise()` treats `sni_bug_host`
+    findings as never-noise (they are the point of the stage, like sensitive-data findings).
+  - The user handles per-target legal/authorization; SNI bug-host candidates are advisory.
+- **Supersedes:** nothing. Amends ADR-4 (the sensitive stage stays passive; the active-recon
+  scope lives in `snihunt`, a separate stage).

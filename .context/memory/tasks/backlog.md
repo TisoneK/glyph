@@ -124,3 +124,22 @@ don't remove the line.
       — only if a target needs packet-level capture: a thin importer that turns a decrypted pcap
       (tshark / PolarProxy + SSLKEYLOGFILE) into catalog `Flow`s, same interface as HAR ingest.
       Keep scapy/pyshark OUT of core deps (optional extra). Low — build on demand. See ADR-6.
+
+---
+- [ ] **SNI bug-host hunting: live carrier verification** (added 2026-07-31 by Super Z, Session 16)
+      — the `glyph.snihunt` stage surfaces CANDIDATES by recon (reverse-IP, CT logs, CDN
+      detection, zero-rating heuristics); it does not verify a candidate actually passes a
+      specific carrier's DPI as zero-rated (that needs the user's SIM + a real tunnel test on
+      the target network). Build an OPTIONAL recipe: given a candidate SNI, open a TLS tunnel
+      through the carrier and measure whether bytes flow without data balance dropping. Out of
+      scope for the core stage (per-target, on-device); track as a follow-up. Low-Medium. See
+      ADR-10.
+- [ ] **SNI hunt: enrich the zero-rating TLD/pattern set** (added 2026-07-31 by Super Z, Session 16)
+      — `glyph/snihunt/zerorate.py::_ZERO_RATED_PATTERNS` ships the well-known global free
+      surfaces (Facebook Free Basics, Wikipedia Zero, internet.org, Free Fire free-pack). The
+      Kenya/East-Africa carrier free-pack domains (Safaricom/MTN/Airtel zero-rated hosts) are
+      operator-specific and rotate; extend the set as the user reports live hits. Low. See ADR-10.
+- [ ] **SNI hunt: second CT-log source failover** (added 2026-07-31 by Super Z, Session 16)
+      — certspotter is the primary CT source (crt.sh is slow/timeout-prone in practice, kept as
+      a fallback). If both are down, the stage degrades gracefully (local heuristics only). A
+      third source (Google CT search, Censys subdomain API) would harden enumeration. Low. See ADR-10.

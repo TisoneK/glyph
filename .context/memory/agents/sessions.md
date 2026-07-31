@@ -287,3 +287,18 @@ visible tab (others on activation); analysis guarded (no overlap) at 4s; final a
 reload then STOP timers when capture done; tables cap at 800 rows. Gotcha: don't name an instance
 attr `_timers` on a Textual DOMNode — it shadows Textual's internal timer set (use `_live_timers`).
 109 tests.
+
+---
+## 2026-07-31 — Session 16 (in progress)
+- **Agent:** Super Z | **Model:** unknown (system prompt does not state the exact GLM version; recorded `unknown` per Pitfall #25) | **Platform:** Z.ai cloud sandbox (Linux, Python 3.12.13, workspace `/home/z/my-project/glyph-work/glyph`) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Implement the SNI bug-host hunting feature (ADR-10) — a new `glyph.snihunt` stage
+  that discovers NEW SNI bug-host candidates from the live capture via reverse-IP lookup,
+  certificate-transparency subdomain enumeration, Cloudflare/CDN frontable-edge detection,
+  zero-rating heuristics, and an optional active SNI probe. NOT scraping published bughost.txt
+  lists — the user explicitly wants the *process* of finding new hosts. Auto-runs after
+  `sensitive` in `glyph run live`/`run har`; new `glyph snihunt` CLI command; new TUI tab
+  (key 6, "SNI Hunt").
+- **Commits:** (TBD — will fill at session end)
+- **Outcome:** (TBD)
+- **Open items:** (TBD)
+- **Report:** .context/memory/reviews/2026-07-31-sni-bug-host-hunt.md (to be written)
