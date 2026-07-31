@@ -426,3 +426,11 @@ User raised two issues:
    — NOT a guarantee of free internet. To confirm, test with your tunneling
    app on your SIM — only a real tunnel test on the carrier proves it.'
 Commit c439ecb. 23 snihunt tests pass.
+
+### Update (2026-07-31, Session 17 cont. 6) — probe ON by default
+User: '--probe should be by default.' Flipped run_hunt(probe=True) default;
+CLI flag changed from --probe (opt-in) to --no-probe (opt-out). Probe gated
+on net=True too (--no-net disables it). Real-world verified: 'glyph snihunt
+betika.com' (no flags) now probes every candidate — betika.com → 302,
+subdomains → 403. Commit 4f84812. 23 snihunt tests pass (mocked test passes
+probe=False explicitly; --no-net CLI tests don't fire the probe).
