@@ -134,3 +134,48 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   subcommand + `_shared`/`_output`/`_format`), the `dict` empty-state fix (via a `rosetta_ran`
   meta flag), and the `glyph sensitive` masked-table output all landed. Status → accepted.
   97 tests pass; `glyph.cli:main` / console script / `python -m glyph.cli` unchanged.
+
+---
+## ADR-6: Capture operates at the HTTP/application layer; raw packet (.cap/pcap) is out of core (2026-07-31)
+- **Status:** accepted
+- **Context:** The user asked whether Glyph should decode `.cap`/pcap packet captures. Research
+  (see `reviews/2026-07-31-capture-mobile-scope-research.md`): `.cap`/`.pcap`/`.pcapng` are
+  packet-level; mitmproxy has no native pcap I/O (it is an HTTP-layer proxy). Turning a pcap
+  into HTTP needs TCP reassembly + TLS decryption (SSLKEYLOGFILE / a decrypting proxy) + HTTP
+  parsing, and even `pyshark`+keylog often can't expose decrypted app-data cleanly. Packet-level
+  only truly matters for non-HTTP protocols (custom TCP/UDP, MQTT, raw protobuf, un-MITMable
+  QUIC/HTTP-3) — a different tool class (Wireshark + pbtk + Frida).
+- **Decision:** Glyph captures and reasons at the **HTTP/application layer**. Substrates:
+  HAR import, the Playwright browser driver (the DOM↔API pairing Rosetta needs), and the
+  optional mitmproxy addon (wire-level HTTP incl. WebSocket frames). **Raw packet capture
+  (.cap/.pcap/.pcapng) is not a core capability.** If a target ever genuinely requires it, it is
+  handled by an *optional preprocessing adapter* that converts pcap → HTTP `Flow`s (tshark /
+  PolarProxy with an SSLKEYLOGFILE) and feeds the same catalog — Glyph never parses raw packets
+  itself. Non-HTTP binary/streaming protocol RE (custom TCP/UDP, MQTT, raw protobuf-over-h2c) is
+  **out of scope**; Glyph's value is HTTP-semantic (endpoints, schemas, code↔label, DOM pairing).
+- **Consequences:** The catalog's unit stays an HTTP request/response (+WS frame, +DOM). A pcap
+  adapter, if built, is a thin importer producing `Flow`s — same interface as `capture/har.py`
+  (keeps scapy/pyshark out of the core deps). Mobile/native TLS-pinned traffic is captured via
+  mitmproxy+Frida-unpinning or PCAPdroid→pcap→adapter, not by Glyph sniffing packets.
+
+---
+## ADR-7: Mobile static mining handles the whole package family (APK/IPA + XAPK/APKS/APKM + OBB) (2026-07-31)
+- **Status:** accepted (implementation backlogged)
+- **Context:** The user asked for XAPK (and beyond) handling. Today `glyph/mobile/apk.py` mines a
+  single APK/IPA (zip + regex over dex/so/resources). Research (same note): modern Android apps
+  ship as **split APKs** (`base.apk` + `config.<abi|density|lang>.apk`); stores wrap these as
+  **XAPK** (zip: base + splits + optional `Android/obb/` + `manifest.json`), **APKS**
+  (bundletool APK Set), or **APKM** (APKMirror). Endpoint strings live across base dex/resources,
+  split native `.so` libs, **and** OBB assets — so single-APK mining misses endpoints.
+- **Decision:** The mobile stage treats an input as *"an archive that may contain one or more
+  APKs plus OBB/asset blobs."* It mines APK/IPA directly, and for XAPK/APKS/APKM/zip-of-APKs it
+  **recursively unwraps** and mines **every** inner APK (dex + native `.so` + resources) plus
+  scans OBB/asset entries for URLs and API paths. It does **not** install, run, device-target,
+  or merge splits (no bundletool/adb) — static string mining only. Developer-side **AAB** is out
+  of scope (you get APKs from stores, not AABs). IPA is handled as its own zip (Mach-O/plist);
+  IPA **decryption** stays out of scope (needs a jailbroken device, RESEARCH-DEEP-DIVE §7.3).
+- **Consequences:** `glyph mobile` becomes format-agnostic — point it at any store download
+  (`.apk/.xapk/.apks/.apkm/.ipa`) and it mines everything. Implementation: detect a bundle
+  (multiple `.apk` entries, a `manifest.json`, or an `Android/obb/` dir) and recurse one level;
+  add split `.so` and OBB assets as scan surfaces; keep the existing per-entry size cap.
+  Tracked as an implementation item in `tasks/backlog.md`.

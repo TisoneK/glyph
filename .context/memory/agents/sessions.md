@@ -225,3 +225,12 @@ the sensitive table, run summary, and counts; ANSI-aware table alignment; bold l
 dim separators/hints; cyan paths/hosts; green success lines. Auto-off on non-TTY/NO_COLOR/--json
 so pipes and tests stay plain. 97 tests. Lesson: implement the *user-visible* intent of a UX ADR,
 not only its structural half.
+
+---
+## 2026-07-31 — Session 13
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Online research (user asked) to ground two scope ADRs the user flagged as missing — capture layer (.cap/pcap vs HTTP/HAR) and mobile packages (XAPK/APKS/APKM/split-APK/OBB).
+- **Commits:** 2 — `docs(review)` (research note w/ sources) + this `chore(context)` (ADR-6, ADR-7, backlog, session).
+- **Outcome:** done. Researched via WebSearch/WebFetch (mitmproxy has no native pcap I/O; pcap→HTTP needs reassembly+TLS-keylog+parsing and pyshark can't cleanly expose decrypted app-data; packet-level only matters for non-HTTP protocols. XAPK/APKS/APKM = zip-of-split-APKs + OBB; endpoint strings live across base dex, split `.so`, and OBB). **ADR-6:** Glyph is HTTP/application-layer; raw packet capture is out of core (optional pcap→Flow adapter if ever needed); non-HTTP binary protocol RE out of scope. **ADR-7:** mobile stage handles the whole package family by recursively unwrapping bundles and mining every inner APK + OBB (static only; no bundletool/adb; AAB + IPA-decryption out of scope). Both have backlog implementation items. Sources in the research note.
+- **Open items:** implement ADR-7 (recursive bundle mining) + optional ADR-6 pcap adapter — both in `tasks/backlog.md`; Session 10 sensitive follow-ups still open.
+- **Report:** .context/memory/reviews/2026-07-31-capture-mobile-scope-research.md

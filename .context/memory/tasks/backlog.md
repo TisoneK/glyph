@@ -114,3 +114,13 @@ don't remove the line.
       Session 10) — `glyph.rosetta.build_dictionary` upserts but never removes rows no longer
       produced, so a re-decode after a logic change keeps stale decodings. Add a fresh/clear
       option (respect human-reviewed rows). Low-Medium.
+- [ ] **Implement ADR-7: recursive bundle mining in `glyph.mobile`** (added 2026-07-31 by
+      Claude Code, Session 13) — extend `glyph/mobile/apk.py` to detect a bundle (multiple
+      `.apk` entries, a `manifest.json`, or an `Android/obb/` dir) and recurse ONE level: mine
+      every inner APK (dex + native `.so` + resources) and scan OBB/asset entries for URLs/API
+      paths. Keep the per-entry size cap; static string mining only (no bundletool/adb/install).
+      See ADR-7 + `reviews/2026-07-31-capture-mobile-scope-research.md`. Medium.
+- [ ] **Optional pcap→HTTP import adapter (ADR-6)** (added 2026-07-31 by Claude Code, Session 13)
+      — only if a target needs packet-level capture: a thin importer that turns a decrypted pcap
+      (tshark / PolarProxy + SSLKEYLOGFILE) into catalog `Flow`s, same interface as HAR ingest.
+      Keep scapy/pyshark OUT of core deps (optional extra). Low — build on demand. See ADR-6.

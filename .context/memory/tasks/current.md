@@ -11,9 +11,8 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 13)
-- **Task:** Online research + write two scope ADRs the user flagged as missing:
-  (A) capture scope — HTTP/HAR level vs raw-packet (.cap/pcap); (B) mobile package
-  handling — APK/IPA vs XAPK/APKS/split-APK/OBB. Research first for context, then
-  record grounded ADRs.
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — Session 13 (2026-07-31) researched + recorded ADR-6 (capture layer) and
+  ADR-7 (mobile packages), with implementation backlog items. See `agents/sessions.md`
+  Session 13 and `reviews/2026-07-31-capture-mobile-scope-research.md`.
+- **Status:** idle
