@@ -306,3 +306,60 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   - The user handles per-target legal/authorization; SNI bug-host candidates are advisory.
 - **Supersedes:** nothing. Amends ADR-4 (the sensitive stage stays passive; the active-recon
   scope lives in `snihunt`, a separate stage).
+
+---
+## ADR-11: VPN-Config Decoder — borrows InjectX algorithms, file-triggered, [crypto] extra (2026-07-31)
+- **Status:** proposed (implementation in progress, Session 17)
+- **Context:** The user wants a VPN-Config Decoder/Sniffer: a user supplies a config file
+  (.hc / .ehi / .dark / .ziv / .tls / etc.) and Glyph decrypts it (online or offline) into a
+  normalized view of the tunnel's host/port/protocol/SNI/bug-host/credentials. The user has
+  already built most of this in a SEPARATE project, InjectX (https://github.com/TisoneK/InjectX)
+  — we are BORROWING its algorithms (the crypto schemes, the key store, the format detector),
+  NOT coupling to or importing from it. InjectX is a standalone Electron+Python app; Glyph is
+  a CLI/TUI library. The algorithms are public (Pancho7532/HCDecryptor, HCTools/hcdecryptor,
+  X-Tools) — reverse-engineered from the VPN apps' APKs (HTTP Custom, HTTP Injector, HA Tunnel,
+  DARK Tunnel, ZIVPN, TLS Tunnel). The user's explicit framing: "we are borrowing algorithms
+  not combining the projects."
+- **Decision:**
+  1. **New stage `glyph.vpndec`** — ports InjectX's decrypt algorithms into Glyph's conventions:
+     - `keys.py` — the Pancho7532 key store (ePro/evozi/slipk/tls/aot/npv2/vhd/sip), with an
+       external keyfile merge (GLYPH_VPNKEYFILE env, like InjectX's INJECTX_KEYFILE).
+     - `detect.py` — format detector (extension + content features: entropy, ASCII ratio,
+       base64 likelihood, ZIP magic) → a `Format` enum.
+     - `crypto.py` — crypto primitives (AES-ECB/CBC/GCM, ChaCha20, PBKDF2, XOR, custom-b64)
+       behind a `HAS_CRYPTO` flag (pycryptodome). Graceful fallback: if pycryptodome is absent,
+       the stage reports `no_decryptor` for crypto-dependent formats but still decodes plain
+       ones (DARK envelope, OVPN, plain JSON).
+     - `hc.py` (A1-A4), `ehi.py` (B1), `dark.py` (I1), `ziv.py` (H1), `tls.py` (F1) — the five
+       formats the user has sample configs for. Architecture is extensible (HAT/NPV/NSH/VHD
+       port as backlog follow-ups).
+     - `router.py` — scheme router (format → applicable schemes → best-confidence result).
+     - `normalize.py` — normalize decrypted JSON/XML → a `VpnConfig` dataclass (host, port,
+       protocol, sni, bug_host, ssh creds, payload, proxy, dns, raw fields).
+  2. **`[crypto]` extra (pycryptodome).** Consistent with `[live]`, `[tui]`, `[schema]`,
+     `[analytics]` — the base package stays stdlib+rich; vpndec's crypto needs an optional dep.
+     `HAS_CRYPTO` guard, same pattern as `HAS_RICH`/`HAS_TEXTUAL`.
+  3. **File-triggered, NOT auto-run.** `glyph vpndec <file>` is the entrypoint — unlike
+     snihunt (which auto-runs after sensitive on a live capture), vpndec operates on a FILE the
+     user points at, not on captured traffic. It does not run in `glyph run live`/`run har`.
+     The decrypted config is persisted to a new `vpn_configs` table in the catalog; the TUI tab
+     reads from there. `glyph vpndec <file>` decrypts + stores + prints; `glyph dashboard` shows
+     it in the TUI.
+  4. **New catalog table `vpn_configs`** (filepath, filename, format, scheme, status, confidence,
+     host, port, protocol, sni, bug_host, ssh_server, ssh_port, ssh_user, ssh_pass, proxy_host,
+     proxy_port, payload, dns, raw_json). Decrypted credentials are KEPT (ADR-4 precedent —
+     flag-and-keep; the catalog is a sensitive artifact the user owns).
+  5. **New TUI tab** (key 7, "VPN Dec") + `glyph vpndec` CLI command (`--json`, `--keyfile`,
+     `--all-schemes`, `--db`).
+  6. **Authorization stays with the user** (RESEARCH.md §10). Glyph decodes configs the user
+     already possesses; it does not distribute keys, does not build tunnels, and names no
+     tunneling tool (ADR-3). The user owns per-target legal authorization.
+- **Consequences:**
+  - `glyph.vpndec` is the second file-based stage (after `glyph mobile`, which mines APK files).
+    It is NOT part of the capture pipeline.
+  - Tests run with pycryptodome installed (it's in `[dev]`); the `HAS_CRYPTO=False` path is
+    tested too (a plain DARK envelope decodes without crypto).
+  - The catalog gains a `vpn_configs` table (schema bump); existing catalogs migrate additively.
+  - InjectX is credited in the code comments as the algorithm source; no InjectX code is
+    imported, and InjectX remains a separate project (per the user's explicit instruction).
+- **Supersedes:** nothing.

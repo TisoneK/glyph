@@ -12,11 +12,12 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-07-31 — Super Z / unknown (cloud sandbox)
-- **Task:** (1) Fix the flaws in Session 16's snihunt work that I shipped without
-  self-critiquing — the two data-correctness bugs (sensitive scan wipes SNI
-  findings; sensitive summary counts SNI findings), the fragile score-in-string
-  parsing, the reverseip __import__ hack, and the missing --no-net passthrough on
-  run live/har. (2) Then start the VPN-Config Decoder/Sniffer feature (new ADR,
-  reference InjectX for algorithms, decrypt user-supplied config files online or
-  offline, new TUI tab).
+- **Task:** Implement the VPN-Config Decoder/Sniffer feature (ADR-11) — a new
+  `glyph.vpndec` stage that decrypts VPN config files (.hc/.ehi/.dark/.ziv/.tls)
+  the user supplies. Borrows algorithms from InjectX (cloned separately at
+  /home/z/my-project/injectx-work/InjectX), NOT coupled to it. New `glyph vpndec
+  <file>` CLI command, new `vpn_configs` catalog table, new TUI tab (key 7 "VPN
+  Dec"). `[crypto]` extra (pycryptodome) with HAS_CRYPTO fallback. File-triggered,
+  not auto-run. Prior to this: fixed the 8 flaws from Session 16 (committed
+  fff1f18 + 34e3d6a).
 - **Status:** in-progress
