@@ -26,6 +26,13 @@ def test_luhn_rejects_invalid_card():
     assert "credit_card" not in {c for c, _, _ in scan_value("x", "1234567812345678")}
 
 
+def test_luhn_valid_timestamp_is_not_a_card():
+    # 1571814229653 is a Luhn-valid ms timestamp (Juice Shop live find) but
+    # starts with '1' — not a card-network prefix, so must not be flagged.
+    assert _luhn_ok("1571814229653") is True
+    assert "credit_card" not in {c for c, _, _ in scan_value("image", "1571814229653")}
+
+
 def test_password_field_and_secret_gating():
     assert "password" in {c for c, _, _ in scan_value("password", "hunter2xyz")}
     # a high-entropy value in a NON-secret field is not flagged as a secret

@@ -76,6 +76,17 @@ def _luhn_ok(digits: str) -> bool:
     return total % 10 == 0
 
 
+def _looks_like_card(candidate: str) -> bool:
+    """Luhn-valid AND starts with a real card-network digit (3-6).
+
+    Luhn alone false-positives on 13-19 digit numbers like Unix-ms
+    timestamps; every live card network (Amex/Diners 3, Visa 4, Mastercard
+    5, Discover/others 6) begins 3-6, so gate on that.
+    """
+    digits = re.sub(r"\D", "", candidate)
+    return bool(digits) and digits[0] in "3456" and _luhn_ok(digits)
+
+
 def scan_value(name: str, value: object) -> List[Tuple[str, str, str]]:
     """Return ``[(category, severity, matched_value)]`` for one value.
 
@@ -94,9 +105,10 @@ def scan_value(name: str, value: object) -> List[Tuple[str, str, str]]:
         if m:
             out.append((category, sev, m.group(0)))
 
-    # Credit card: shape + Luhn (Luhn cuts most false positives).
+    # Credit card: shape + Luhn + card-network prefix (3-6). The prefix
+    # gate rejects Luhn-valid non-cards like millisecond timestamps.
     for m in _CARD_CANDIDATE.finditer(text):
-        if _luhn_ok(m.group(0)):
+        if _looks_like_card(m.group(0)):
             out.append(("credit_card", SEV_HIGH, m.group(0).strip()))
             break
 
