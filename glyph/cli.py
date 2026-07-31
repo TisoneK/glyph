@@ -298,43 +298,51 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_run(args: argparse.Namespace) -> int:
-    from glyph.capture import ingest_har
+def _analyze_and_report(cat, args) -> None:
+    """Shared pipeline tail: schema -> rosetta -> (sensitive) + summary.
+
+    Sensitive flagging runs by default (it's passive and operates on data
+    already captured); skip with --no-sensitive.
+    """
     from glyph.schema import infer_all
     from glyph.rosetta import build_dictionary
+    sch = infer_all(cat)
+    ros = build_dictionary(cat)
+    print(f"schema:    {sch['fields']} fields, {sch['enum_candidates']} enum candidate(s)")
+    print(f"rosetta:   {ros['entries']} decoded "
+          f"({ros['high_confidence']} high-confidence, {ros['needs_review']} to review)")
+    hint = "'glyph dict' to view"
+    if not getattr(args, "no_sensitive", False):
+        from glyph.sensitive import run_scan
+        sens = run_scan(cat)
+        sev = sens.get("by_severity", {})
+        sev_line = ", ".join(f"{n} {s}" for s, n in sev.items()) or "none"
+        print(f"sensitive: {sens['total']} finding(s) ({sev_line})")
+        hint += ", 'glyph sensitive' for findings"
+    print(f"\nCatalog: {args.db}  —  {hint}, 'glyph codegen' to export.")
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    from glyph.capture import ingest_har
     cat = _catalog(args)
     try:
         cap = ingest_har(cat, args.file, harvest_html=not args.no_html)
-        sch = infer_all(cat)
-        ros = build_dictionary(cat)
+        print(f"capture:   {cap['flows']} flows, {cap['pages']} page(s)")
+        _analyze_and_report(cat, args)
     finally:
         cat.close()
-    print(f"capture:  {cap['flows']} flows, {cap['pages']} page(s)")
-    print(f"schema:   {sch['fields']} fields, {sch['enum_candidates']} enum candidate(s)")
-    print(f"rosetta:  {ros['entries']} decoded "
-          f"({ros['high_confidence']} high-confidence, {ros['needs_review']} to review)")
-    print(f"\nCatalog: {args.db}  —  'glyph dict' to view, "
-          f"'glyph codegen' to export.")
     return 0
 
 
 def cmd_run_live(args: argparse.Namespace) -> int:
     from glyph.capture import capture_live
-    from glyph.schema import infer_all
-    from glyph.rosetta import build_dictionary
     cat = _catalog(args)
     try:
         cap = capture_live(cat, args.url, **_live_kwargs(args))
-        sch = infer_all(cat)
-        ros = build_dictionary(cat)
+        _report_live(args.url, cap)
+        _analyze_and_report(cat, args)
     finally:
         cat.close()
-    _report_live(args.url, cap)
-    print(f"schema:   {sch['fields']} fields, {sch['enum_candidates']} enum candidate(s)")
-    print(f"rosetta:  {ros['entries']} decoded "
-          f"({ros['high_confidence']} high-confidence, {ros['needs_review']} to review)")
-    print(f"\nCatalog: {args.db}  —  'glyph dict' to view, "
-          f"'glyph codegen' to export.")
     return 0
 
 
@@ -447,9 +455,13 @@ def build_parser() -> argparse.ArgumentParser:
     rhar = with_db(rsub.add_parser("har", help="run the pipeline on a HAR file"))
     rhar.add_argument("file")
     rhar.add_argument("--no-html", action="store_true")
+    rhar.add_argument("--no-sensitive", action="store_true",
+                      help="skip the sensitive/risk scan")
     rhar.set_defaults(func=cmd_run)
     rlive = with_live(with_db(rsub.add_parser(
-        "live", help="live-capture a page, then schema + rosetta")))
+        "live", help="live-capture a page, then schema + rosetta + sensitive")))
+    rlive.add_argument("--no-sensitive", action="store_true",
+                       help="skip the sensitive/risk scan")
     rlive.set_defaults(func=cmd_run_live)
 
     return p

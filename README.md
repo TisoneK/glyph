@@ -58,7 +58,7 @@ Two ways in. **Live** — Glyph drives a real headless browser and captures ever
 (needs the `live` extra):
 
 ```bash
-glyph run live https://example.com    # drive the page → capture → schema → rosetta
+glyph run live https://example.com    # capture → schema → rosetta → sensitive scan
 ```
 
 Or from a **HAR** you already have (browser DevTools → Network → *Export HAR*, mitmproxy,
@@ -184,7 +184,8 @@ Redaction, if you ever want it, is an opt-in *export* concern, never a default. 
 analysis for authorized assessment — no active scanning or exploitation.
 
 ```bash
-glyph sensitive                    # all findings, most severe first
+glyph run live <url>               # the scan runs automatically at the end of a run
+glyph sensitive                    # (re-)scan and list findings, most severe first
 glyph sensitive --severity high    # only high/critical
 glyph sensitive --kind risk        # just the risk indicators
 ```

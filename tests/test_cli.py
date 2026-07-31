@@ -21,6 +21,16 @@ def test_run_pipeline(tmp_path, make_entry, capsys):
     assert main(["run", "har", har, "--db", db]) == 0
     out = capsys.readouterr().out
     assert "rosetta" in out
+    assert "sensitive:" in out  # sensitive scan runs by default
+
+
+def test_run_no_sensitive_skips_scan(tmp_path, make_entry, capsys):
+    db = str(tmp_path / "c.db")
+    har = _har(tmp_path, make_entry)
+    assert main(["run", "har", har, "--db", db, "--no-sensitive"]) == 0
+    out = capsys.readouterr().out
+    assert "rosetta" in out
+    assert "sensitive:" not in out  # the 'sensitive:' summary line is absent
 
 
 def test_dict_after_run(tmp_path, make_entry, capsys):
