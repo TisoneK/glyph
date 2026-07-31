@@ -48,14 +48,36 @@ def build_parser() -> argparse.ArgumentParser:
         prog="glyph",
         description="Capture, catalog, and decode a target's API surface.")
     p.add_argument("--version", action="version", version=f"glyph {__version__}")
-    sub = p.add_subparsers(dest="command", required=True)
+    p.add_argument("--db", default="glyph.db",
+                   help="catalog for the home screen (bare 'glyph')")
+    sub = p.add_subparsers(dest="command", required=False)
     for module in _COMMANDS:
         module.add_parser(sub)
     return p
 
 
+def _home_or_help(parser, args) -> int:
+    """Bare `glyph`: open the home/splash TUI when interactive, else help."""
+    import sys
+    if sys.stdout.isatty():
+        try:
+            from glyph.tui import HAS_TEXTUAL, run_home
+        except Exception:
+            HAS_TEXTUAL = False
+        if HAS_TEXTUAL:
+            run_home(args.db)
+            return 0
+        print("The dashboard needs the 'tui' extra: pip install 'glyph-re[tui]'\n",
+              file=sys.stderr)
+    parser.print_help()
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if getattr(args, "func", None) is None:
+        return _home_or_help(parser, args)
     try:
         return args.func(args)
     except (FileNotFoundError, RuntimeError) as exc:

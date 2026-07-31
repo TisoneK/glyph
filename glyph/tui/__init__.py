@@ -5,6 +5,6 @@ Presentation/interaction only: `glyph.tui.data` provides pure catalog views,
 """
 from __future__ import annotations
 
-from glyph.tui.app import HAS_TEXTUAL, run_dashboard
+from glyph.tui.app import HAS_TEXTUAL, run_dashboard, run_home
 
-__all__ = ["run_dashboard", "HAS_TEXTUAL"]
+__all__ = ["run_dashboard", "run_home", "HAS_TEXTUAL"]

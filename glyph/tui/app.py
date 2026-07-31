@@ -1,23 +1,33 @@
-"""The Glyph dashboard — a Textual TUI over a catalog (`glyph.db`).
+"""The Glyph TUI — a home/splash screen and the live dashboard.
 
-Phase 1: read-only exploration. Five tabbed views (Flows / DOM / Schema /
-Sensitive / Rosetta) with a summary header and a flow request/response
-drill-in. The app only *reads* the catalog — all analysis already happened
-in the headless pipeline (ADR-9). Live streaming is Phase 2.
+`glyph` (no args) opens the home screen: the GLYPH wordmark and a target
+box. Enter a URL → the live dashboard captures and streams it in real time
+(ADR-9 Phase 2). `glyph dashboard` / `glyph run live` jump straight to the
+dashboard. The app only reads/refreshes the catalog; the analysis engine
+stays headless.
 """
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
-    from textual.containers import VerticalScroll
-    from textual.screen import ModalScreen
+    from textual.containers import (
+        Center,
+        Horizontal,
+        Middle,
+        Vertical,
+        VerticalScroll,
+    )
+    from textual.screen import ModalScreen, Screen
     from textual.widgets import (
+        Button,
         DataTable,
         Footer,
         Header,
+        Input,
         Static,
         TabbedContent,
         TabPane,
@@ -28,6 +38,7 @@ except ImportError:  # pragma: no cover
 
 from glyph.catalog import Catalog
 from glyph.tui import data as D
+from glyph.tui.logo import TAGLINE, logo_renderable
 
 _VIEWS = [
     ("flows", "Flows", D.flow_rows),
@@ -51,19 +62,17 @@ def _summary_markup(s: dict) -> str:
     doms = " · ".join(f"{dtags[k]} {k}" for k in ("button", "input", "a", "span")
                       if dtags.get(k)) or f"{s.get('dom_labels', 0)} labels"
     return (
-        f"  [b cyan]FLOWS[/]  [b]{s.get('flows', 0)}[/]  [grey58]{types}[/]"
-        f"     [b cyan]SCHEMA[/]  [b]{s.get('fields', 0)}[/] fields · {s.get('enums', 0)} enums"
-        f"     [b cyan]FINDINGS[/]  [b]{s.get('findings', 0)}[/]  {sevs}{noise}"
-        f"     [b cyan]DOM[/]  [b]{s.get('dom_labels', 0)}[/]  [grey58]{doms}[/]"
-        f"     [b cyan]ROSETTA[/]  [b]{s.get('decoded', 0)}[/] decoded"
+        f"  [b cyan]FLOWS[/] [b]{s.get('flows', 0)}[/] [grey58]{types}[/]"
+        f"    [b cyan]SCHEMA[/] [b]{s.get('fields', 0)}[/] fields · {s.get('enums', 0)} enums"
+        f"    [b cyan]FINDINGS[/] [b]{s.get('findings', 0)}[/] {sevs}{noise}"
+        f"    [b cyan]DOM[/] [b]{s.get('dom_labels', 0)}[/] [grey58]{doms}[/]"
+        f"    [b cyan]ROSETTA[/] [b]{s.get('decoded', 0)}[/]"
     )
 
 
 if HAS_TEXTUAL:
 
     class FlowDetail(ModalScreen):
-        """Request/response detail for one flow."""
-
         BINDINGS = [Binding("escape,q,enter", "close", "Close")]
 
         def __init__(self, detail: dict) -> None:
@@ -90,9 +99,68 @@ if HAS_TEXTUAL:
         def action_close(self) -> None:
             self.app.pop_screen()
 
-    class GlyphDashboard(App):
+    class HomeScreen(Screen):
         CSS = """
-        #summary { height: 1; padding: 0 0; color: $text; }
+        HomeScreen { align: center middle; }
+        #box { width: 66; height: auto; }
+        #logo { content-align: center middle; height: auto; padding: 1 0 0 0; }
+        #tag { content-align: center middle; color: $text-muted; padding: 0 0 1 0; }
+        #url { margin: 1 0; }
+        #actions { height: auto; align: center middle; padding: 1 0; }
+        #actions Button { margin: 0 1; }
+        #hint { content-align: center middle; color: $text-muted; }
+        """
+        BINDINGS = [Binding("q,escape", "app.quit", "Quit")]
+
+        def compose(self) -> "ComposeResult":
+            yield Header(show_clock=True)
+            with Middle():
+                with Center():
+                    with Vertical(id="box"):
+                        yield Static(logo_renderable(), id="logo")
+                        yield Static(TAGLINE, id="tag")
+                        yield Input(
+                            placeholder="https://target.example.com  —  enter a URL to capture",
+                            id="url")
+                        with Horizontal(id="actions"):
+                            yield Button("Capture ▶", id="capture", variant="primary")
+                            yield Button("Open catalog", id="open")
+                            yield Button("Quit", id="quit", variant="error")
+                        yield Static("[dim]Enter a URL and press Enter · "
+                                     "or open the existing catalog[/]", id="hint")
+            yield Footer()
+
+        def on_mount(self) -> None:
+            self.app.title = "GLYPH"
+            self.app.sub_title = "reverse-engineering toolkit"
+            self.query_one("#url", Input).focus()
+
+        def _capture(self, url: str) -> None:
+            url = (url or "").strip()
+            if not url:
+                self.app.bell()
+                return
+            if not url.startswith(("http://", "https://")):
+                url = "https://" + url
+            live = {"url": url, "kwargs": {
+                "explore": 2, "settle_ms": 3000, "timeout_ms": 30000,
+                "wait_selector": None, "proxy": os.environ.get("GLYPH_PROXY")}}
+            self.app.push_screen(DashboardScreen(self.app.db_path, live=live))
+
+        def on_input_submitted(self, event) -> None:
+            self._capture(event.value)
+
+        def on_button_pressed(self, event) -> None:
+            if event.button.id == "capture":
+                self._capture(self.query_one("#url", Input).value)
+            elif event.button.id == "open":
+                self.app.push_screen(DashboardScreen(self.app.db_path, live=None))
+            elif event.button.id == "quit":
+                self.app.exit()
+
+    class DashboardScreen(Screen):
+        CSS = """
+        #summary { height: 1; }
         TabbedContent { height: 1fr; }
         DataTable { height: 1fr; }
         #detail { padding: 1 2; }
@@ -104,13 +172,14 @@ if HAS_TEXTUAL:
             Binding("4", "show('sensitive')", "Sensitive"),
             Binding("5", "show('rosetta')", "Rosetta"),
             Binding("r", "reload", "Reload"),
-            Binding("q", "quit", "Quit"),
+            Binding("escape", "back", "Back"),
+            Binding("q", "app.quit", "Quit"),
         ]
 
         def __init__(self, db_path: str, live: Optional[dict] = None) -> None:
             super().__init__()
             self.db_path = db_path
-            self.live = live  # {"url":.., "kwargs":..} for a live capture, else None
+            self.live = live
             self._start = None
             self._done = live is None
 
@@ -125,16 +194,19 @@ if HAS_TEXTUAL:
 
         def on_mount(self) -> None:
             import time
-            self.title = "GLYPH"
-            self.sub_title = "catalog"
+            self.app.title = "GLYPH"
             self.action_reload()
             if self.live:
                 self._start = time.monotonic()
-                # capture runs in a worker thread, writing flows to glyph.db as
-                # they arrive; the UI just polls and refreshes (ADR-9 Phase 2).
-                self.run_worker(self._capture_worker, thread=True, name="capture")
-                self.set_interval(1.0, self._tick)       # flows/DOM/counts live
-                self.set_interval(3.0, self._analyze_tick)  # schema/rosetta/sensitive
+                self.app.run_worker(self._capture_worker, thread=True, name="capture")
+                self.set_interval(1.0, self._tick)
+                self.set_interval(3.0, self._analyze_tick)
+            else:
+                cat = Catalog(self.db_path)
+                try:
+                    self.app.sub_title = cat.target() or "catalog"
+                finally:
+                    cat.close()
 
         # -- live capture + refresh --------------------------------------
         def _capture_worker(self) -> None:
@@ -166,14 +238,14 @@ if HAS_TEXTUAL:
             if self._status() == "done":
                 if not self._done:
                     self._done = True
-                    self.run_worker(self._analyze_once, thread=True)  # final pass
-                self.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
+                    self.app.run_worker(self._analyze_once, thread=True)
+                self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
             else:
-                self.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
+                self.app.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
 
         def _analyze_tick(self) -> None:
             if not self._done:
-                self.run_worker(self._analyze_once, thread=True, name="analyze")
+                self.app.run_worker(self._analyze_once, thread=True, name="analyze")
 
         def _analyze_once(self) -> None:
             from glyph.rosetta import build_dictionary
@@ -189,12 +261,11 @@ if HAS_TEXTUAL:
             finally:
                 cat.close()
 
+        # -- rendering ---------------------------------------------------
         def action_reload(self) -> None:
             cat = Catalog(self.db_path)
             try:
-                s = D.summary(cat)
-                self.sub_title = s.get("target") or "catalog"
-                self.query_one("#summary", Static).update(_summary_markup(s))
+                self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
                 for tab_id, _, fn in _VIEWS:
                     self._fill(f"#t_{tab_id}", fn(cat))
             finally:
@@ -212,6 +283,13 @@ if HAS_TEXTUAL:
         def action_show(self, tab: str) -> None:
             self.query_one(TabbedContent).active = tab
 
+        def action_back(self) -> None:
+            # Pop back to the home screen if we came from it; otherwise quit.
+            if len(self.app.screen_stack) > 1:
+                self.app.pop_screen()
+            else:
+                self.app.exit()
+
         def on_data_table_row_selected(self, event) -> None:
             if event.data_table.id != "t_flows":
                 return
@@ -226,17 +304,38 @@ if HAS_TEXTUAL:
             finally:
                 cat.close()
             if detail:
-                self.push_screen(FlowDetail(detail))
+                self.app.push_screen(FlowDetail(detail))
+
+    class GlyphApp(App):
+        """Top-level app: opens on the home screen, or straight to a dashboard."""
+
+        def __init__(self, home: bool = True, db_path: str = "glyph.db",
+                     live: Optional[dict] = None) -> None:
+            super().__init__()
+            self._home = home
+            self.db_path = db_path
+            self._live = live
+
+        def get_default_screen(self) -> "Screen":
+            if self._home:
+                return HomeScreen()
+            return DashboardScreen(self.db_path, live=self._live)
+
+
+def run_home(db_path: str = "glyph.db") -> None:
+    """Open the home/splash screen. Requires the `tui` extra."""
+    _require_textual()
+    GlyphApp(home=True, db_path=db_path).run()
 
 
 def run_dashboard(db_path: str, live: Optional[dict] = None) -> None:
-    """Open the dashboard on a catalog. Requires the `tui` extra.
+    """Open the dashboard directly (read-only, or a live capture)."""
+    _require_textual()
+    GlyphApp(home=False, db_path=db_path, live=live).run()
 
-    ``live={"url":.., "kwargs":..}`` runs a live capture in a worker and
-    refreshes in real time; ``None`` opens the catalog read-only.
-    """
+
+def _require_textual() -> None:
     if not HAS_TEXTUAL:
         raise RuntimeError(
             "Textual is not installed. Install the tui extra:\n"
             "  pip install 'glyph-re[tui]'")
-    GlyphDashboard(db_path, live=live).run()

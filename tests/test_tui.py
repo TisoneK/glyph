@@ -135,14 +135,36 @@ def test_live_dashboard_streams(tmp_path, monkeypatch):
                 "by_source": {"playwright:xhr": 3}, "error": None}
 
     monkeypatch.setattr(drv, "capture_url", fake_capture)
-    from glyph.tui.app import GlyphDashboard
+    from glyph.tui.app import GlyphApp
     db = str(tmp_path / "l.db")
-    app = GlyphDashboard(db, live={"url": "https://x", "kwargs": {}})
+    app = GlyphApp(home=False, db_path=db, live={"url": "https://x", "kwargs": {}})
 
     async def go():
         async with app.run_test() as pilot:
             await pilot.pause(1.3)  # let the first 1s refresh tick fire
             assert app.query_one("#t_flows").row_count == 3
-            assert app._done is True  # capture finished -> header flips
+            assert app.screen._done is True  # capture finished -> header flips
+
+    asyncio.run(go())
+
+
+def test_home_screen_mounts(tmp_path):
+    """Bare `glyph` home screen mounts, shows the logo, and captures a URL."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import DashboardScreen, GlyphApp
+    app = GlyphApp(home=True, db_path=str(tmp_path / "h.db"))
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#url").value = "example.com"
+            await pilot.press("enter")          # submit URL -> dashboard
+            await pilot.pause()
+            assert isinstance(app.screen, DashboardScreen)
 
     asyncio.run(go())
