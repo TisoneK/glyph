@@ -400,8 +400,18 @@ class Catalog:
         self.conn.commit()
 
     def target(self) -> Optional[str]:
+        return self.get_meta("target_host")
+
+    # -- generic meta -----------------------------------------------------
+    def set_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            (key, value))
+        self.conn.commit()
+
+    def get_meta(self, key: str) -> Optional[str]:
         row = self.conn.execute(
-            "SELECT value FROM meta WHERE key='target_host'").fetchone()
+            "SELECT value FROM meta WHERE key=?", (key,)).fetchone()
         return row["value"] if row else None
 
     # -- findings ---------------------------------------------------------

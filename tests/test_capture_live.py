@@ -19,14 +19,16 @@ _PLAYWRIGHT = importlib.util.find_spec("playwright") is not None
 def test_capture_live_registered_with_defaults():
     args = build_parser().parse_args(
         ["capture", "live", "https://x.test", "--db", "/tmp/x.db"])
-    assert args.func.__name__ == "cmd_capture_live"
+    assert args.func.__name__ == "run_live"
+    assert args.func.__module__.endswith("cli.capture")
     assert args.url == "https://x.test"
     assert args.explore == 2 and args.settle_ms == 3000 and args.timeout_ms == 30000
 
 
 def test_run_live_registered():
     args = build_parser().parse_args(["run", "live", "https://y.test", "--explore", "5"])
-    assert args.func.__name__ == "cmd_run_live"
+    assert args.func.__name__ == "run_live"
+    assert args.func.__module__.endswith("cli.run")
     assert args.explore == 5
 
 

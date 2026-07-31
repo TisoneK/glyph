@@ -76,5 +76,8 @@ def build_dictionary(catalog: Catalog) -> Dict[str, int]:
         if needs_review:
             review += 1
 
+    # Record that rosetta ran, so `glyph dict` can tell "ran, found nothing"
+    # from "not run yet" even when 0 entries were written.
+    catalog.set_meta("rosetta_ran", "1")
     return {"entries": written, "needs_review": review,
             "high_confidence": written - review}
