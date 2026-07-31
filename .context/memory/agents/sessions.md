@@ -526,3 +526,26 @@ questions refined to 7 in tasks/current.md (Q2 answered by the user's choice; Q3
 new). No product code — research/planning session. Honored the honest-gap rule: ADR-14's
 consequences explicitly call out that CDP-attach sees ALL the user's tabs/sessions (not
 just the target) → capture everything, tag by host, document it.
+
+### Update (2026-07-31, Session 19 cont. 2) — capture scoping by tab lineage (user's filter requirement)
+User: "But it needs target so that we can easily filter non-relevant tabs or targets." Fair
+— ADR-14 point 7 originally said "capture everything, tag by host" which would fill the
+catalog with the user's unrelated tabs (email, social, other-banking) in CDP-attach mode.
+Revised ADR-14 point 7 to filter by **tab lineage**, not per-flow host inspection: `--browse`
+REQUIRES the target `<url>` (already required by `with_live()`, but now load-bearing); on
+CDP-attach Glyph opens a fresh tab (`context.new_page()` → `page.goto(url)`) in the user's
+attached browser (shares their session — saved logins, password manager), hooks that tab +
+`page.on("popup")` (new tabs opened FROM the target — payment providers, SSO,
+`target="_blank"`). Existing tabs + manually-opened new tabs (Ctrl+T, address bar) are NOT
+hooked → unrelated tabs invisible by construction. Navigations WITHIN the target tab to
+other hosts (SSO redirect to `accounts.google.com`, payment redirect to `flutterwave.com`)
+ARE captured (the tab is still the target tab) and tagged by host; `glyph sensitive
+--target <host>` scopes reads later. No allowlist/denylist needed; no per-flow host
+inspection at capture time. Grounded in existing primitives: `registrable_domain()`
+(eTLD+1, multi-part TLD aware incl. `.co.ke`) + `catalog.set_target(host)` (ADR-12) already
+exist. Updated ADR-14 points 3 + 7 + consequences (security note: Glyph COULD see all tabs
+but the tab-lineage filter means it only hooks target + popups), review section 7 Q7
+(marked ANSWERED), backlog implement item (added the `context.new_page()` + `page.on("popup")`
++ "existing tabs NOT hooked" logic), tasks/current.md Q7 (marked ANSWERED). 4 open questions
+remain for the build session (TUI mode, stop-signal confirmation, request-side capture,
+cookie storage, launch-helper). No product code — research/planning session.

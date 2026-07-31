@@ -504,6 +504,16 @@ guidance is ~100-150 LOC, deferred.
    browser means Glyph sees ALL tabs/sessions, not just the target. Should Glyph
    filter capture to the target host (drop non-target flows), or capture
    everything and let the catalog's first/third-party tagging handle it?
-   Recommend: capture everything (the user may navigate across related subdomains
-   / SSO redirects / payment providers), tag by host, but surface a "non-target
-   hosts seen" note.
+   **ANSWERED by the user:** "it needs target so that we can easily filter
+   non-relevant tabs or targets." Decision (in ADR-14 point 7): filter by **tab
+   lineage**, not by per-flow host inspection. `--browse` requires the target
+   `<url>`; Glyph opens a fresh tab in the attached context (`context.new_page()`
+   → `page.goto(url)`), hooks that tab + `page.on("popup")` (new tabs opened FROM
+   the target tab — payment providers, SSO, `target="_blank"`). Existing tabs +
+   manually-opened new tabs are NOT hooked → the user's email/social/other-banking
+   tabs are invisible by construction. Navigations within the target tab to other
+   hosts (SSO redirect to `accounts.google.com`) ARE captured (the tab is still
+   the target tab) and tagged by host; `glyph sensitive --target <host>` scopes
+   reads later. No allowlist/denylist needed; no per-flow host inspection at
+   capture time. A future `--browse-scope all` could relax this; v1 is
+   target-tab + popups only.

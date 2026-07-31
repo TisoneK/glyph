@@ -32,4 +32,4 @@ check its session entry and backlog before starting.
   4. Record the request side too (`page.on("request")`)? (Recommend yes.)
   5. Cookie snapshot storage: meta blob (v1) vs dedicated `cookies` table (v2)?
   6. NEW: should Glyph offer `glyph browse --launch <browser>` to spawn the browser with `--remote-debugging-port`? (Recommend yes, with manual path documented.)
-  7. NEW: capture scoping in CDP-attach mode — capture ALL tabs/hosts (recommended, tag by host) or filter to target host only?
+  7. ~~Capture scoping in CDP-attach mode~~ ANSWERED by the user ("it needs target so that we can easily filter non-relevant tabs or targets"): filter by **tab lineage** — `--browse` requires the target `<url>`; Glyph opens a fresh tab in the attached context, hooks it + `page.on("popup")`; existing tabs + manually-opened new tabs are NOT hooked. See ADR-14 point 7.

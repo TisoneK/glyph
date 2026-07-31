@@ -555,13 +555,15 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
      `/Applications/Brave Browser.app/Contents/MacOS/Brave Browser`, Linux
      `/usr/bin/brave-browser`, Windows `%ProgramFiles%\BraveSoftware\Brave-Browser\
      \Application\brave.exe`) or `--browser-path <path>`.
-  3. **`--browse` flag** on `glyph run live` and `glyph capture live`. When set, Glyph
-     TRIES CDP-attach first (default `http://localhost:9222`, overridable via `--cdp-port`
-     / `--cdp-host` / `GLYPH_CDP_URL` env). If no CDP endpoint reachable, falls back to the
-     launch path with a clear stderr message ("No browser on :9222 — launching <browser>
-     with a dedicated profile; log in once, it persists at ~/.glyph/profiles/<host>/").
-     `--browser chrome|edge|brave` picks the fallback browser (default: chrome).
-     `--incognito` forces an ephemeral context. `--no-browse` is implicit (current behavior).
+  3. **`--browse` flag** on `glyph run live` and `glyph capture live`. **Requires the target
+     `<url>`** (already required by `with_live()`, but now load-bearing — the URL is the
+     anchor for the tab-lineage capture filter, point 7). When set, Glyph TRIES CDP-attach
+     first (default `http://localhost:9222`, overridable via `--cdp-port` / `--cdp-host` /
+     `GLYPH_CDP_URL` env). If no CDP endpoint reachable, falls back to the launch path with
+     a clear stderr message ("No browser on :9222 — launching <browser> with a dedicated
+     profile; log in once, it persists at ~/.glyph/profiles/<host>/"). `--browser
+     chrome|edge|brave` picks the fallback browser (default: chrome). `--incognito` forces
+     an ephemeral context. `--no-browse` is implicit (current behavior).
   4. **Browser-launch helper (recommended).** `glyph browse --launch <browser> [--url <url>]`
      spawns the chosen browser with `--remote-debugging-port=9222`, resolving the binary
      per OS. If the browser is already running on that profile (profile-lock), it prints the
@@ -581,12 +583,34 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
      (schema → rosetta → sensitive → snihunt), THEN open the dashboard as a post-capture
      exploration view (or print the summary if `--no-tui`). Split-pane (browser + dashboard
      side-by-side) is a future enhancement; defer.
-  7. **Capture scoping.** In CDP-attach mode, Glyph sees ALL tabs/sessions in the user's
-     browser, not just the target. Decision: capture everything (the user may navigate
-     across related subdomains / SSO redirects / payment providers), tag by host, surface a
-     "non-target hosts seen" note. Do NOT filter at capture time — the catalog's
-     first/third-party tagging (ADR-12 multi-target) handles it; the user can scope reads
-     with `--target <host>` later.
+  7. **Capture scoping — target-tab + popups only (the user's filter requirement).**
+     `--browse` REQUIRES the target `<url>` (already required by `with_live()`, but now
+     load-bearing for filtering). The target URL is the anchor; Glyph captures ONLY the
+     target tab + tabs opened FROM it — not every tab in the user's browser:
+     - On CDP-attach: `context.new_page()` → `page.goto(url)` opens a fresh tab in the
+       user's attached browser (shares their session: cookies, saved logins, password
+       manager — the whole point of attach mode). This is **the target tab**.
+     - Hook `page.on("response")` / `"request"` / `"websocket"` / `"framenavigated"` on
+       the target tab.
+     - Hook `page.on("popup")` — fires when a new tab is opened FROM the target tab
+       (`window.open`, `target="_blank"`, Ctrl+click). Hook those popup pages too. This
+       is how payment providers / SSO that open in a new tab get captured.
+     - **Existing tabs are NOT hooked.** The user's email, social, other-banking tabs —
+       invisible to Glyph by construction. No flow inspection needed.
+     - **Manually-opened new tabs** (Ctrl+T, address bar) are NOT hooked — they're not
+       popups from the target tab.
+     - Navigations WITHIN the target tab to other hosts (SSO redirect to
+       `accounts.google.com`, payment redirect to `flutterwave.com`) ARE captured (the
+       tab is still the target tab) and tagged by their actual host; `glyph sensitive
+       --target <host>` scopes reads later. The target host is set via
+       `catalog.set_target(urlparse(url).hostname)` (ADR-12).
+     - Launch fallback: same model — Glyph owns the browser, opens the target URL, hooks
+       the page + popups.
+     - This filters by **tab lineage** (target tab + its popups), which is exactly the
+       user's "filter non-relevant tabs" requirement — unrelated tabs never get hooks.
+       No allowlist/denylist needed; no per-flow host inspection at capture time. A
+       future `--browse-scope all` flag could relax this (hook every tab), but v1 is
+       target-tab + popups only.
   8. **Captured flows tagged `source = "playwright:<type>"`** (same as today). Add a
      `capture_mode` meta (`"auto"` vs `"browse-attach"` vs `"browse-launch"`) so the
      catalog/UI can distinguish.
@@ -606,10 +630,13 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
     closing the user's whole browser (all tabs) is disruptive. This differs from ADR-13's
     launch-mode "close the browser to stop". The build session must implement BOTH stop
     paths and pick the right one per mode.
-  - **Security:** attaching to the user's real browser means Glyph sees their real
-    cookies/tokens for ALL tabs/sessions, not just the target. Capture scoping (point 7)
-    captures everything and tags by host — the catalog's multi-target model (ADR-12)
-    handles per-host filtering. Document this clearly so the user knows what's captured.
+  - **Security:** attaching to the user's real browser means Glyph COULD see their real
+    cookies/tokens for ALL tabs — but the tab-lineage filter (point 7) means Glyph only
+    hooks the target tab + its popups, so unrelated tabs (email, social, other-banking)
+    are invisible by construction. Flows within the target tab that cross to other hosts
+    (SSO/payment redirects) ARE captured and tagged by host; the catalog's multi-target
+    model (ADR-12) + `--target <host>` read-filter handle per-host scoping. Document this
+    clearly so the user knows what's captured (target tab + popups) vs not (everything else).
   - ADR-13's `launch_persistent_context` design is RETAINED as the fallback. ADR-14 adds
     CDP-attach as the PRIMARY. The build session reads ADR-14 (not ADR-13) for the
     authoritative implementation.
