@@ -179,3 +179,12 @@ weren't Betika's. Added first/third-party scoping: capture records the primary t
 a registrable-domain matcher (eTLD+1 incl. .co.ke) tags each finding's party, and
 `glyph sensitive` defaults to first-party (--all/--party/--target to control). Cut Betika's
 50 findings to 10 trustworthy first-party ones. `party` column on findings (+migration). 94 tests.
+
+### Correction (2026-07-31, Session 10 cont.) — de-noise by tracking-vendor, not third-party
+User pushback: hiding third-party findings is wrong — sites store their own data on third-party
+CDNs/stores (S3, storage.googleapis.com). Reworked the default: sensitive-data findings are never
+hidden on any host; only hygiene chatter (CORS/headers) on KNOWN tracking/ad vendors (GTM,
+DoubleClick, adnxs, Hotjar, Clarity...) is noise; CDNs/object stores are explicitly NOT vendors.
+Findings now carry host; is_noise() drives the default. On Betika this restored the
+storage.googleapis.com CDN data finding that was wrongly hidden. 95 tests. Lesson: don't conflate
+"third-party host" with "irrelevant" — the axis is data/behavior vs tracking-hygiene noise.
