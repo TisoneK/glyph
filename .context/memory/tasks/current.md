@@ -11,9 +11,13 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 9 (2026-07-31) wired live browser capture into the
-  CLI (`glyph capture live` / `run live`) so no per-site scripts are needed, and
-  verified a rich live capture of linebet via the user's proxy. See
-  `agents/sessions.md` Session 9. Next items in `tasks/backlog.md`.
-- **Status:** idle
+- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 10)
+- **Task:** Build the `glyph.sensitive` stage — passively flag (a) sensitive
+  data (PII/secrets/financial) in captured payloads, (b) sensitive endpoints
+  (auth/admin/payment/account), and (c) risk indicators (secrets in query,
+  missing auth on sensitive data, wildcard CORS, missing security headers,
+  debug endpoints, sequential-ID/IDOR). FLAG-AND-LOCATE, keep values intact
+  (user correction: redaction is NOT a default, only an opt-in export). New
+  catalog `findings` table + `glyph sensitive` CLI. Passive analysis only —
+  no active scanning/exploitation.
+- **Status:** in-progress
