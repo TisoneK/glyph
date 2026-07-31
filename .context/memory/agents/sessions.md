@@ -567,3 +567,68 @@ all-traffic fallback), backlog implement item (url now OPTIONAL via argparse `na
 the `context.pages`/`context.on("page")` all-traffic path + the stderr banner), tasks/current.md
 Q7 (noted both halves of the user's answer). Still no product code — research/planning
 session. 4 open questions remain for the build session.
+
+### Update (2026-07-31, Session 19 cont. 4) — ADR-14 IMPLEMENTED + accepted
+User: "Start implementing." Implemented ADR-14 in commit `8915b5d`
+(`feat(capture): browse mode --browse (ADR-14)`). Product code:
+- `glyph/capture/driver.py`: `capture_url` now branches on `browse=True`.
+  PRIMARY = `connect_over_cdp(cdp_url)` → reuse `browser.contexts[0]` (the
+  user's real session) → `context.new_page()` + `page.goto(url)`. FALLBACK =
+  `launch_persistent_context(channel='chrome'|'msedge', headless=False,
+  user_data_dir=~/.glyph/profiles/<host>/)`; Brave via `executable_path`
+  (`_browser_binary_path` auto-detects per OS: macOS/Linux/Windows candidates,
+  or `--browser-path`). Extracted `_make_recorders` (shared by auto + browse):
+  `page.on('response')` + `'request'` (ADDITIVE — captures the request side,
+  incl. requests whose responses never arrive) + `'websocket'` +
+  `'framenavigated'` (refresh DOM snapshot on nav) + `'popup'` (recurse into
+  popups). Tab-lineage scoping: url given → hook target tab + popups only
+  (existing/other tabs NOT hooked → email/social/other-banking invisible); no
+  url → all-traffic (`context.pages` + `context.on('page')` + stderr banner
+  "⚠ browse-all mode"). Periodic `context.cookies()` snapshot every ~5s + on
+  stop (v1: JSON blob in `capture_cookies` meta). Stop signal: attach → Ctrl+C
+  DETACHES (does NOT call `browser.close()` — sync_playwright exit drops the
+  CDP WS without closing the user's browser); launch → close browser or Ctrl+C.
+  `capture_mode` meta (`auto`/`browse-attach`/`browse-launch`). Blocking wait
+  uses `while not done.wait(0.2)` (not bare `done.wait()`) so Ctrl+C is
+  delivered promptly — a C-level indefinite wait can swallow the signal.
+- `glyph/cli/_shared.py`: `--browse`/`--cdp-port`/`--cdp-host`/`--browser
+  chrome|msedge|brave`/`--browser-path`/`--incognito` on `with_live()`; `url`
+  now `nargs='?'` (optional). `live_kwargs` carries them; `GLYPH_CDP_URL` env
+  overrides host:port.
+- `glyph/cli/run.py` + `capture.py`: browse path does NOT take over the screen
+  with the dashboard during capture (user needs the browser); after
+  detach/close runs `_gather` (schema→rosetta→sensitive→snihunt) then opens the
+  dashboard as a post-capture view (or `--no-tui` summary). Auto path
+  unchanged; auto still requires a url (clear error if absent).
+- `glyph/cli/browse.py` (NEW): `glyph browse --launch --browser <b> [--url]`
+  spawns the browser with `--remote-debugging-port=9222` (`find_browser`
+  resolves the binary per OS); no `--launch` prints attach help (per-browser
+  one-liner + the attach command). Registered in `cli/__init__.py`.
+- `glyph/capture/__init__.py`: `capture_live` passes `progress` through.
+- `README.md`: new "Browse mode" section (ADR-14) + commands table entries.
+
+Tests: 10 new in `tests/test_capture_live.py` with mock-Playwright fakes
+(`_FakeChromium`/`_FakeBrowser`/`_FakeContext`/`_FakePage`): CDP-attach hooks
+target tab + popups + disconnect doesn't close the user's browser; all-traffic
+hooks every tab + `context.on('page')`; launch-fallback uses `channel='chrome'`
++ per-host profile; Brave without a binary raises a clear error; `--browse`
+flags in parser; `live_kwargs` carries browse options + `GLYPH_CDP_URL`
+override; `glyph browse` registered; auto mode still requires url. **Blocking
+tests fire the `disconnected`/`close` event the driver listens for** (not
+`_thread.interrupt_main`, which `Event.wait()` can swallow — learned this when
+the first run hung). 156 pass, 5 skip (was 146; +10 new). Real headless
+auto-capture verified against example.com (2 flows, mode meta set).
+
+Open questions resolved with sensible defaults (the user said "Start
+implementing" → went with the recommended defaults): TUI = browser-only during
+capture + dashboard after (recommended); stop-signal = Ctrl+C detaches in
+attach / close-or-Ctrl+C in launch; request-side capture = yes (additive);
+cookie storage = meta blob v1 (dedicated table deferred to backlog);
+`glyph browse --launch` helper = yes. ADR-14 marked **accepted**. Backlog
+items remain for the user's on-device verification: real-world Brave +
+auth-protected target test; dedicated `cookies` table (v2); split-pane TUI;
+mitmproxy `glyph capture proxy` for Firefox/Safari. The CDP-attach path is
+NOT verifiable in this sandbox (no real browser + no display) — the user must
+verify on their machine (Brave primary). Honored the retry-limit rule: the
+first `pytest` run hung (the `Event.wait()` issue); I diagnosed with a single
+per-test timeout run instead of looping.

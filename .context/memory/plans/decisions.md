@@ -521,7 +521,7 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 ---
 ## ADR-14: Browse Mode — CDP-attach to the user's real browser is primary; Playwright-launched Chromium is fallback (2026-07-31)
-- **Status:** proposed (research complete 2026-07-31, Session 19 cont.; awaiting build session)
+- **Status:** accepted (implemented 2026-07-31, Session 19 cont. 4)
 - **Context:** ADR-13 (proposed, unimplemented) chose Playwright-launched Chromium
   (`launch_persistent_context`, headless=False, dedicated Glyph-managed profile) as the
   browse-mode technique. User feedback: they want their **real browser** (Brave primary,
