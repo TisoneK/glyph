@@ -289,7 +289,7 @@ attr `_timers` on a Textual DOMNode — it shadows Textual's internal timer set 
 109 tests.
 
 ---
-## 2026-07-31 — Session 16 (in progress)
+## 2026-07-31 — Session 16
 - **Agent:** Super Z | **Model:** unknown (system prompt does not state the exact GLM version; recorded `unknown` per Pitfall #25) | **Platform:** Z.ai cloud sandbox (Linux, Python 3.12.13, workspace `/home/z/my-project/glyph-work/glyph`) | **Role:** engineer | **Core:** 0.4.0
 - **Task:** Implement the SNI bug-host hunting feature (ADR-10) — a new `glyph.snihunt` stage
   that discovers NEW SNI bug-host candidates from the live capture via reverse-IP lookup,
@@ -298,7 +298,19 @@ attr `_timers` on a Textual DOMNode — it shadows Textual's internal timer set 
   lists — the user explicitly wants the *process* of finding new hosts. Auto-runs after
   `sensitive` in `glyph run live`/`run har`; new `glyph snihunt` CLI command; new TUI tab
   (key 6, "SNI Hunt").
-- **Commits:** (TBD — will fill at session end)
-- **Outcome:** (TBD)
-- **Open items:** (TBD)
-- **Report:** .context/memory/reviews/2026-07-31-sni-bug-host-hunt.md (to be written)
+- **Commits:** 2 — `49e4fbe` (chore(context): Session 16 task + ADR-10 proposed) + `0ff9e7d`
+  (feat(snihunt): the stage + CLI + TUI + tests). Plus this closing `chore(context)`.
+- **Outcome:** done. `glyph/snihunt/` = 8 modules (extract, dns DoH, reverseip HackerTarget,
+  ctlogs certspotter+crt.sh, cdn Cloudflare/Fastly/Akamai/CloudFront, zerorate Free Basics/
+  Wikipedia Zero/internet.org, probe opt-in TLS, hunt orchestrator). New `FINDING_SNI_BUG_HOST`
+  kind + `clear_findings(kind=)`. `glyph snihunt` CLI (--no-net/--probe/--min-score/--max-domains/
+  --json). Auto-runs after sensitive in run live/har (--no-snihunt opts out). TUI tab 6 "SNI Hunt"
+  + summary SNI count; live dashboard runs hunt ONCE at finalize. **123 tests pass** (was 106;
+  +17 new offline mocked-network tests), 3 skipped. Real-world verified against cloudflare.com +
+  0.facebook.com: 184 candidates, `0.facebook.com` scored 75 (high: zero-rated + wildcard cert +
+  144 CT subdomains + reverse-IP siblings), 21 Cloudflare-fronted candidates via reverse-IP.
+  ADR-10 marked accepted/implemented.
+- **Open items:** live carrier verification recipe (on-device, backlog); enrich the zero-rating
+  TLD/pattern set with Kenya/East-Africa carrier free-pack domains (backlog); third CT-log
+  source for failover (backlog). See `tasks/backlog.md` + the review note.
+- **Report:** .context/memory/reviews/2026-07-31-sni-bug-host-hunt.md

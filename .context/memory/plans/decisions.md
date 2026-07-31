@@ -242,7 +242,7 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 ---
 ## ADR-10: SNI bug-host hunting is a bounded active-recon stage, post-sensitive (2026-07-31)
-- **Status:** proposed (implementation in progress, Session 16)
+- **Status:** accepted (implemented 2026-07-31, Session 16)
 - **Context:** The user wants Glyph to hunt for "SNI bug hosts" — hostnames that, when used as
   the TLS SNI, are zero-rated or otherwise pass through a carrier's DPI for free-internet
   tunneling (HttpInjector / KPN Tunnel / HA Tunnel class of tools, Kenya-priority). The user's

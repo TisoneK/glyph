@@ -157,3 +157,45 @@ never harvested.
   2. After committing `.gitattributes`, ran `git checkout -- .context/core/` to restore LF blobs from git history.
   3. `context-sync verify` now passes on Windows.
 - **Prevent next time:** The `.context/core/` directory should always have `eol=lf` enforced via `.gitattributes` (or the project should document this requirement for Windows users). The protocol's `verify` command computes hashes against on-disk bytes, so platform line-ending conversion directly breaks integrity checks.
+
+---
+## 2026-07-31 — Super Z / unknown (Session 16)
+- **Problem:** Two friction points, both project-local.
+  1. **A dict-comprehension typo in a test helper silently produced a 1-element list instead
+     of N.** `_set_certspotter` wrote `json.dumps([{"dns_names": [s] for s in subs}])` — a
+     dict comprehension INSIDE a list literal — which iterates `subs` and OVERWRITES the
+     `"dns_names"` key each time, yielding `[{"dns_names": [<last sub>]}]` (1 entry). The
+     intended `[{"dns_names": [s]} for s in subs]` (list comprehension, one dict per sub)
+     produces N entries. The bug was invisible for ~30 min because the stage silently
+     persisted only the last CT subdomain; tests for the OTHER subdomains failed with a
+     generic "not in hosts" assertion. The two forms are visually near-identical and the
+     difference (where the `for` sits — inside the `{}` vs outside) is easy to miss.
+  2. **The Bash tool's shell CWD resets to `/home/z/my-project` between calls.** A `cd
+     /home/z/my-project/glyph-work/glyph && git ...` in one call does NOT persist; the next
+     call starts fresh in `/home/z/my-project` (which is itself a git repo, so `git` commands
+     silently operate on the WRONG repo — showing `glyph-work/ scripts/ tool-results/` as
+     untracked instead of the glyph repo's staged files). I dropped the `cd` prefix from
+     several `git commit` calls and they reported "nothing added to commit" while my staged
+     files sat unstaged in the actual repo.
+- **Cost:** ~30 min on the dict-comp typo (added debug prints inside `_from_certspotter`
+  and `run_hunt`; the inline `python3 -c` repro returned 7 while the pytest run returned 2,
+  which was the key clue — the test helper differed from my inline helper by exactly the
+  typo). ~10 min on the CWD issue (3 failed `git commit` calls before I switched to
+  `git -C /abs/path` which is CWD-independent).
+- **Cause:** (1) A genuine typo — the two comprehension forms are syntactically close and
+  Python doesn't warn on a dict-comprehension that overwrites keys. (2) The Bash tool runs
+  each command in a fresh shell (CWD doesn't persist across calls); I assumed it did and
+  wrote relative `git` commands. The Session 7 inefficiency note already flagged "use
+  absolute paths in Bash" but I extended it only to file paths, not to git's repo dir.
+- **Workaround / fix:** (1) Fixed the test helper to `[{"dns_names": [s]} for s in subs]`
+  and added a docstring noting the certspotter `expand=dns_names` shape (one issuance per
+  subdomain). The real `_from_certspotter` was always correct — only the test fake was
+  wrong. (2) Switched ALL git commands to `git -C /home/z/my-project/glyph-work/glyph ...`
+  (absolute, CWD-independent). Recorded in `system/environments.md` for the next session.
+- **Prevent next time:** (1) When a test fake produces a suspiciously small result, diff
+  the test's helper against the inline repro that worked — the bug is in the helper, not
+  the code under test. And: never write `[{"k": v for x in xs}]` when you mean
+  `[{"k": v} for x in xs]` — the bracket placement changes list-of-one-overwritten into
+  list-of-N. (2) Always use `git -C <abs-repo-path>` in this sandbox; never rely on `cd`
+  persisting across Bash calls. The Session 7 note "use absolute paths in Bash" now covers
+  git's repo dir too.
