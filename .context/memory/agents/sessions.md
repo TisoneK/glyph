@@ -412,3 +412,17 @@ score in Session 16 (structured data in a string field, parsed back out) —
 this time I caught the CDN-name parse too. Commit e94a6e4. 23 snihunt tests
 pass. Honored the retry-limit rule: stopped after 2 CWD-reset failures on the
 live CLI verify (tests already proved the parse works).
+
+### Update (2026-07-31, Session 17 cont. 5) — HTTP status code + plain footer
+User raised two issues:
+1. 'Why am I not seeing status code? eg 200, etc?' — the probe only did a TLS
+   handshake, no HTTP request. Extended probe_sni to also send an HTTP/1.1 GET
+   over the TLS connection and parse the status code. New STATUS column in the
+   CLI + TUI tables (— when --probe is off; the footer says so explicitly).
+   Real-world verified: probe_sni('betika.com') → 302.
+2. 'you say See ADR-10 how will that be useful to the user????' — ADRs are
+   internal docs; pointing an end user at them is useless. Replaced both
+   footers with plain language: 'score ranks how usable the host is as an SNI
+   — NOT a guarantee of free internet. To confirm, test with your tunneling
+   app on your SIM — only a real tunnel test on the carrier proves it.'
+Commit c439ecb. 23 snihunt tests pass.
