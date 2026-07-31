@@ -179,3 +179,58 @@ don't remove the line.
 - **`set_reachability` target scoping.** `set_reachability(endpoint_id, ...)`
   doesn't take a target filter — works because `endpoint_id` is already
   per-target under ADR-12, but worth a docstring note.
+
+---
+## 2026-07-31 — Session 19 follow-ups (Browse Mode research → ADR-13 proposed)
+
+The build session implements ADR-13. Research + plan are done; these are the
+concrete build items + open questions. See
+`reviews/2026-07-31-browse-mode-research.md` and ADR-13 in `plans/decisions.md`.
+
+- [ ] **Implement ADR-13: `--browse` flag on `glyph run live` + `glyph capture live`**
+      (added 2026-07-31 by Super Z, Session 19) — `capture_url` gains `browse: bool = False`
+      + `user_data_dir: Optional[str] = None`. When `browse=True`: `headless=False`,
+      use `launch_persistent_context` when `user_data_dir` set (else `launch + new_context`
+      for `--incognito`), skip `_explore_round`, register `context.on("page")` (multi-tab),
+      `page.on("framenavigated")` (refresh DOM snapshot on nav), `page.on("request")`
+      (capture request side, additive), block on `browser.on("disconnected")` (user
+      closes browser → capture done). Periodic `context.cookies()` snapshot every ~5s +
+      on disconnect. Add `--browse`, `--profile <dir>`, `--incognito` to `with_live()`
+      in `glyph/cli/_shared.py`; thread through `live_kwargs()`. Update `glyph/cli/run.py`
+      `run_live` to NOT take over the screen with the dashboard during browse (user needs
+      the browser visible) — print "Browser open — navigate, log in, do your flows. Close
+      the browser when done." to stderr; AFTER browser-close run `_gather` + `_render`,
+      THEN open dashboard as post-capture view (or print summary if `--no-tui`). Same
+      plumbing for `glyph capture live --browse`. Update README live-capture section.
+      Default profile dir: `~/.glyph/profiles/<host>/` (override via `GLYPH_PROFILE_DIR`
+      env or `--profile <dir>`; `--incognito` = fresh ephemeral). Medium. See ADR-13.
+- [ ] **Browse Mode: tests for the new code path** (added 2026-07-31 by Super Z, Session 19)
+      — `tests/test_capture_live.py`: mock Playwright; assert `browse=True` →
+      `launch(headless=False)` or `launch_persistent_context(headless=False)`; assert
+      `_explore_round` NOT called when `browse=True`; assert `context.on("page")` registered
+      (multi-tab path); assert `browser.on("disconnected")` is the wait condition; assert
+      `page.on("request")` handler records the request side. Follow the existing
+      `test_capture_live.py` mock-playwright pattern. Low-Medium. See ADR-13.
+- [ ] **Browse Mode: `glyph profile clear <host>` CLI** (added 2026-07-31 by Super Z,
+      Session 19) — convenience command to wipe a per-host Chromium profile dir
+      (`~/.glyph/profiles/<host>/`) when the user wants to start fresh (logged-out, no
+      cached state). Doc-only fallback for v1: document `rm -rf ~/.glyph/profiles/<host>/`.
+      Low. See ADR-13.
+- [ ] **Browse Mode: real-world verification on an auth-protected target** (added 2026-07-31
+      by Super Z, Session 19) — the build session's end-to-end proof. Point `glyph run live
+      --browse <user's-target>` at a real auth-protected site (the user's SIM/betting account
+      flow is the obvious candidate), log in, navigate to deposit/withdraw/send, close the
+      browser, confirm the captured catalog contains the auth + payment endpoints + the
+      sensitive scan flags the credentials/tokens/OTPs in those flows. Document the result
+      in the session review. Medium. See ADR-13.
+- [ ] **Browse Mode: dedicated `cookies` table (v2)** (added 2026-07-31 by Super Z,
+      Session 19) — v1 stashes the periodic `context.cookies()` snapshot as a JSON blob in
+      meta (`capture_cookies`). v2 promotes it to a dedicated `cookies` table (schema bump)
+      so `glyph sensitive` can flag auth tokens / session IDs in cookies per-target, and
+      drift can track cookie changes between captures. Low-Medium. See ADR-13.
+- [ ] **Browse Mode: split-pane TUI (browser + dashboard side-by-side)** (added 2026-07-31
+      by Super Z, Session 19) — v1 opens the dashboard AFTER browser-close (post-capture
+      exploration view). Future enhancement: split-pane mode where the dashboard is visible
+      alongside the browser, streaming flows in real time as the user navigates. Needs
+      Textual + visible-Chromium window-management work. Low — defer until v1 proves the
+      capture path is solid. See ADR-13.

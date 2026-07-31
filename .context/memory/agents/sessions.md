@@ -443,3 +443,57 @@ probe=False explicitly; --no-net CLI tests don't fire the probe).
 - **Outcome:** done. Schema v3 → v4. New `targets` table; `target_id` column on every data table (flows/endpoints/fields/dictionary/page_observations/findings/vpn_configs); every UNIQUE updated to include `target_id`. Reserved "(unassigned)" target (id=0) so writes always stamp a NON-NULL target_id (SQLite's NULL!=NULL in UNIQUE would break upsert dedup otherwise). `Catalog._active_target_id` instance state: `set_target` upserts+activates, `clear_target` wipes one target's rows (replaces `reset()` at all 4 run sites), `reset()` retained for tests. Reads filter to active by default (fall back to all). `glyph target list|show|rm` CLI. v3→v4 migration rebuilds tables, ports legacy NULL rows to unassigned, ports old `meta.target_host` into a real targets row. **146 tests pass** (was 144; +2 new multi-target tests, 1 rewritten — `test_run_resets_catalog_between_targets` → `test_run_coexists_across_targets` since the old "run wipes between targets" assertion is wrong by design now). Verified migration with a hand-built v3 catalog.
 - **Open items:** TUI target picker (dashboard shows all targets mixed — MVP); `glyph --target <host>` global flag to scope reads; see backlog.
 - **Report:** .context/memory/reviews/2026-07-31-multi-target-schema.md
+
+---
+## 2026-07-31 — Session 19
+- **Agent:** Super Z | **Model:** unknown (system prompt does not state the exact GLM version; recorded `unknown` per Pitfall #25) | **Platform:** Z.ai cloud sandbox (Linux, Python 3.12.13, workspace `/home/z/my-project/glyph-work/glyph`) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Research + plan Browse Mode (`--browse` flag for `glyph run live <target>`) — a
+  visible, user-driven browser that captures auth/payment/login/deposit/withdrawal flows the
+  current auto-explore path misses. The user's explicit framing: *"Do research how we will
+  accomplish this, will we use playwright browser and capture or we will use mitmproxy or both
+  or any other technique. This is just the same as 'glyph run live <target>' but with real
+  browser and user actually navigates. This enables us to capture endpoints that we are missing
+  from the normal auto-capture eg auth payments logins deposits, withdraw, sending etc."*
+  **Research + plan only** — implementation deferred to the next session per the user's
+  "Do research" framing.
+- **Commits:** 1 planned — `chore(context): Session 19 task + ADR-13 proposed + browse-mode research` (.context only; no product code changes — this is a research session).
+- **Outcome:** done (research + planning). Cloned the repo with the PAT (stripped from
+  `.git/config` immediately per kickoff Step 0), read AGENTS.md + .context/README.md +
+  kickoff.md + the protocol editions + the memory zone (workflows/active, tasks/current,
+  tasks/backlog, agents/sessions tail, plans/decisions, inefficiencies/log) + the product code
+  for the live-capture path (`glyph/cli/run.py::run_live`, `glyph/cli/_shared.py::with_live`/
+  `live_kwargs`, `glyph/cli/capture.py::run_live`, `glyph/capture/__init__.py::capture_live`,
+  `glyph/capture/driver.py::capture_url` + `_explore_round`, `glyph/capture/mitm.py::GlyphAddon`,
+  `glyph/tui/app.py::DashboardScreen::_capture_worker`). Confirmed the existing AGENTS.md +
+  kickoff.md are correctly initialized (no bootstrap needed) — the user's "initialize AGENTS.md
+  or kickoff.md (core, memory)" was interpreted as "follow the protocol: read core + memory,
+  start a session" since both files already exist and are current. Wrote:
+  1. `reviews/2026-07-31-browse-mode-research.md` — the research note. Evaluates four
+     techniques: (A) Playwright visible, headless=False, user-driven — **RECOMMENDED for v1**;
+     (B) mitmproxy system-wide proxy — rejected for v1 (no DOM access kills Rosetta, cert-install
+     friction, pinning breakage); (C) hybrid Playwright+mitmproxy — deferred as a future
+     enhancement; (D) CDP / Selenium / extensions / Frida / Wireshark — all rejected with
+     reasons. The recommendation is grounded: Playwright already there, decrypted bodies for
+     free (vs mitmproxy TLS interception), DOM stays for Rosetta, multi-tab via
+     `context.on("page")`, cookie/session persistence via `launch_persistent_context`, one
+     command (no cert install). Honest gaps documented (non-browser traffic, beacon/prefetch
+     edge cases, `document.cookie` reads) with mitigations (`page.on("request")`, periodic
+     `context.cookies()` snapshot).
+  2. `plans/decisions.md` ADR-13 (proposed) — the architectural decision for the build session:
+     `--browse` flag, `browse`/`user_data_dir` params on `capture_url`, `headless=False`,
+     `launch_persistent_context` for per-host profile persistence, skip `_explore_round`,
+     register `context.on("page")` (multi-tab) + `page.on("framenavigated")` (refresh DOM on
+     nav) + `page.on("request")` (capture request side, additive), block on
+     `browser.on("disconnected")`, periodic `context.cookies()` snapshot. TUI opens
+     POST-capture (not during) so the user keeps the actual browser visible. Backward
+     compatible — existing `glyph run live` behavior unchanged.
+  3. `tasks/backlog.md` — 6 build-session items: implement ADR-13, tests, `glyph profile clear`
+     CLI, real-world verification on an auth-protected target, dedicated `cookies` table (v2),
+     split-pane TUI (deferred).
+  4. `tasks/current.md` — Session 19 task set, 5 open questions for the user explicitly flagged
+     (TUI in browse mode, profile persistence default, closing signal, record request side,
+     cookie storage v1 vs v2).
+- **Open items:** the 6 backlog items above (build session owns them); the 5 open questions in
+  `tasks/current.md` (the build session must NOT guess — ask the user). ADR-13 stays
+  `proposed` until the build session implements + verifies, then flips to `accepted`.
+- **Report:** .context/memory/reviews/2026-07-31-browse-mode-research.md

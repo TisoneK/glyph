@@ -425,3 +425,96 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
     wrong by design). Two new tests cover multi-target coexistence + the unassigned dedup.
 - **Supersedes:** nothing. Amends the implicit single-target model that ran from Session 1
   through Session 17 (the `meta.target_host` + `Catalog.reset()` pattern).
+
+---
+## ADR-13: Browse Mode — Playwright visible, user-driven, persistent context (2026-07-31)
+- **Status:** proposed (research complete 2026-07-31, Session 19; awaiting build session)
+- **Context:** `glyph run live <url>` today launches Chromium **headless** and auto-drives
+  the page via `_explore_round` (scroll + pseudo-random generic clicks on `a, button,
+  [role=button], [class*='item']` etc.). This captures anything reachable by generic
+  click/scroll on the landing page (public catalogue APIs, lazy-loaded lists, live-odds
+  streams, SPAs whose data loads on initial render) but CANNOT capture:
+  - **Auth/login flows** — no form filling, no credential submission, no OTP.
+  - **Payment / deposit / withdrawal flows** — require amount entry, provider selection,
+    PIN/OTP confirmation, modal/wizard navigation.
+  - **Send/transfer flows** — multi-step forms (recipient → amount → review → confirm).
+  - **Account-state-specific endpoints** — `/api/wallet/balance`, `/api/transactions`,
+    `/api/profile` (return 401 unauthed, full of value once logged in).
+  - **KYC / verification flows** — modal wizards, document upload.
+  - **Hidden / modal flows** — behind "click to deposit" buttons generic clicks won't aim at.
+  The user's directive: *"A browser pops up, the user interacts with it while the live
+  capture is continuing — same as `glyph run live` but with real browser and user actually
+  navigates."* The *capture mechanism* doesn't need to change (Playwright's response/WS
+  hooks fire on every response regardless of who initiated the navigation); the *driving*
+  changes from auto-explore to human-driven.
+- **Decision:**
+  1. **New `--browse` flag** on `glyph run live` and `glyph capture live`. When set:
+     - `capture_url(browse=True, user_data_dir=<per-host profile>)`.
+     - `launch_kwargs["headless"] = False` — browser visible.
+     - Use `browser_type.launch_persistent_context(user_data_dir, headless=False, ...)`
+       when `user_data_dir` is set (login persists across captures); else fall back to
+       `launch(headless=False) + new_context()` for `--incognito`.
+     - Skip `_explore_round` (the user is driving; auto-clicks would fight them). The
+       `--explore N` flag stays as an opt-in if the user wants both (rare).
+     - Register `context.on("page", ...)` so new tabs the user opens (Ctrl+click,
+       `target="_blank"`, "open in new tab") get the same response/WS/snapshot handlers.
+     - Register `page.on("framenavigated", ...)` to refresh the DOM snapshot on nav
+       (link click, form submit, address-bar nav within the page) — keeps
+       `page_observations` current for Rosetta.
+     - Register `page.on("request", ...)` (NEW) to capture the request side. Today only
+       responses are recorded; this catches requests whose responses never arrive
+       (cancelled, preflight-rejected, beacon fire-and-forget). Purely additive.
+     - Block on `browser.on("disconnected", ...)` (or `context.on("close")`) — user
+       closes the browser, `capture_status = "done"`, analysis runs. Ctrl+C in the
+       terminal calls `browser.close()` as a fallback.
+     - Periodic `context.cookies()` snapshot (every ~5s + on disconnect) — `document.cookie`
+       reads are invisible to the response hook. v1: stash as a JSON blob in meta
+       (`capture_cookies`); v2: dedicated `cookies` table (schema bump, deferred).
+  2. **Per-host profile dir.** Default `~/.glyph/profiles/<host>/` (override via
+     `GLYPH_PROFILE_DIR` env or `--profile <dir>` flag; `--incognito` uses a fresh
+     ephemeral context). Login survives across `glyph run live --browse <host>`
+     invocations on the same target. Aligns with ADR-12's per-target model — one
+     Chromium profile per target host.
+  3. **TUI integration.** When `--browse` is set, do NOT take over the screen with the
+     dashboard DURING capture (the user needs the actual browser visible). Print a
+     one-line "Browser open — navigate, log in, do your flows. Close the browser when
+     done." to stderr. AFTER browser-close: run `_gather` (schema → rosetta → sensitive
+     → snihunt), THEN open the dashboard as a post-capture exploration view (or print
+     the summary if `--no-tui`). Split-pane (browser + dashboard side-by-side) is a
+     future enhancement; defer.
+  4. **Cookie/session persistence** via `launch_persistent_context` — log in once, all
+     future runs on the same host start already-authed. The user can clear the profile
+     via `glyph profile clear <host>` (or just `rm -rf ~/.glyph/profiles/<host>/`).
+  5. **Captured flows are tagged `source = "playwright:<type>"`** (same as today). Add a
+     `capture_mode` meta (`"auto"` vs `"browse"`) so the catalog/UI can distinguish
+     auto-explore captures from user-driven captures if the user wants to filter.
+  6. **Backward compatible.** `--browse` is opt-in; existing `glyph run live` behavior
+     (headless + auto-explore + live dashboard takeover) is unchanged.
+- **Consequences:**
+  - The live capture path stays the SAME when `--browse` is NOT set — no regression.
+  - A persistent profile dir means cookies/localStorage/IndexedDB survive across captures.
+    Document the path + add `glyph profile clear <host>` (or document `rm -rf`).
+  - Captures in browse mode can run for many minutes (the user is doing real flows) — the
+    capture worker thread must handle long runs gracefully (the existing 1s/4s TUI tick
+    + WAL catalog hold up; the periodic cookie snapshot adds a small write every 5s).
+  - When `--proxy` is set, Chromium auto-disables QUIC (proxy can't speak QUIC) — non-issue.
+    When NO proxy, QUIC traffic IS captured by Playwright's response hook (browser-layer).
+  - Honest gaps (documented in the research note): non-browser traffic (mobile companion
+    apps, desktop clients) is NOT captured — out of scope; covered by `glyph capture har`
+    or the future pcap→HTTP adapter (ADR-6). Some service-worker/beacon traffic MIGHT slip
+    past `page.on("response")` — mitigated by also hooking `page.on("request")`.
+  - `glyph sensitive` will surface PII (passwords, OTPs, card numbers via Luhn) in the
+    captured auth/payment flows — this is the POINT of the feature. The values are kept
+    (ADR-4 precedent: flag-and-keep; the catalog is a sensitive artifact the user owns).
+    Redaction, if wanted, is an export-time concern (backlog).
+- **Research backing:** `.context/memory/reviews/2026-07-31-browse-mode-research.md`
+  evaluates four techniques — Playwright visible (recommended), mitmproxy (rejected for
+  v1: no DOM, cert-install friction, pinning breakage), hybrid (deferred), other (CDP /
+  Selenium / extensions / Frida / Wireshark — all rejected). The recommendation is
+  Technique A (Playwright visible): minimum disruption (~50-100 LOC), no new deps,
+  decrypted bodies for free, DOM stays, multi-tab support, cookie/session persistence.
+- **Supersedes / amends:** nothing. Builds on ADR-6 (HTTP/application layer — Playwright
+  is the canonical implementation), ADR-9 (TUI as presentation — dashboard opens
+  post-capture in browse mode), ADR-12 (multi-target — browse mode still respects
+  `set_target` + `clear_target`). The build session must NOT change ADR-9's live-dashboard
+  takeover for the non-browse path; browse mode is a sibling path, not a replacement.

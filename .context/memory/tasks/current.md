@@ -11,11 +11,22 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 18 (2026-07-31) shipped the multi-target catalog
-  schema (ADR-12): `targets` table + `target_id` on every data row,
-  `clear_target` replacing the per-run `reset()` wipe, and a `glyph target
-  list|show|rm` CLI. See `agents/sessions.md` Session 18,
-  `reviews/2026-07-31-multi-target-schema.md`, and the backlog follow-ups
-  (TUI target picker; `glyph --target <host>` global flag; guard `rm 0`).
-- **Status:** idle
+- **Session:** 2026-07-31 — Session 19 — Super Z / unknown (cloud sandbox, Python 3.12.13)
+- **Task:** Research + plan Browse Mode (`--browse` flag for `glyph run live <target>`)
+  — a visible, user-driven browser that captures auth/payment/login/deposit/withdrawal
+  flows the auto-explore path misses. Research complete; ADR-13 (proposed) appended;
+  review note written; backlog items added for the build session. **Implementation
+  deferred to the next session** per the user's explicit framing ("Do research how we
+  will accomplish this").
+- **Status:** done (research + planning). Build session = next.
+- **Deliverables:**
+  - `.context/memory/reviews/2026-07-31-browse-mode-research.md` (the research note)
+  - `.context/memory/plans/decisions.md` — ADR-13 (proposed) appended
+  - `.context/memory/tasks/backlog.md` — 6 build-session items appended
+  - `.context/memory/agents/sessions.md` — Session 19 entry appended
+- **Open questions for the user** (carried into the build session, do NOT guess):
+  1. TUI in browse mode: browser-only + dashboard after close / split-pane / no dashboard?
+  2. Profile persistence: persistent by default + `--incognito`, OR incognito by default + `--profile`?
+  3. Closing signal: browser-close only, OR also Ctrl+C as fallback?
+  4. Record the request side too (`page.on("request")`)? (Recommend yes.)
+  5. Cookie snapshot storage: meta blob (v1) vs dedicated `cookies` table (v2)?
