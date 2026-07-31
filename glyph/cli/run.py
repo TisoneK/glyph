@@ -25,7 +25,21 @@ def _sub(text: str) -> str:
 
 def add_parser(sub) -> None:
     sp = with_db(sub.add_parser(
-        "run", help="capture -> schema -> rosetta -> sensitive -> snihunt"))
+        "run", help="capture -> schema -> rosetta -> sensitive -> snihunt",
+        description=(
+            "Run the full analysis pipeline on a capture source.\n"
+            "    capture -> schema -> rosetta -> sensitive -> snihunt\n\n"
+            "Stages run in order; each is opt-out-able with a flag on the "
+            "SUBCOMMAND (not here):\n"
+            "    --no-sensitive      skip the sensitive/risk scan\n"
+            "    --no-snihunt        skip the SNI bug-host hunt\n"
+            "    --snihunt-no-net    SNI hunt local-only (no DoH/CT/reverse-IP)\n\n"
+            "See `glyph run har -h` / `glyph run live -h` for the full flag "
+            "list. (vpndec is separate — `glyph vpndec <file>` — it decodes a "
+            "VPN config FILE you point at, not captured traffic.)"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    ))
     rsub = sp.add_subparsers(dest="run_kind", required=True)
     rhar = with_db(rsub.add_parser("har", help="run the pipeline on a HAR file"))
     rhar.add_argument("file")
