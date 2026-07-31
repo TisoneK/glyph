@@ -48,6 +48,27 @@ def run_har(args: argparse.Namespace) -> int:
 
 def run_live(args: argparse.Namespace) -> int:
     from glyph.capture import capture_live
+    if getattr(args, "browse", False):
+        # Browse mode: the browser is visible + user-driven. No TUI takeover;
+        # the capture blocks until Ctrl+C / browser-close. (ADR-14 point 6.)
+        if not args.url:
+            _progress("⚠ browse-all mode: capturing EVERY tab in your browser.")
+        else:
+            _progress(f"browse mode → {args.url}")
+        _progress("(launching/attaching browser; navigate, log in, do your flows…)")
+        cat = catalog(args)
+        try:
+            res = capture_live(cat, args.url, **live_kwargs(args),
+                               progress=_progress)
+        finally:
+            cat.close()
+        _progress(f"captured {res.get('flows', 0)} flows — done")
+        report_live(args.url or "(all tabs)", res)
+        return 0
+    if not args.url:
+        print("error: a target URL is required (or use --browse for browse mode)",
+              file=sys.stderr)
+        return 1
     _progress(f"launching browser → {args.url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)

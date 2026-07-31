@@ -3,11 +3,28 @@
 Requires the ``live`` extra (``pip install glyph-re[live]`` plus
 ``playwright install chromium``). Imports cleanly without Playwright; the
 dependency is checked only when :func:`capture_url` is called.
+
+Two capture modes (ADR-14):
+
+- **Auto** (default): headless Chromium, ``page.goto(url)``, settle, then
+  ``explore`` target-agnostic interaction rounds (scroll + generic clicks).
+  Returns when the rounds finish. Used by ``glyph run live``/``capture live``
+  without ``--browse``.
+- **Browse** (``browse=True``): a VISIBLE browser the USER drives. Primary
+  path = CDP-attach to the user's real browser (Brave/Edge/Chrome) launched
+  with ``--remote-debugging-port=9222``; fallback = Playwright launches the
+  real-browser binary with a dedicated profile. Capture hooks the target tab
+  (+ popups) and blocks until Ctrl+C (detach) or the browser closes — so
+  auth/payment/login/deposit/withdrawal flows the auto-explore path misses
+  get captured. If ``url`` is omitted, all-traffic mode hooks every tab.
 """
 from __future__ import annotations
 
+import json
+import os
+import threading
 import time
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import unquote, urlparse
 
 from glyph.catalog import Catalog, Flow, PageObservation
@@ -88,43 +105,190 @@ def _explore_round(page, timeout_ms: int) -> None:
         pass  # exploration is best-effort; never fail the capture
 
 
-def capture_url(catalog: Catalog, url: str,
+def _browser_binary_path(browser: str) -> Optional[str]:
+    """Resolve a real-browser binary path for the launch fallback (Brave only).
+
+    Playwright natively supports ``channel="chrome"`` and ``channel="msedge"``
+    but has NO ``channel="brave"`` — so for Brave we must pass ``executable_path``
+    to the binary. Returns the first existing candidate, or ``None`` if not found
+    (caller then raises a clear error). Per ADR-14 point 2.
+    """
+    if browser != "brave":
+        return None  # chrome/edge use channel=, no path needed
+    candidates = {
+        "darwin": [
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ],
+        "linux": [
+            "/usr/bin/brave-browser", "/usr/bin/brave",
+            "/snap/bin/brave",
+        ],
+        "win32": [
+            os.path.join(os.environ.get("ProgramFiles", ""),
+                         "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""),
+                         "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                         "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+        ],
+    }.get(_platform_key(), [])
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def _platform_key() -> str:
+    import platform
+    s = platform.system().lower()
+    if s == "darwin":
+        return "darwin"
+    if s.startswith("win"):
+        return "win32"
+    return "linux"
+
+
+def _make_recorders(catalog: Catalog, by_source, state, url: Optional[str],
+                    snapshot: bool = True):
+    """Build the response/request/websocket handlers + a page-hook installer.
+
+    Shared by the auto and browse modes so the capture semantics are identical.
+    Returns ``(hook_page, record)`` where ``hook_page(page)`` registers every
+    relevant listener on a Playwright ``Page`` (and recursively on its popups),
+    and ``record(flow)`` persists a flow + bumps the by_source counter.
+
+    ``snapshot`` — in auto mode the single page_observations row is replaced on
+    each snapshot; in browse mode we snapshot the target tab on navigation but
+    skip snapshots for popups/all-traffic tabs (their DOM is transient).
+    """
+    def record(flow: Flow) -> None:
+        catalog.add_flow(flow)
+        by_source[flow.source] += 1
+
+    def _snapshot(page) -> None:
+        if not snapshot:
+            return
+        try:
+            html = page.content()
+        except Exception:
+            return
+        labels = harvest_labels(html)
+        # Replace the single page_observations row (the DOM is cumulative).
+        catalog.conn.execute("DELETE FROM page_observations")
+        catalog.add_page(PageObservation(
+            url=(url or page.url or ""), html=html,
+            text=plain_text(html), labels=labels))
+        state["labels"] = len(labels)
+
+    def on_response(response) -> None:
+        req = response.request
+        rtype = req.resource_type or "unknown"
+        try:
+            body = response.text()
+        except Exception:
+            body = None
+        record(Flow(
+            method=req.method, url=response.url, host="", path="",
+            req_headers=dict(req.headers), status=response.status,
+            resp_headers=dict(response.headers), resp_body=body,
+            resp_mime=(response.headers.get("content-type") or "")
+            .split(";")[0] or None,
+            source=f"playwright:{rtype}"))
+
+    def on_request(req) -> None:
+        # Additive (ADR-14 point 1): captures the request side, including
+        # requests whose responses never arrive (cancelled, preflight-rejected,
+        # beacon fire-and-forget). No response body / status here.
+        rtype = req.resource_type or "unknown"
+        try:
+            rbody = req.post_data
+        except Exception:
+            rbody = None
+        record(Flow(
+            method=req.method, url=req.url, host="", path="",
+            req_headers=dict(req.headers), req_body=rbody,
+            status=0, resp_headers={}, resp_body=None,
+            resp_mime=(req.headers.get("content-type") or "").split(";")[0] or None,
+            source=f"playwright:request:{rtype}"))
+
+    def on_websocket(ws) -> None:
+        ws_url = getattr(ws, "url", "")
+
+        def sent(payload, *a, **kw):
+            record(Flow(
+                method="WS_SEND", url=ws_url, host="", path="", query="",
+                req_headers={},
+                req_body=payload if isinstance(payload, str) else None,
+                status=0, resp_headers={}, resp_body=None,
+                resp_mime="websocket", source="playwright:websocket"))
+
+        def recv(payload, *a, **kw):
+            record(Flow(
+                method="WS_RECV", url=ws_url, host="", path="", query="",
+                req_headers={}, req_body=None,
+                resp_body=payload if isinstance(payload, str) else None,
+                status=0, resp_headers={},
+                resp_mime="websocket", source="playwright:websocket"))
+
+        try:
+            ws.on("framesent", sent)
+            ws.on("framereceived", recv)
+        except Exception:
+            pass
+
+    def hook_page(page) -> None:
+        """Register every capture listener on a Page + recurse into its popups."""
+        try:
+            page.on("response", on_response)
+        except Exception:
+            pass
+        try:
+            page.on("request", on_request)
+        except Exception:
+            pass
+        try:
+            page.on("websocket", on_websocket)
+        except Exception:
+            pass
+        try:
+            page.on("popup", hook_page)  # new tabs FROM this tab → hooked too
+        except Exception:
+            pass
+
+    return hook_page, record, _snapshot
+
+
+def capture_url(catalog: Catalog, url: Optional[str] = None,
                 wait_selector: Optional[str] = None,
                 timeout_ms: int = 15000,
                 proxy: Optional[str] = None,
                 settle_ms: int = 3000,
-                explore: int = 0) -> dict:
-    """Load ``url`` headless, recording XHR/fetch flows and the rendered DOM.
+                explore: int = 0,
+                *,
+                browse: bool = False,
+                cdp_url: Optional[str] = None,
+                browser: str = "chrome",
+                user_data_dir: Optional[str] = None,
+                incognito: bool = False,
+                browser_path: Optional[str] = None,
+                progress=None) -> dict:
+    """Capture a target's traffic into the catalog.
 
-    Raises :class:`RuntimeError` with install guidance if Playwright is
-    missing, so the base package never hard-depends on it.
+    Two modes (ADR-14):
 
-    ``proxy`` (optional) routes the headless browser through an upstream
-    proxy — useful for geo-blocked targets (the host's native egress can't
-    reach them) or for routing through a residential IP. Accepts the full
-    ``http://user:pass@host:port`` form. Per ADR-3, Glyph records the
-    resulting reachability as a neutral catalog attribute; it does not
-    own or name the proxy/relay tool itself.
+    - **Auto** (``browse=False``, the default): load ``url`` headless, settle,
+      run ``explore`` target-agnostic interaction rounds, return. ``url`` is
+      required.
+    - **Browse** (``browse=True``): a VISIBLE browser the user drives. PRIMARY
+      = CDP-attach to the user's real browser (Brave/Edge/Chrome) on
+      ``--remote-debugging-port=9222``; FALLBACK = Playwright launches the
+      real-browser binary with a dedicated profile. Hooks the target tab +
+      popups (or every tab if ``url`` is None — all-traffic). Blocks until
+      Ctrl+C (attach: detach, browser stays open) or the browser closes. So
+      auth/payment/login/deposit/withdrawal flows the auto path misses get
+      captured. ``url`` is optional in browse mode.
 
-    ``wait_selector`` (optional) waits for a CSS selector that marks
-    "content settled" — essential for SPAs whose real data loads via
-    late XHR/fetch after the initial HTML. Without it, capture races the
-    app's bootstrap and records only the shell.
-
-    ``settle_ms`` (default 3s) is a final quiet delay after the wait
-    condition, so late-fired XHR responses land in the catalog. SPAs
-    often issue follow-up calls (websocket frames, polling, lazy-loaded
-    markets) that arrive after the first render.
-
-    ``explore`` (default 0) is the number of target-agnostic interaction
-    rounds to run after the initial load settles. Each round: scroll the
-    page in steps, click a few generic clickable elements (links, buttons,
-    list rows with cursor:pointer), and wait briefly for the resulting
-    XHR/fetch to fire. This surfaces lazy-loaded endpoints (live-odds
-    feeds, expand-on-click markets, infinite-scroll content) that a pure
-    load capture misses. The interaction is deliberately generic — no
-    target-specific selectors — so it works on any SPA. Set higher (3-5)
-    for content-rich dashboards.
+    Raises :class:`RuntimeError` with install guidance if Playwright is missing.
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -134,9 +298,20 @@ def capture_url(catalog: Catalog, url: str,
             "  pip install 'glyph-re[live]' && playwright install chromium"
         ) from exc
 
+    if browse:
+        return _capture_browse(
+            catalog, url, sync_playwright,
+            cdp_url=cdp_url, browser=browser, user_data_dir=user_data_dir,
+            incognito=incognito, browser_path=browser_path,
+            timeout_ms=timeout_ms, progress=progress)
+
+    if not url:
+        raise RuntimeError("a target URL is required for auto (non-browse) capture")
+
     from collections import Counter
     catalog.set_target(urlparse(url).hostname)  # anchors first/third-party
     catalog.set_meta("capture_status", "running")
+    catalog.set_meta("capture_mode", "auto")
     catalog.set_meta("capture_started", str(time.time()))
     by_source: Counter = Counter()
     state = {"labels": 0}
@@ -144,80 +319,15 @@ def capture_url(catalog: Catalog, url: str,
     if proxy:
         launch_kwargs["proxy"] = _parse_proxy(proxy)
 
-    def _record(flow: Flow) -> None:
-        # Write each flow the moment it's seen so the live dashboard shows it
-        # in real time (Phase 2), and so a crash never loses captured data.
-        catalog.add_flow(flow)
-        by_source[flow.source] += 1
-
-    def _snapshot(page) -> None:
-        # The browser DOM is cumulative, so replace the single snapshot each
-        # time — DOM label counts grow live as the page renders/interacts.
-        try:
-            html = page.content()
-        except Exception:
-            return
-        labels = harvest_labels(html)
-        catalog.conn.execute("DELETE FROM page_observations")
-        catalog.add_page(PageObservation(
-            url=url, html=html, text=plain_text(html), labels=labels))
-        state["labels"] = len(labels)
+    hook_page, _record, _snapshot = _make_recorders(
+        catalog, by_source, state, url, snapshot=True)
 
     nav_error: Optional[str] = None
     try:
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(**launch_kwargs)
-            page = browser.new_page()
-
-            def on_response(response) -> None:
-                # Capture EVERYTHING that moves (any resource type) — sites
-                # hide API calls behind non-xhr types. The resource type is
-                # preserved in `source` as "playwright:<type>".
-                req = response.request
-                rtype = req.resource_type or "unknown"
-                try:
-                    body = response.text()
-                except Exception:
-                    body = None  # binary body: metadata only
-                _record(Flow(
-                    method=req.method, url=response.url, host="", path="",
-                    req_headers=dict(req.headers), status=response.status,
-                    resp_headers=dict(response.headers), resp_body=body,
-                    resp_mime=(response.headers.get("content-type") or "")
-                    .split(";")[0] or None,
-                    source=f"playwright:{rtype}"))
-
-            page.on("response", on_response)
-
-            def on_websocket(ws) -> None:
-                ws_url = getattr(ws, "url", "")
-
-                def sent(payload, *a, **kw):
-                    _record(Flow(
-                        method="WS_SEND", url=ws_url, host="", path="", query="",
-                        req_headers={},
-                        req_body=payload if isinstance(payload, str) else None,
-                        status=0, resp_headers={}, resp_body=None,
-                        resp_mime="websocket", source="playwright:websocket"))
-
-                def recv(payload, *a, **kw):
-                    _record(Flow(
-                        method="WS_RECV", url=ws_url, host="", path="", query="",
-                        req_headers={}, req_body=None,
-                        resp_body=payload if isinstance(payload, str) else None,
-                        status=0, resp_headers={},
-                        resp_mime="websocket", source="playwright:websocket"))
-
-                try:
-                    ws.on("framesent", sent)
-                    ws.on("framereceived", recv)
-                except Exception:
-                    pass  # older Playwright APIs differ; best-effort
-
-            try:
-                page.on("websocket", on_websocket)
-            except Exception:
-                pass  # websocket event not available in this Playwright version
+            browser_obj = pw.chromium.launch(**launch_kwargs)
+            page = browser_obj.new_page()
+            hook_page(page)
 
             # domcontentloaded milestone, then settle + explore; best-effort so
             # a nav failure never discards what was already captured.
@@ -245,7 +355,7 @@ def capture_url(catalog: Catalog, url: str,
                 _snapshot(page)
             except Exception:
                 pass
-            browser.close()
+            browser_obj.close()
     finally:
         catalog.set_meta("capture_status", "done")
 
@@ -255,4 +365,196 @@ def capture_url(catalog: Catalog, url: str,
         "labels": state["labels"],
         "by_source": dict(by_source),
         "error": nav_error,
+        "mode": "auto",
+    }
+
+
+def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
+                    cdp_url: Optional[str], browser: str,
+                    user_data_dir: Optional[str], incognito: bool,
+                    browser_path: Optional[str], timeout_ms: int,
+                    progress=None) -> dict:
+    """Browse mode — CDP-attach primary, launch fallback (ADR-14)."""
+    from collections import Counter
+    import sys
+
+    def _say(msg: str) -> None:
+        if progress:
+            progress(msg)
+        else:
+            print(f"  {msg}", file=sys.stderr, flush=True)
+
+    # Target host (if given) — ADR-12: activate + clear this target's old rows.
+    host = urlparse(url).hostname if url else None
+    if host:
+        catalog.set_target(host)
+        catalog.clear_target()
+    catalog.set_meta("capture_status", "running")
+    catalog.set_meta("capture_started", str(time.time()))
+    by_source: Counter = Counter()
+    state = {"labels": 0}
+
+    # In browse mode we snapshot only the target tab (skip popups/all-traffic
+    # tabs — their DOM is transient). When no url (all-traffic), skip snapshots
+    # entirely (no single canonical page to track).
+    hook_page, _record, _snapshot = _make_recorders(
+        catalog, by_source, state, url, snapshot=bool(url))
+
+    cdp_target = cdp_url or os.environ.get("GLYPH_CDP_URL") or "http://localhost:9222"
+    mode: str
+    nav_error: Optional[str] = None
+    done = threading.Event()
+    cookie_thread: Optional[threading.Thread] = None
+
+    def _cookie_loop(ctx_holder, interval: float = 5.0) -> None:
+        """Periodic context.cookies() snapshot — document.cookie reads are
+        invisible to the response hook (ADR-14 point 1). v1: JSON blob in meta."""
+        while not done.is_set():
+            ctx = ctx_holder[0]
+            if ctx is not None:
+                try:
+                    cookies = ctx.cookies()
+                    catalog.set_meta("capture_cookies", json.dumps(cookies))
+                except Exception:
+                    pass
+            done.wait(interval)
+
+    try:
+        with sync_playwright() as pw:
+            browser_obj = None
+            context = None
+            # --- PRIMARY: CDP-attach to the user's real browser ---------------
+            try:
+                browser_obj = pw.chromium.connect_over_cdp(cdp_target)
+                mode = "browse-attach"
+                # The user's existing context holds their session (cookies,
+                # saved logins, password manager). Reuse it; don't make a new
+                # isolated context or none of their logins carry over.
+                contexts = browser_obj.contexts
+                context = contexts[0] if contexts else browser_obj.new_context()
+            except Exception as exc:
+                # --- FALLBACK: launch the real-browser binary -----------------
+                _say(f"no browser on {cdp_target} ({exc.__class__.__name__}) "
+                     f"— launching {browser} with a dedicated profile…")
+                launch_kwargs: dict = {"headless": False}
+                if browser in ("chrome", "msedge"):
+                    launch_kwargs["channel"] = browser
+                elif browser == "brave":
+                    path = browser_path or _browser_binary_path("brave")
+                    if not path:
+                        raise RuntimeError(
+                            "Could not find the Brave binary. Pass --browser-path "
+                            "/path/to/brave, or use --browser chrome|msedge.")
+                    launch_kwargs["executable_path"] = path
+                profile = user_data_dir or os.path.expanduser(
+                    f"~/.glyph/profiles/{host or 'default'}")
+                os.makedirs(profile, exist_ok=True)
+                if incognito:
+                    browser_obj = pw.chromium.launch(**launch_kwargs)
+                    context = browser_obj.new_context()
+                else:
+                    context = pw.chromium.launch_persistent_context(
+                        user_data_dir=profile, **launch_kwargs)
+                    browser_obj = context.browser  # may be None for persistent
+                mode = "browse-launch"
+
+            catalog.set_meta("capture_mode", mode)
+            ctx_holder = [context]
+
+            # --- hook pages per the capture-scoping rule (ADR-14 point 7) ----
+            if url:
+                # Default: target tab + popups only. Existing/other tabs NOT
+                # hooked → the user's email/social/other-banking tabs invisible.
+                target_page = context.new_page()
+                hook_page(target_page)
+                try:
+                    target_page.goto(url, timeout=timeout_ms,
+                                     wait_until="domcontentloaded")
+                except Exception as exc:
+                    nav_error = (str(exc).splitlines()[0] if str(exc)
+                                 else type(exc).__name__)
+                # Snapshot the target tab now + on each navigation (Rosetta DOM).
+                try:
+                    _snapshot(target_page)
+                    target_page.on("framenavigated",
+                                   lambda f: _snapshot(f.frame().page)
+                                   if getattr(f, "is_main_frame", lambda: False)()
+                                   else None)
+                except Exception:
+                    pass
+                _say(f"[{mode}] attached — navigate, log in, do your flows.")
+                _say("Ctrl+C here when done"
+                     + (" (browser stays open)." if mode == "browse-attach"
+                        else " or close the browser."))
+            else:
+                # All-traffic fallback (no target url): hook EVERY tab.
+                _say(f"[{mode}] ⚠ browse-all mode: capturing EVERY tab in your "
+                     f"browser (email, social, other-banking — everything). "
+                     f"Ctrl+C to stop.")
+                for p in context.pages:
+                    hook_page(p)
+                try:
+                    context.on("page", hook_page)
+                except Exception:
+                    pass
+
+            # cookie snapshot thread (daemon; exits when `done` is set)
+            cookie_thread = threading.Thread(
+                target=_cookie_loop, args=(ctx_holder,), daemon=True)
+            cookie_thread.start()
+
+            # --- block until Ctrl+C or the browser disconnects ---------------
+            # Poll with a short timeout (not a bare done.wait()) so Ctrl+C /
+            # KeyboardInterrupt is delivered promptly — a C-level indefinite
+            # wait can swallow the signal on some Python builds.
+            try:
+                if browser_obj is not None:
+                    try:
+                        browser_obj.on("disconnected", lambda: done.set())
+                    except Exception:
+                        pass
+                # For launch_persistent_context (browser_obj may be None), watch
+                # the context close instead.
+                if browser_obj is None:
+                    try:
+                        context.on("close", lambda: done.set())
+                    except Exception:
+                        pass
+                while not done.wait(0.2):
+                    pass
+            except KeyboardInterrupt:
+                if mode == "browse-attach":
+                    _say("Ctrl+C — detaching (browser stays open)…")
+                    # Do NOT call browser_obj.close() — that closes the user's
+                    # browser. Just break; sync_playwright exit drops the CDP
+                    # WebSocket connection, leaving the browser running.
+                else:
+                    _say("Ctrl+C — closing browser…")
+                    try:
+                        if browser_obj is not None:
+                            browser_obj.close()
+                        else:
+                            context.close()
+                    except Exception:
+                        pass
+                done.set()
+            finally:
+                # final cookie snapshot
+                try:
+                    if ctx_holder[0] is not None:
+                        catalog.set_meta("capture_cookies",
+                                         json.dumps(ctx_holder[0].cookies()))
+                except Exception:
+                    pass
+    finally:
+        done.set()
+        catalog.set_meta("capture_status", "done")
+
+    return {
+        "flows": sum(by_source.values()),
+        "pages": 1,
+        "labels": state["labels"],
+        "by_source": dict(by_source),
+        "error": nav_error,
+        "mode": mode,
     }

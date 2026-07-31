@@ -15,6 +15,7 @@ from typing import Optional, Sequence
 from glyph import __version__
 from glyph.cli import (
     auth,
+    browse,
     capture,
     catalog,
     codegen,
@@ -40,7 +41,7 @@ from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
 
 # Registration order = help-listing order.
 _COMMANDS = [
-    init, capture, run, dashboard,
+    init, capture, run, browse, dashboard,
     flows, dom, schema, rosetta, dict_cmd, sensitive, snihunt, vpndec, review,
     target, fingerprint, auth, gating, codegen, drift, mobile, catalog,
 ]

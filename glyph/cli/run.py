@@ -238,6 +238,41 @@ def run_har(args: argparse.Namespace) -> int:
 
 
 def run_live(args: argparse.Namespace) -> int:
+    # Browse mode: the browser is visible + user-driven. No TUI takeover during
+    # capture (the user needs the actual browser). Capture blocks until Ctrl+C
+    # / browser-close, THEN run the pipeline + open the dashboard as a post-
+    # capture view (or print summary if --no-tui). (ADR-14 point 6.)
+    if getattr(args, "browse", False):
+        from glyph.capture import capture_live
+        from urllib.parse import urlparse
+        if not args.url:
+            _progress("⚠ browse-all mode: capturing EVERY tab in your browser.")
+        else:
+            _progress(f"browse mode → {args.url}")
+        _progress("(launching/attaching browser; navigate, log in, do your flows…)")
+        cat = catalog(args)
+        try:
+            if args.url:
+                host = urlparse(args.url).hostname
+                if host:
+                    cat.set_target(host)
+                    cat.clear_target()
+            cap = capture_live(cat, args.url, **live_kwargs(args),
+                               progress=_progress)
+            _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
+            r = _gather(cat, args, cap)
+        finally:
+            cat.close()
+        _render(args, args.url or "(all tabs)", r)
+        # Optional post-capture dashboard (read-only; capture is already done).
+        if not getattr(args, "no_tui", False):
+            try:
+                from glyph.tui import HAS_TEXTUAL, run_dashboard
+                if HAS_TEXTUAL:
+                    run_dashboard(args.db, live=None)
+            except Exception:
+                pass  # TUI not available / user can read the summary above
+        return 0
     # Interactive: the live dashboard runs the capture itself and streams it
     # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
     if _open_live_dashboard(args):
@@ -246,6 +281,10 @@ def run_live(args: argparse.Namespace) -> int:
     # synchronously, then print the designed summary.
     from glyph.capture import capture_live
     from urllib.parse import urlparse
+    if not args.url:
+        print("error: a target URL is required (or use --browse for browse mode)",
+              file=__import__("sys").stderr)
+        return 1
     _progress(f"launching browser → {args.url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)

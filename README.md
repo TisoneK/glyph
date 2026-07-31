@@ -102,6 +102,67 @@ GLYPH_PROXY=http://host:port glyph capture live https://example.com  # proxy via
 | `--proxy URL` / `GLYPH_PROXY` | route the browser through an upstream proxy |
 | `--timeout-ms N` | per-step timeout (default 30000) |
 
+### Browse mode — capture auth/payment/login flows (ADR-14)
+
+Auto-capture drives the page with generic clicks and scroll, so it can't reach
+anything behind a login wall, a payment form, a deposit/withdrawal flow, or a
+multi-step wizard. **Browse mode** opens a VISIBLE browser that **you** drive —
+log in, submit the deposit form, confirm the OTP — while Glyph captures every
+request/response in the background. Same pipeline (schema → rosetta → sensitive
+→ snihunt) runs after you stop.
+
+Glyph attaches to **your real browser** (Brave/Edge/Chrome — all Chromium) so
+your saved logins, password manager, and extensions carry over. No cert
+install, no proxy setup.
+
+```bash
+# 1. Launch your browser with the debug port (one-time per session):
+glyph browse --launch --browser brave --url https://target.example.com
+#   (or launch it yourself: brave-browser --remote-debugging-port=9222 &)
+
+# 2. Attach + capture. Ctrl+C detaches (your browser + tabs stay open):
+glyph run live --browse https://target.example.com --browser brave
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--browse` | browse mode (visible, user-driven browser) |
+| `--browser chrome\|msedge\|brave` | fallback browser binary to launch if no CDP endpoint (default chrome; Edge uses `channel="msedge"`, Brave uses `executable_path`) |
+| `--cdp-port N` / `--cdp-host H` | CDP-attach endpoint (default localhost:9222; or set `GLYPH_CDP_URL`) |
+| `--browser-path PATH` | explicit browser binary (Brave needs this if not auto-detected) |
+| `--incognito` | launch-fallback only: fresh ephemeral context (no persistent profile) |
+
+**Capture scoping (tab lineage):**
+
+- `glyph run live --browse <url>` — Glyph opens a fresh tab for the target and
+  hooks **that tab + popups only** (new tabs opened FROM it — payment providers,
+  SSO, `target="_blank"`). Your other tabs (email, social, other-banking) are
+  invisible to Glyph by construction.
+- `glyph run live --browse` (no url) — **all-traffic mode**: hooks EVERY tab in
+  the attached browser. The CLI prints a clear `⚠ browse-all` warning so it's
+  never accidental. Flows are tagged by host; filter later with
+  `glyph sensitive --target <host>` or `glyph target list`.
+
+**Stop signal:**
+
+- CDP-attach mode: **Ctrl+C detaches** — the CDP connection drops, your browser
+  and all its tabs stay open (closing your whole browser would be disruptive).
+- Launch-fallback mode: close the browser, or Ctrl+C (which closes it).
+
+Notes:
+
+- The browser must be **Chromium-based** (Chrome/Edge/Brave). Firefox/Safari
+  have no CDP — use `glyph run har` (export a HAR from any browser) until a
+  future `glyph capture proxy` (mitmproxy) lands.
+- A persistent profile lives at `~/.glyph/profiles/<host>/` (launch-fallback
+  only; CDP-attach uses your real profile). Log in once, all future runs on
+  that host start already-authed.
+- Brave's built-in Shields may block some requests; disable Shields for the
+  target site if a capture looks incomplete.
+- `glyph sensitive` will flag credentials/tokens/OTPs in the captured
+  auth/payment flows — that's the point. Values are kept (the catalog is a
+  sensitive artifact you own).
+
 ## How Rosetta works
 
 Most APIs return codes whose meaning lives only in the rendered UI. Glyph recovers that
@@ -139,7 +200,9 @@ them.
 | Command | Purpose |
 |---------|---------|
 | `glyph run live <url>` | drive a live page, then the full pipeline |
+| `glyph run live --browse <url>` | browse mode: you drive your real browser (Brave/Edge/Chrome), pipeline runs after |
 | `glyph run har <file>` | run the full pipeline on a HAR |
+| `glyph browse --launch` | spawn your browser with the CDP debug port for `--browse` |
 | `glyph capture live <url>` | drive a live page and capture everything |
 | `glyph capture har <file>` | ingest traffic only |
 | `glyph schema` | infer schemas and flag enum candidates |

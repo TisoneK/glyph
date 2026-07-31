@@ -20,7 +20,8 @@ def capture_live(*args, **kwargs):
     time (the driver only needs it when actually called).
     """
     from glyph.capture.driver import capture_url
-    return capture_url(*args, **kwargs)
+    progress = kwargs.pop("progress", None)
+    return capture_url(*args, progress=progress, **kwargs)
 
 
 __all__ = ["ingest_har", "harvest_labels", "plain_text", "capture_live"]
