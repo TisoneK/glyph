@@ -234,3 +234,11 @@ not only its structural half.
 - **Outcome:** done. Researched via WebSearch/WebFetch (mitmproxy has no native pcap I/O; pcap→HTTP needs reassembly+TLS-keylog+parsing and pyshark can't cleanly expose decrypted app-data; packet-level only matters for non-HTTP protocols. XAPK/APKS/APKM = zip-of-split-APKs + OBB; endpoint strings live across base dex, split `.so`, and OBB). **ADR-6:** Glyph is HTTP/application-layer; raw packet capture is out of core (optional pcap→Flow adapter if ever needed); non-HTTP binary protocol RE out of scope. **ADR-7:** mobile stage handles the whole package family by recursively unwrapping bundles and mining every inner APK + OBB (static only; no bundletool/adb; AAB + IPA-decryption out of scope). Both have backlog implementation items. Sources in the research note.
 - **Open items:** implement ADR-7 (recursive bundle mining) + optional ADR-6 pcap adapter — both in `tasks/backlog.md`; Session 10 sensitive follow-ups still open.
 - **Report:** .context/memory/reviews/2026-07-31-capture-mobile-scope-research.md
+
+### Update (2026-07-31, Session 13) — run summary redesign + Windows ANSI
+User (on Windows) reported `glyph run live` output still looked bad — a flat wall of lines.
+Redesigned it into one aligned, color-coded block (bold header, cyan labels, bold numbers, dim
+resource-type sub-line, severity-colored counts, 'view' footer). Enabled ANSI/VT on Windows
+(SetConsoleMode +0x0004) so color renders in PowerShell/conhost — the likely reason Session 11's
+output looked plain. Color still auto-off on non-TTY/NO_COLOR/--json. 97 tests. Lesson: verify UX
+polish on the user's actual platform (Windows console != a Unix TTY for ANSI).
