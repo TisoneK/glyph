@@ -97,3 +97,35 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   list (`sensitive/party.py::_TRACKING_VENDORS`) is the noise gate and is extensible. Related:
   Rosetta's reference-join is scoped to the same registrable domain so integer ids don't
   collide across unrelated hosts (`registrable_domain` in `catalog/normalize.py`).
+
+---
+## ADR-5: Split cli.py into a cli/ package; table rendering + masking for sensitive output (2026-07-31)
+- **Status:** proposed
+- **Context:** `glyph/cli.py` has grown to ~517 lines with 12+ subcommands. Two UX gaps
+  surfaced in Session 11:
+  1. **Inconsistent empty-state messaging:** `glyph run live` reports `rosetta: 0 decoded`
+     (meaning rosetta ran but found nothing), yet `glyph dict` says `(dictionary empty — run
+     'glyph rosetta' first)`, implying rosetta didn't run. The user has no way to tell
+     whether rosetta needs to be re-run or legitimately found 0 candidates.
+  2. **Sensitive findings are invisible:** `glyph sensitive` outputs only a count line
+     (`sensitive: 10 finding(s) (2 medium, 8 low)`). The actual data is hidden behind a
+     separate command with no at-a-glance visibility.
+- **Decision:**
+  1. **Split `glyph/cli.py` into `glyph/cli/` package.** One file per subcommand
+     (`run.py`, `dict.py`, `rosetta.py`, `sensitive.py`, `codegen.py`, etc.), each exposing
+     `add_parser(subparsers)` and `run(args)`. Shared helpers live in `_format.py` (table
+     rendering, severity coloring, value masking) and `_output.py` (`--json` vs human
+     output mode). Business logic stays in the stage modules; `cli/` is presentation only.
+  2. **Fix empty-state consistency.** `glyph dict` must distinguish "rosetta ran and found
+     nothing" from "rosetta hasn't run." If the catalog has a rosetta run logged, say so
+     (timestamp, 0 results); otherwise suggest running it. Add a one-line hint about why
+     0 fields were found (e.g., "no structured request/response bodies in captured flows").
+  3. **Table output for `glyph sensitive`.** Masked values by default (show enough to
+     identify: `sk_live_***3f2a`, not `[REDACTED]`), precise location (flow #, header/body/
+     query/cookie), severity color-coding, and filter flags (`--severity`, `--type`, `flow N`).
+     Add `--json` for scripting.
+- **Consequences:** The CLI package grows from 1 file to ~8, but each is small and focused.
+  The split makes it easier to add new commands (mobile, drift, fingerprint) without
+  bloating a single file. Shared formatting in `_format.py` ensures consistent table look
+  across `sensitive`, `dict`, and `schema` output. No business logic moves — the stage
+  modules (`glyph.sensitive`, `glyph.rosetta`, etc.) remain the single source of truth.
