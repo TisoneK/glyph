@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from glyph.catalog import FINDING_SENSITIVE_DATA, Catalog, Finding, severity_rank
+from glyph.catalog import FINDING_SENSITIVE_DATA, FINDING_SNI_BUG_HOST, Catalog, Finding, severity_rank
 from glyph.sensitive import endpoints as endpoints_mod
 from glyph.sensitive import party as party_mod
 from glyph.sensitive import risk as risk_mod
@@ -107,6 +107,10 @@ def is_noise(finding) -> bool:
     tracking/ad vendor — NOT merely because its host is third-party.
     Anything carrying real data/behavior is never noise."""
     if finding.kind == FINDING_SENSITIVE_DATA:
+        return False
+    # SNI bug-host candidates (ADR-10) are the point of their stage — never
+    # noise, even if a candidate host happens to be a tracking vendor.
+    if finding.kind == FINDING_SNI_BUG_HOST:
         return False
     if finding.category in ("unauthenticated_sensitive_data",
                             "sensitive_data_in_url", "verbose_error"):

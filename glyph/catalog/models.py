@@ -23,6 +23,10 @@ REACH_UNREACHABLE = "unreachable"
 FINDING_SENSITIVE_DATA = "sensitive_data"
 FINDING_SENSITIVE_ENDPOINT = "sensitive_endpoint"
 FINDING_RISK = "risk"
+# SNI bug-host candidates (ADR-10): hostnames that look bug-host-shaped for
+# free-internet tunneling. The ONLY active-recon stage; every other stage is
+# passive over the captured catalog.
+FINDING_SNI_BUG_HOST = "sni_bug_host"
 
 SEV_LOW = "low"
 SEV_MEDIUM = "medium"

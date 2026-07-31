@@ -18,7 +18,7 @@ def _har(tmp_path, make_entry):
 def test_run_pipeline(tmp_path, make_entry, capsys):
     db = str(tmp_path / "c.db")
     har = _har(tmp_path, make_entry)
-    assert main(["run", "har", har, "--db", db]) == 0
+    assert main(["run", "har", har, "--db", db, "--no-snihunt"]) == 0
     out = capsys.readouterr().out
     assert "rosetta" in out
     assert "findings" in out  # the sensitive row runs by default
@@ -27,7 +27,8 @@ def test_run_pipeline(tmp_path, make_entry, capsys):
 def test_run_no_sensitive_skips_scan(tmp_path, make_entry, capsys):
     db = str(tmp_path / "c.db")
     har = _har(tmp_path, make_entry)
-    assert main(["run", "har", har, "--db", db, "--no-sensitive"]) == 0
+    assert main(["run", "har", har, "--db", db, "--no-sensitive",
+                 "--no-snihunt"]) == 0
     out = capsys.readouterr().out
     assert "rosetta" in out
     assert "findings" not in out  # the sensitive row is absent
@@ -36,7 +37,7 @@ def test_run_no_sensitive_skips_scan(tmp_path, make_entry, capsys):
 def test_dict_after_run(tmp_path, make_entry, capsys):
     db = str(tmp_path / "c.db")
     har = _har(tmp_path, make_entry)
-    main(["run", "har", har, "--db", db])
+    main(["run", "har", har, "--db", db, "--no-snihunt"])
     capsys.readouterr()
     assert main(["dict", "--db", db]) == 0
     assert "Shipped" in capsys.readouterr().out
@@ -45,7 +46,7 @@ def test_dict_after_run(tmp_path, make_entry, capsys):
 def test_codegen_json_to_file(tmp_path, make_entry, capsys):
     db = str(tmp_path / "c.db")
     out = str(tmp_path / "openapi.json")
-    main(["run", "har", _har(tmp_path, make_entry), "--db", db])
+    main(["run", "har", _har(tmp_path, make_entry), "--db", db, "--no-snihunt"])
     capsys.readouterr()
     assert main(["codegen", "--db", db, "--out", out]) == 0
     spec = json.loads(open(out).read())
@@ -63,8 +64,8 @@ def test_run_resets_catalog_between_targets(tmp_path, make_entry):
     second = tmp_path / "b.har"
     second.write_text(json.dumps({"log": {"entries": [
         make_entry("GET", "https://new.example/api/y")]}}))
-    main(["run", "har", str(first), "--db", db])
-    main(["run", "har", str(second), "--db", db])
+    main(["run", "har", str(first), "--db", db, "--no-snihunt"])
+    main(["run", "har", str(second), "--db", db, "--no-snihunt"])
     cat = Catalog(db)
     hosts = {e.host for e in cat.endpoints()}
     cat.close()

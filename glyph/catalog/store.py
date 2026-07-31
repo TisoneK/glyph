@@ -466,9 +466,19 @@ class Catalog:
         out.sort(key=lambda f: (severity_rank(f.severity), f.kind, f.category))
         return out
 
-    def clear_findings(self) -> None:
-        """Drop all findings so a re-scan is idempotent."""
-        self.conn.execute("DELETE FROM findings")
+    def clear_findings(self, kind: Optional[str] = None) -> None:
+        """Drop findings so a re-scan is idempotent.
+
+        With ``kind``, only that kind is cleared (e.g. re-running the SNI
+        hunt wipes ``sni_bug_host`` rows but leaves ``sensitive`` findings
+        intact). Without ``kind``, all findings are cleared (the original
+        behavior — used by the sensitive scan, which is the first stage to
+        write findings and owns the full reset).
+        """
+        if kind is None:
+            self.conn.execute("DELETE FROM findings")
+        else:
+            self.conn.execute("DELETE FROM findings WHERE kind=?", (kind,))
         self.conn.commit()
 
     def reset(self) -> None:

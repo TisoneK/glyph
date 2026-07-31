@@ -46,6 +46,7 @@ _VIEWS = [
     ("schema", "Schema", D.schema_rows),
     ("sensitive", "Sensitive", D.sensitive_rows),
     ("rosetta", "Rosetta", D.rosetta_rows),
+    ("snihunt", "SNI Hunt", D.snihunt_rows),
 ]
 
 
@@ -61,12 +62,21 @@ def _summary_markup(s: dict) -> str:
     dtags = s.get("dom_by_tag", {})
     doms = " · ".join(f"{dtags[k]} {k}" for k in ("button", "input", "a", "span")
                       if dtags.get(k)) or f"{s.get('dom_labels', 0)} labels"
+    sni = s.get("sni_candidates", 0)
+    sni_sev = s.get("sni_by_severity", {}) or {}
+    sni_color = "grey58"
+    for k, c in (("high", "red"), ("medium", "yellow"), ("low", "grey58")):
+        if sni_sev.get(k):
+            sni_color = c
+            break
+    sni_str = f"[{sni_color}]{sni} sni[/]" if sni else "[grey58]0 sni[/]"
     return (
         f"  [b cyan]FLOWS[/] [b]{s.get('flows', 0)}[/] [grey58]{types}[/]"
         f"    [b cyan]SCHEMA[/] [b]{s.get('fields', 0)}[/] fields · {s.get('enums', 0)} enums"
         f"    [b cyan]FINDINGS[/] [b]{s.get('findings', 0)}[/] {sevs}{noise}"
         f"    [b cyan]DOM[/] [b]{s.get('dom_labels', 0)}[/] [grey58]{doms}[/]"
         f"    [b cyan]ROSETTA[/] [b]{s.get('decoded', 0)}[/]"
+        f"    [b cyan]SNI[/] {sni_str}"
     )
 
 
@@ -171,6 +181,7 @@ if HAS_TEXTUAL:
             Binding("3", "show('schema')", "Schema"),
             Binding("4", "show('sensitive')", "Sensitive"),
             Binding("5", "show('rosetta')", "Rosetta"),
+            Binding("6", "show('snihunt')", "SNI Hunt"),
             Binding("r", "reload", "Reload"),
             Binding("escape", "back", "Back"),
             Binding("q", "app.quit", "Quit"),
@@ -273,6 +284,18 @@ if HAS_TEXTUAL:
 
         def _finalize(self) -> None:
             self._analyze_once()
+            # SNI hunt runs ONCE at finalize (not on every analyze tick) —
+            # it does bounded network recon (DNS, CT logs, reverse-IP) that
+            # would be too slow / too chatty to repeat every 4s. ADR-10.
+            try:
+                from glyph.snihunt import run_hunt
+                cat = Catalog(self.db_path)
+                try:
+                    run_hunt(cat)
+                finally:
+                    cat.close()
+            except Exception:
+                pass  # network/lock hiccup — the snihunt CLI can re-run it
             # stop the live timers now that capture is done (no more polling).
             for t in self._live_timers:
                 try:

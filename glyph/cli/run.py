@@ -25,18 +25,22 @@ def _sub(text: str) -> str:
 
 def add_parser(sub) -> None:
     sp = with_db(sub.add_parser(
-        "run", help="capture -> schema -> rosetta -> sensitive"))
+        "run", help="capture -> schema -> rosetta -> sensitive -> snihunt"))
     rsub = sp.add_subparsers(dest="run_kind", required=True)
     rhar = with_db(rsub.add_parser("har", help="run the pipeline on a HAR file"))
     rhar.add_argument("file")
     rhar.add_argument("--no-html", action="store_true")
     rhar.add_argument("--no-sensitive", action="store_true",
                       help="skip the sensitive/risk scan")
+    rhar.add_argument("--no-snihunt", action="store_true",
+                      help="skip the SNI bug-host hunt")
     rhar.set_defaults(func=run_har)
     rlive = with_live(with_db(rsub.add_parser(
         "live", help="live-capture a page, then open the dashboard")))
     rlive.add_argument("--no-sensitive", action="store_true",
                        help="skip the sensitive/risk scan")
+    rlive.add_argument("--no-snihunt", action="store_true",
+                       help="skip the SNI bug-host hunt")
     rlive.add_argument("--no-tui", action="store_true",
                        help="print the summary instead of opening the dashboard")
     rlive.set_defaults(func=run_live)
@@ -54,10 +58,16 @@ def _gather(cat, args, cap: dict) -> dict:
     from glyph.schema import infer_all
     from glyph.rosetta import build_dictionary
     d = {"cap": cap, "sch": infer_all(cat), "ros": build_dictionary(cat),
-         "sens": None}
+         "sens": None, "sni": None}
     if not getattr(args, "no_sensitive", False):
         from glyph.sensitive import run_scan
         d["sens"] = run_scan(cat)
+    # SNI hunt runs AFTER sensitive: it reads the captured host surface and
+    # does bounded active recon (reverse-IP, CT logs, CDN detection). Opt
+    # out with --no-snihunt. See ADR-10.
+    if not getattr(args, "no_snihunt", False):
+        from glyph.snihunt import run_hunt
+        d["sni"] = run_hunt(cat)
     return d
 
 
@@ -99,7 +109,8 @@ def _print_rich(args, header: str, r: dict) -> None:
     from rich.panel import Panel
     from rich.table import Table
     con = C.con()
-    cap, sch, ros, sens = r["cap"], r["sch"], r["ros"], r["sens"]
+    cap, sch, ros, sens, sni = (r["cap"], r["sch"], r["ros"],
+                                 r["sens"], r.get("sni"))
 
     g = Table.grid(padding=(0, 3))
     g.add_column(style="bold cyan", justify="left")
@@ -127,6 +138,13 @@ def _print_rich(args, header: str, r: dict) -> None:
             val += f"   [grey58](+{noise} tracking noise · --all)[/]"
         g.add_row("sensitive", val)
         steps.insert(1, "glyph sensitive")
+    if sni is not None:
+        val = (f"[bold]{sni['persisted']}[/] SNI candidates"
+               f" [grey58]({sni['discovered']} discovered)[/]")
+        if sni.get("by_severity"):
+            val += f" · {C.sev_counts(sni['by_severity'])}"
+        g.add_row("snihunt", val)
+        steps.insert(1 if sens is not None else 1, "glyph snihunt")
 
     con.print(Panel(g, title=f"[bold]{header}[/]", title_align="left",
                     border_style="cyan", box=box.ROUNDED, padding=(1, 2)))
@@ -135,7 +153,8 @@ def _print_rich(args, header: str, r: dict) -> None:
 
 
 def _print_plain(args, header: str, r: dict) -> None:
-    cap, sch, ros, sens = r["cap"], r["sch"], r["ros"], r["sens"]
+    cap, sch, ros, sens, sni = (r["cap"], r["sch"], r["ros"],
+                                 r["sens"], r.get("sni"))
     print()
     print(f"  {style(header, 'bold')}\n")
     print(_row("capture", _cap_value(cap)))
@@ -153,6 +172,12 @@ def _print_plain(args, header: str, r: dict) -> None:
             val += f" · {sev_line(sens.get('actionable_by_severity', {}))}"
         print(_row("sensitive", val))
         steps.insert(1, "glyph sensitive")
+    if sni is not None:
+        val = f"{num(sni['persisted'])} SNI candidates"
+        if sni.get("by_severity"):
+            val += f" · {sev_line(sni['by_severity'])}"
+        print(_row("snihunt", val))
+        steps.insert(1, "glyph snihunt")
     print(f"\n  {style('view', 'bold', 'cyan')}"
           + " " * (_LABELW - 4) + style(" · ".join(steps), "gray"))
     print(_sub(f"catalog: {args.db}"))

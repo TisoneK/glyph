@@ -70,6 +70,8 @@ def summary(cat: Catalog) -> Dict[str, Any]:
     labels = [lab for p in cat.pages() for lab in p.labels]
     by_tag = Counter((lab.get("tag") or "?") for lab in labels)
     dic = cat.dictionary()
+    sni = cat.findings(kind="sni_bug_host")
+    sni_by_sev = Counter(f.severity for f in sni)
     return {
         "flows": len(flows),
         "by_type": dict(by_type),
@@ -82,6 +84,8 @@ def summary(cat: Catalog) -> Dict[str, Any]:
         "dom_by_tag": dict(by_tag),
         "decoded": len(dic),
         "decoded_review": sum(1 for d in dic if d.needs_review),
+        "sni_candidates": len(sni),
+        "sni_by_severity": dict(sni_by_sev),
         "target": cat.target(),
     }
 
@@ -165,4 +169,41 @@ def rosetta_rows(cat: Catalog) -> Rows:
         rows.append([d.json_path, repr(d.code), str(d.meaning),
                      f"{d.confidence:.2f}", d.strategy,
                      "REVIEW" if d.needs_review else "ok"])
+    return headers, rows
+
+
+def _sni_score(evidence: str) -> str:
+    """Pull the integer score out of an SNI finding's evidence string."""
+    if not evidence:
+        return "0"
+    for tok in evidence.split("·"):
+        tok = tok.strip()
+        if tok.startswith("score "):
+            try:
+                return tok.split()[1]
+            except (ValueError, IndexError):
+                return "0"
+    return "0"
+
+
+_SNI_CAT_LABEL = {
+    "sni_zero_rated": "zero-rated",
+    "sni_frontable_cdn": "cdn-front",
+    "sni_shared_cert": "shared-cert",
+    "sni_candidate": "candidate",
+}
+
+
+def snihunt_rows(cat: Catalog) -> Rows:
+    """SNI bug-host candidates ranked by score (ADR-10)."""
+    headers = ["SEV", "SCORE", "TYPE", "SNI HOST", "EVIDENCE"]
+    rows: List[List[str]] = []
+    findings = cat.findings(kind="sni_bug_host")
+    # Sort by score desc (parsed from evidence) — findings() already sorts
+    # by severity, but score is finer-grained.
+    findings = sorted(findings, key=lambda f: -int(_sni_score(f.evidence) or 0))
+    for f in findings:
+        rows.append([f.severity.upper(), _sni_score(f.evidence),
+                     _SNI_CAT_LABEL.get(f.category, f.category),
+                     f.host or "", (f.evidence or "")[:100]])
     return headers, rows
