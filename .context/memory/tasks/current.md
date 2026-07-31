@@ -12,7 +12,7 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 15 (2026-07-31) shipped TUI Phase 2 (live/real-time). NEXT/VERIFY:
-  confirm the Playwright browser live path on the user's Windows box. See `agents/sessions.md`
-  Session 15 and `plans/decisions.md` ADR-9 Phase 2.
+- **Task:** none — Session 15 (2026-07-31) shipped TUI Phase 2 (live) + the home/splash screen.
+  VERIFY on the user's Windows box: the Playwright browser live path (sync Playwright in a Textual
+  worker + concurrent WAL writers). See `agents/sessions.md` Session 15, ADR-9.
 - **Status:** idle

@@ -268,3 +268,12 @@ rich tables too. Lesson: for polished cross-platform CLI output, use rich — do
 - **Outcome:** done. Driver writes flows/WS/DOM incrementally + `capture_status` meta; catalog on WAL+busy_timeout; dashboard live mode runs capture in a worker thread, refreshes flows/DOM/summary every 1s + analysis every 3s, `● LIVE mm:ss` → `✓ captured` header. `glyph run live` opens the live dashboard interactively; `--no-tui`/pipe = synchronous headless path. **107 tests** incl. an async `run_test` proving flows stream 0→N and the header flips. NOTE: the real Playwright browser live path (sync Playwright in a Textual worker thread; two concurrent DB writers under WAL) is implemented but NOT verified on this box (no playwright in `.venv`) — **must be confirmed on the user's Windows machine** (`.venv` there has playwright). Fallbacks: if a worker hits a transient lock, analysis retries next tick; capture writes wait up to busy_timeout.
 - **Open items:** verify live browser path on-device; consider resetting the catalog at the start of a live run (currently appends to `--db`); optimize the 1s full-table reload to append-only for large captures; richer DOM capture (inputs/forms); migrate remaining commands to rich tables.
 - **Report:** none (ADR-9 Phase 2 note + this entry carry it).
+
+### Update (2026-07-31, Session 15) — home/splash screen + app restructure
+Bare `glyph` now opens a home screen (GLYPH gradient wordmark + URL box + Capture/Open/Quit) that
+flows into the live dashboard; Esc returns home. Restructured the TUI into `GlyphApp` hosting
+`HomeScreen` + `DashboardScreen` (former GlyphDashboard, now a Screen) + `FlowDetail`;
+`get_default_screen` picks home vs dashboard. Subcommand optional — bare `glyph` = home (interactive)
+or help (pipe). 108 tests (home mount + URL->dashboard covered). Still verify the Playwright browser
+live path on the user's Windows box. Lesson: use App.get_default_screen (not on_mount push) so the
+initial screen is queryable immediately in run_test.

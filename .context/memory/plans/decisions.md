@@ -232,3 +232,10 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   a `● LIVE`/`✓ captured` header. `glyph run live` opens the live dashboard when interactive;
   `--no-tui`/pipe keeps the synchronous headless path. Verified via async `run_test` (flows
   stream 0→N, header flips); the Playwright browser live path is confirmed on-device.
+
+- **Home screen added (2026-07-31, Session 15):** bare `glyph` opens a home/splash screen (the
+  GLYPH ANSI-shadow wordmark + URL box + Capture/Open/Quit) that flows into the live dashboard;
+  Esc returns home. The TUI is now `GlyphApp` hosting `HomeScreen` + `DashboardScreen` (+ a
+  `FlowDetail` modal). Subcommand is optional — bare `glyph` opens home when interactive, else
+  prints help. `dashboard`/`run live`/`flows`/`dom` jump straight to their views. Still a pure
+  presentation layer over glyph.db.
