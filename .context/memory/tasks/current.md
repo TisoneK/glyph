@@ -11,6 +11,10 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** idle — no task in progress. Last completed: Session 11 (2026-07-31) — setup local Windows dev environment (venv + glyph-re[dev] + Chromium + 93 tests).
-- **Task:** none
-- **Status:** idle
+- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 12)
+- **Task:** Implement ADR-5 — split `glyph/cli.py` (517 lines) into a `glyph/cli/`
+  package (one module per subcommand + `_output.py`/`_format.py` shared helpers),
+  fix the dict/run empty-state messaging inconsistency, and give `glyph sensitive`
+  table output (masked values, location, severity, filters, --json). Presentation
+  only — stage modules stay the single source of truth.
+- **Status:** in-progress
