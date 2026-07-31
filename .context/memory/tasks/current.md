@@ -12,8 +12,8 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** —
-- **Task:** none — Session 8 (2026-07-31) committed the S7 bookkeeping +
-  ran the .context sync (found project 0.3.0 ahead of package 0.2.0 —
-  logged as a flaw; user action: push 0.3.0 to the package upstream).
-  See `agents/sessions.md` Session 8 and `reviews/2026-07-31-context-sync.md`.
+- **Task:** none — Session 9 (2026-07-31) wired live browser capture into the
+  CLI (`glyph capture live` / `run live`) so no per-site scripts are needed, and
+  verified a rich live capture of linebet via the user's proxy. See
+  `agents/sessions.md` Session 9. Next items in `tasks/backlog.md`.
 - **Status:** idle

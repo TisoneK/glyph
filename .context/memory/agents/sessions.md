@@ -146,3 +146,12 @@ now RESOLVED for this project — the package is at 0.4.0, the project is
 at 0.4.0, sync direction is package -> project again as designed. The
 flaw itself (protocol has no project-ahead-of-package behavior) remains
 open for the package to address.
+
+---
+## 2026-07-31 — Session 9
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Live-capture test on the local Mac; then, per user direction, make live browser capture a first-class, site-agnostic CLI command so no per-site scripts are needed.
+- **Commits:** 1 feat (`glyph capture live` / `run live` + driver resilience + 5 tests + README) — see `git log`. Plus this bookkeeping commit.
+- **Outcome:** done. Live Playwright capture verified locally through the user's bore.pub proxy: **919 flows / 855 endpoints / 1309 decoded** against linebet.com/en/line/basketball (rich — the proxy got past the block interstitial the cloud hit). Wired the driver into the CLI: `glyph capture live <url>` and `glyph run live <url>` — site-agnostic, captures all resource types + WebSocket frames + DOM, target-agnostic explore rounds, `--proxy`/`GLYPH_PROXY`. Made the driver resilient (nav failure persists partial capture + surfaces a clean error instead of a traceback). Deleted the throwaway scratch scripts. 74 tests pass. **mitmproxy live comparison could NOT run here** — the sandbox classifier blocks running a local proxy that upstreams to an authenticated external tunnel (tried twice, did not bypass). Gave the user a grounded architectural comparison instead (Playwright superior for web/DOM targets; mitmproxy's edge is mobile/native no-DOM clients — complementary).
+- **Open items:** mitmproxy-vs-Playwright *live* head-to-head needs the user to allow `mitmdump` or run it themselves; verify whether the driver's WebSocket capture stores frame payloads vs just handshakes; bore.pub tunnel is ephemeral (dropped mid-session) — refresh before re-running the linebet capture.
+- **Report:** none (feature session; this entry + commit message carry it).

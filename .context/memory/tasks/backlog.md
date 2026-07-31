@@ -78,3 +78,16 @@ don't remove the line.
       the terminal + scriptable `glyph review` workflow (Session 5) covers single-analyst use.
       A Label Studio export/import (RESEARCH-DEEP-DIVE §4.6) would give teams a GUI review
       surface. Not needed for solo use; only if a multi-analyst workflow is wanted. Low.
+- [ ] **mitmproxy vs Playwright live head-to-head** (added 2026-07-31 by Claude Code) —
+      compare endpoint/flow coverage of the mitmproxy addon vs the Playwright driver on the
+      same target. BLOCKED locally: the sandbox classifier denies running `mitmdump` as a
+      local proxy that upstreams to an authenticated external tunnel. Needs the user to allow
+      `mitmdump` (Bash permission rule) or run it themselves and hand over the catalog.
+      Grounded prediction (Session 9): Playwright wins for web/DOM targets (captures all
+      resource types + the DOM Rosetta needs); mitmproxy's edge is mobile/native no-DOM
+      clients — complementary, not competing. Low-Medium.
+- [ ] **Verify WebSocket frame capture in the driver** (added 2026-07-31 by Claude Code) —
+      `glyph.capture.driver` registers `framesent`/`framereceived` handlers (Session 7), but
+      confirm it actually stores frame *payloads* (not just the handshake) end-to-end against
+      a live WS target (e.g. live-odds streams). This is the one area mitmproxy would clearly
+      capture more if the driver doesn't. Medium.
