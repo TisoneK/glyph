@@ -165,6 +165,16 @@ open for the package to address.
 - **Open items:** live test to exercise `glyph sensitive` against a richer real target (in progress); consider tightening enum deny-list (`desc`/`img`, noted Session 9); optional redacted-export command.
 - **Report:** none (feature session; commit + this entry carry it).
 
+
+---
+## 2026-07-31 — Session 11
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local Windows 10/11 (PowerShell 7) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Setup the local Windows development environment — create venv, install glyph-re[dev], install Playwright Chromium, run baseline tests.
+- **Commits:** 3 — `0934faa` (chore(context): add .gitattributes to preserve LF line endings in core/) + `7e64db1` (chore(context): roll back core to 0.4.0) + this bookkeeping.
+- **Outcome:** done — `.venv` created with Python 3.14.2, `glyph-re[dev]` installed (mitmproxy 12.2.3, playwright 1.61.0, genson 1.4.0, duckdb 1.5.5, pytest 9.1.1), Playwright Chromium downloaded, **93 tests pass** (1 skipped). Discovered and resolved a Windows CRLF line-ending mismatch in `.context/core/` that caused `context-sync verify` to fail (core files checked out with CRLF due to `core.autocrlf=true`, but MANIFEST.sha256 hashes are computed against LF-only blobs). Fixed by adding `.gitattributes` (`.context/core/* text eol=lf`) and using `git checkout -- .context/core/` to restore LF blobs from git history.
+- **Open items:** none — environment is ready for development work.
+- **Report:** none (setup session; this entry carries it).
+
 ### Update (2026-07-31, Session 10 cont.) — sensitive hooked into `run` by default
 Per user ("shouldn't the sensitive be by default hooked in run live?"), the sensitive/risk
 scan now runs automatically at the end of `glyph run live` and `glyph run har` (passive, on

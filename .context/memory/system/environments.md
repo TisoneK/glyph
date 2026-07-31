@@ -65,3 +65,22 @@ block (and its "last verified" date) every time you run on it again.
   - **Try sandbox capabilities before assuming they fail.** Session 6: I told the user "I can't run `playwright install chromium` reliably in this sandbox (heavy browser-binary download)" without trying. The user pushed back; I tried; it installed cleanly and headless chromium works. **Principle: the cost of trying is seconds; the cost of a wrong assumption is a round-trip.** Verify sandbox capabilities by trying, not by extrapolating from prior restricted-environment experience. Recorded after the Session 6 round-trip.
   - **When a user supplies a HAR, check for response bodies first.** Session 6: the uploaded `betting.xhr` had 116 entries but 0 response bodies (Chrome DevTools "Save all as HAR" sometimes strips content). Run `sum(1 for e in har['log']['entries'] if e['response']['content'].get('text'))` before assuming it's usable; if body-less, tell the user up front with the exact re-export instruction ("Save all as HAR **with content**").
   - **Local agents must NOT absorb this block** — the PAT dance, the `/home/z/my-project/glyph` path, and the cloud-sandbox identity are machine- and agent-type-scoped facts. A local agent reading this block should ignore the PAT instructions and log a flaw if memory tried to enforce them on a local session (Pitfall #43).
+
+---
+## bao@local (Windows 10/11, PowerShell 7) (last verified 2026-07-31)
+- **Identify by:** hostname/path `C:\Users\tison\Dev\glyph`; agent runs as user `tison`
+- **OS:** Windows (win32), PowerShell 7 (`pwsh.exe`)
+- **Runtimes:** system `python` = **3.14.2**; project venv at `.venv/` (Python 3.14.2)
+- **Package manager:** `pip` via project venv. Install with `.venv\Scripts\pip.exe install -e ".[dev]"`.
+- **Verified commands (2026-07-31):**
+  - `python -m venv .venv` — creates venv
+  - `.venv\Scripts\pip.exe install -e ".[dev]"` — installs glyph-re + mitmproxy + playwright + genson + duckdb + pytest
+  - `playwright install chromium` — downloads Chrome for Testing + Headless Shell (succeeds on Windows)
+  - `.venv\Scripts\pytest.exe -q` → **93 passed, 1 skipped**
+  - `pwsh -File .context/core/bin/context-sync.ps1 verify` — core verify (PowerShell port)
+  - `pwsh -File .context/core/bin/context-sync.ps1 status` — core status
+  - `git config user.name` / `git config user.email` — already set to `Tisone Kironget` / `tisonkironget@gmail.com`
+- **Quirks:**
+  - `core.autocrlf=true` causes `.context/core/*` files to be checked out with CRLF on Windows, breaking `context-sync verify` against the LF-only MANIFEST.sha256. Workaround: `git checkout -- .context/core/` after any verify failure (rollback restores LF blobs from git history). `.gitattributes` added with `.context/core/* text eol=lf` to prevent renormalization.
+  - `context-sync.ps1` is the Windows port of `context-sync`; use it instead of `sh` on this machine.
+  - System Python is 3.14.2 — newer than the project's `>=3.9` requirement; code runs fine.

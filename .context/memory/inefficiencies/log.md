@@ -146,3 +146,14 @@ never harvested.
 
 ## Live-test findings (Session 10) — real-world validation of `glyph.sensitive`
 - `glyph run live` + `glyph sensitive` against OWASP Juice Shop (authorized intentionally-vulnerable target): found a genuine CRITICAL (`/rest/admin/application-configuration` returns sensitive data unauthenticated), wildcard CORS, missing security headers, exposed emails. Also surfaced a real false positive (Luhn-valid ms timestamp flagged as a card) → fixed with a card-network-prefix gate (commit this session). Confirms the value of real-world testing over synthetic: the timestamp FP would never have appeared in hand-authored fixtures.
+
+---
+## 2026-07-31 — Claude Code / claude-opus-4-8 (Session 11)
+- **Problem:** `context-sync verify` failed on the local Windows machine — every `.context/core/*` file reported `FAILED` against `MANIFEST.sha256`. The root cause was `core.autocrlf=true` in the local git config, which checked out the vendored core files with CRLF line endings on disk. However, `MANIFEST.sha256` hashes are computed against LF-only blob content (the canonical form in git). The byte mismatch caused every file to fail verification.
+- **Cost:** ~15 minutes diagnosing the mismatch (compared blob hashes from git history vs on-disk bytes, identified the CRLF difference, tested the fix). The rollback command worked but didn't resolve the underlying issue — the next checkout would reintroduce CRLF.
+- **Cause:** Windows git default `core.autocrlf=true` converts LF blobs to CRLF on checkout. The `context-sync.ps1` PowerShell port computes hashes with `Get-FileHash` against the on-disk bytes, which are CRLF. The `context-sync` sh script on macOS/Linux doesn't hit this because macOS/Linux default to `core.autocrlf=input` or `false`, preserving LF on checkout.
+- **Workaround / fix:**
+  1. Added `.gitattributes` with `.context/core/* text eol=lf` to force LF line endings for core files regardless of platform git config.
+  2. After committing `.gitattributes`, ran `git checkout -- .context/core/` to restore LF blobs from git history.
+  3. `context-sync verify` now passes on Windows.
+- **Prevent next time:** The `.context/core/` directory should always have `eol=lf` enforced via `.gitattributes` (or the project should document this requirement for Windows users). The protocol's `verify` command computes hashes against on-disk bytes, so platform line-ending conversion directly breaks integrity checks.
