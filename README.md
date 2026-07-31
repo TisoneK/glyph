@@ -54,11 +54,23 @@ pip install -e '.[live]'
 
 ## Quickstart
 
-Record a session against a target you're authorized to analyze — in your browser,
-DevTools → Network → *Export HAR* — then:
+Two ways in. **Live** — Glyph drives a real headless browser and captures everything itself
+(needs the `live` extra):
 
 ```bash
-glyph run har session.har         # capture → catalog → schema → rosetta
+glyph run live https://example.com    # drive the page → capture → schema → rosetta
+```
+
+Or from a **HAR** you already have (browser DevTools → Network → *Export HAR*, mitmproxy,
+Charles…):
+
+```bash
+glyph run har session.har
+```
+
+Either way, inspect and export the same way:
+
+```bash
 glyph dict                        # see the decoded code → meaning dictionary
 glyph review                      # confirm/edit/reject the uncertain rows
 glyph codegen --out openapi.json  # export a documented OpenAPI 3 spec
@@ -66,6 +78,29 @@ glyph codegen --out openapi.json  # export a documented OpenAPI 3 spec
 
 That's the golden path. Every command that reads or writes a catalog takes `--db PATH`
 (default `glyph.db`).
+
+### Live capture
+
+`glyph capture live <url>` (and `glyph run live <url>`) drives a headless browser and is
+**site-agnostic** — no per-site configuration or scripts. It records *every* kind of traffic
+automatically (documents, scripts, XHR/fetch, WebSocket frames, …), snapshots the rendered
+DOM for Rosetta, and runs a few target-agnostic interaction rounds (scroll, generic clicks)
+to surface lazy-loaded endpoints.
+
+```bash
+glyph capture live https://example.com                 # sensible defaults, any site
+glyph capture live https://example.com --explore 5     # richer: more interaction rounds
+glyph capture live https://example.com --proxy http://host:port   # route via a proxy
+GLYPH_PROXY=http://host:port glyph capture live https://example.com  # proxy via env
+```
+
+| Option | Meaning |
+|--------|---------|
+| `--explore N` | target-agnostic interaction rounds (default 2) |
+| `--settle-ms N` | quiet wait after load for late XHR (default 3000) |
+| `--wait-selector CSS` | wait for a selector that marks "content settled" |
+| `--proxy URL` / `GLYPH_PROXY` | route the browser through an upstream proxy |
+| `--timeout-ms N` | per-step timeout (default 30000) |
 
 ## How Rosetta works
 
@@ -103,7 +138,9 @@ them.
 
 | Command | Purpose |
 |---------|---------|
+| `glyph run live <url>` | drive a live page, then the full pipeline |
 | `glyph run har <file>` | run the full pipeline on a HAR |
+| `glyph capture live <url>` | drive a live page and capture everything |
 | `glyph capture har <file>` | ingest traffic only |
 | `glyph schema` | infer schemas and flag enum candidates |
 | `glyph rosetta` | decode codes → meaning |
@@ -162,10 +199,10 @@ glyph/
 
 ## Status
 
-Glyph is early and evolving. The HAR-based pipeline — capture, catalog, schema, Rosetta
-decoding, review, and OpenAPI export — works today with no external dependencies. Live
-capture (mitmproxy / Playwright) ships as an optional backend. Interfaces may still change
-as Glyph is exercised against more real targets.
+Glyph is early and evolving. The full pipeline — capture, catalog, schema, Rosetta decoding,
+review, and OpenAPI export — works today; the HAR path needs no external dependencies, and
+live browser capture is a first-class command behind the optional `live` extra. Interfaces
+may still change as Glyph is exercised against more real targets.
 
 ## Responsible use
 

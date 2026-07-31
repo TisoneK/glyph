@@ -92,7 +92,7 @@ def capture_url(catalog: Catalog, url: str,
                 timeout_ms: int = 15000,
                 proxy: Optional[str] = None,
                 settle_ms: int = 3000,
-                explore: int = 0) -> None:
+                explore: int = 0) -> dict:
     """Load ``url`` headless, recording XHR/fetch flows and the rendered DOM.
 
     Raises :class:`RuntimeError` with install guidance if Playwright is
@@ -204,35 +204,52 @@ def capture_url(catalog: Catalog, url: str,
         # 'networkidle' never fires for SPAs with long-lived connections
         # (websockets, long-polling) or behind slow proxy tunnels. Use
         # 'domcontentloaded' as the early milestone, then wait for a
-        # caller-supplied selector that marks "content settled."
-        page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
-        if wait_selector:
-            try:
-                page.wait_for_selector(wait_selector, timeout=timeout_ms)
-            except Exception:
-                pass  # selector may never appear (block page, slow render)
-        else:
-            try:
-                page.wait_for_load_state("load", timeout=timeout_ms)
-            except Exception:
-                pass
-        # Settle: let late-fired XHR responses land in the catalog.
-        if settle_ms > 0:
-            page.wait_for_timeout(settle_ms)
-
-        # Explore: target-agnostic interaction to surface lazy-loaded
-        # endpoints (live feeds, expand-on-click, infinite scroll). Each
-        # round scrolls the page in steps and clicks a few generic
-        # clickable elements, then waits for the resulting traffic.
-        for _ in range(max(0, explore)):
-            _explore_round(page, timeout_ms)
-
-        html = page.content()
+        # caller-supplied selector that marks "content settled." The whole
+        # navigation+interaction block is best-effort: a failure (dead
+        # proxy, block page, timeout) must not throw away whatever was
+        # already captured — we record the error and still persist flows.
+        nav_error: Optional[str] = None
+        html = ""
+        try:
+            page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+            if wait_selector:
+                try:
+                    page.wait_for_selector(wait_selector, timeout=timeout_ms)
+                except Exception:
+                    pass  # selector may never appear (block page, slow render)
+            else:
+                try:
+                    page.wait_for_load_state("load", timeout=timeout_ms)
+                except Exception:
+                    pass
+            # Settle: let late-fired XHR responses land in the catalog.
+            if settle_ms > 0:
+                page.wait_for_timeout(settle_ms)
+            # Explore: target-agnostic interaction to surface lazy-loaded
+            # endpoints (live feeds, expand-on-click, infinite scroll).
+            for _ in range(max(0, explore)):
+                _explore_round(page, timeout_ms)
+        except Exception as exc:
+            nav_error = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+        try:
+            html = page.content()
+        except Exception:
+            pass  # page may be unusable after a nav failure
         browser.close()
 
+    from collections import Counter
+    by_source: Counter = Counter()
     for flow in captured:
         catalog.add_flow(flow)
+        by_source[flow.source] += 1
     labels = harvest_labels(html)
     catalog.add_page(PageObservation(
         url=url, html=html, text=plain_text(html), labels=labels,
     ))
+    return {
+        "flows": len(captured),
+        "pages": 1,
+        "labels": len(labels),
+        "by_source": dict(by_source),
+        "error": nav_error,
+    }
