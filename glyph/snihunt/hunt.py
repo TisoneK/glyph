@@ -87,7 +87,8 @@ def _evidence(host: str, score: int, signals: Dict[str, Any]) -> str:
 def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
              net: bool = True, probe: bool = False,
              http_get: Optional[HttpGet] = None,
-             max_domains: int = 25) -> Dict[str, Any]:
+             max_domains: int = 25,
+             progress=None) -> Dict[str, Any]:
     """Run the full SNI hunt over ``catalog`` and persist findings.
 
     Parameters
@@ -112,7 +113,18 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
     max_domains : int
         Cap on the number of registrable domains to enumerate via CT logs
         (each CT query is one network round-trip; 25 domains is a sane bound).
+    progress : callable, optional
+        ``progress(message: str)`` called at each phase / per-item so the
+        CLI can show live activity (a hunt makes N network calls and looks
+        frozen without it). Default None = silent (library / test use).
     """
+    def _prog(msg: str) -> None:
+        if progress is not None:
+            try:
+                progress(msg)
+            except Exception:
+                pass  # progress reporting must never break the hunt
+
     hosts = extract_mod.extract_hosts(catalog)
     # Build the candidate set: every captured hostname, PLUS the subdomains
     # CT logs surface for their registrable domains (the "find NEW hosts"
@@ -141,7 +153,9 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
         # relevant first), then cap.
         regs = sorted(captured_by_reg.keys(),
                       key=lambda d: -len(captured_by_reg[d]))[:max_domains]
-        for reg in regs:
+        _prog(f"CT logs: enumerating {len(regs)} registrable domain(s)…")
+        for i, reg in enumerate(regs, 1):
+            _prog(f"  [{i}/{len(regs)}] crt.sh/certspotter ← {reg}")
             subs = ct_mod.subdomains(reg, http_get=http_get)
             ct_results[reg] = subs
             for sub in subs:
@@ -150,12 +164,17 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
                         "host": sub, "captured": 0, "captured_ips": set(),
                         "registrable": reg, "ips": [],
                     }
+        _prog(f"CT logs: {sum(len(s) for s in ct_results.values())} subdomains found")
 
     # --- DISCOVERY PHASE: resolve IPs + reverse-IP for every candidate, so
     # siblings are in the candidate set BEFORE scoring. One level deep; no
     # recursion (siblings-of-siblings aren't chased). ---
     if net:
-        for cand in list(candidates.values()):
+        to_resolve = list(candidates.values())
+        _prog(f"DNS: resolving {len(to_resolve)} host(s) via DoH…")
+        for i, cand in enumerate(to_resolve, 1):
+            if i % 10 == 1 or i == len(to_resolve):  # throttle: every 10th + last
+                _prog(f"  [{i}/{len(to_resolve)}] resolve {cand['host']}")
             ips = dns_mod.resolve(cand["host"], http_get=http_get, cache=cache)
             if ips:
                 cand["ips"] = ips
@@ -164,7 +183,11 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
                 pass  # keep captured IPs
         # Reverse-IP on each candidate's first IP; promote siblings.
         from glyph.catalog.normalize import registrable_domain
-        for cand in list(candidates.values()):
+        rip_targets = [c for c in list(candidates.values()) if c.get("ips")]
+        _prog(f"reverse-IP: looking up siblings for {len(rip_targets)} host(s)…")
+        for i, cand in enumerate(rip_targets, 1):
+            if i % 10 == 1 or i == len(rip_targets):
+                _prog(f"  [{i}/{len(rip_targets)}] reverse-IP {cand['host']}")
             ips = cand.get("ips") or []
             if not ips:
                 continue
@@ -185,6 +208,7 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
                     break
 
     # --- SCORING PHASE: score every candidate (snapshot — no mutation now). ---
+    _prog(f"scoring {len(candidates)} candidate(s)…")
     scored: List[Dict[str, Any]] = []
     for cand in list(candidates.values()):
         host = cand["host"]

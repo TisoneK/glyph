@@ -74,12 +74,23 @@ def _types_line(cap: dict) -> str:
     return " · ".join(parts[:9])
 
 
+def _progress(msg: str) -> None:
+    """Live progress to stderr (TTY only). Long-running pipeline stages
+    (capture, schema, rosetta, sensitive, snihunt) look frozen without it."""
+    import sys
+    if sys.stderr.isatty():
+        print(f"  {msg}", file=sys.stderr, flush=True)
+
+
 def _gather(cat, args, cap: dict) -> dict:
     from glyph.schema import infer_all
     from glyph.rosetta import build_dictionary
+    _progress("schema: inferring fields + enum candidates…")
     d = {"cap": cap, "sch": infer_all(cat), "ros": build_dictionary(cat),
          "sens": None, "sni": None}
+    _progress(f"rosetta: decoded {d['ros']['entries']} entries")
     if not getattr(args, "no_sensitive", False):
+        _progress("sensitive: scanning for PII / secrets / risk…")
         from glyph.sensitive import run_scan
         d["sens"] = run_scan(cat)
     # SNI hunt runs AFTER sensitive: it reads the captured host surface and
@@ -88,7 +99,12 @@ def _gather(cat, args, cap: dict) -> dict:
     # CT / reverse-IP — faster, no outbound calls). See ADR-10.
     if not getattr(args, "no_snihunt", False):
         from glyph.snihunt import run_hunt
-        d["sni"] = run_hunt(cat, net=not getattr(args, "snihunt_no_net", False))
+        if getattr(args, "snihunt_no_net", False):
+            _progress("snihunt: local heuristics only (--no-net)…")
+        else:
+            _progress("snihunt: reverse-IP + CT logs + CDN detection (network)…")
+        d["sni"] = run_hunt(cat, net=not getattr(args, "snihunt_no_net", False),
+                            progress=_progress)
     return d
 
 
@@ -206,10 +222,12 @@ def _print_plain(args, header: str, r: dict) -> None:
 
 def run_har(args: argparse.Namespace) -> int:
     from glyph.capture import ingest_har
+    _progress(f"ingesting HAR: {args.file}")
     cat = catalog(args)
     try:
         cat.reset()  # a run is a fresh analysis of this source
         cap = ingest_har(cat, args.file, harvest_html=not args.no_html)
+        _progress(f"ingested {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
     finally:
         cat.close()
@@ -225,10 +243,13 @@ def run_live(args: argparse.Namespace) -> int:
     # Headless fallback (pipe / CI / --no-tui / no textual): capture
     # synchronously, then print the designed summary.
     from glyph.capture import capture_live
+    _progress(f"launching browser → {args.url}")
+    _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)
     try:
         cat.reset()  # a run is a fresh capture of this target
         cap = capture_live(cat, args.url, **live_kwargs(args))
+        _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
     finally:
         cat.close()

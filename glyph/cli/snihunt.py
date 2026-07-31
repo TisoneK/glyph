@@ -81,11 +81,21 @@ def run(args: argparse.Namespace) -> int:
             cat.set_target(t)
             cat.add_flow(Flow(method="GET", url=f"https://{t}/", host="", path="",
                               source="snihunt:seed"))
+        # Live progress to stderr so the terminal shows activity (the hunt
+        # makes N network calls and looks frozen without it). Suppressed under
+        # --json (stdout must stay pure JSON) and when stderr isn't a TTY.
+        progress = None
+        if not args.json and sys.stderr.isatty():
+            def progress(msg: str) -> None:
+                print(f"\r  {msg}", end="", file=sys.stderr, flush=True)
         summary = run_hunt(
             cat, target=target,
             net=not args.no_net, probe=args.probe,
             max_domains=args.max_domains,
+            progress=progress,
         )
+        if progress:
+            print(file=sys.stderr)  # newline after the \r progress lines
         findings = [f for f in cat.findings(kind="sni_bug_host")
                     if (f.score or 0) >= args.min_score]
     finally:

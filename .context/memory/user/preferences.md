@@ -45,6 +45,23 @@ Pre-Flight at bootstrap; grows as sessions reveal preferences.
     what the tests do and don't cover.
 
 ## Review depth
+- **When you find an issue, fix it AND hunt for the same pattern elsewhere —
+  don't go round and round.** A single bug is rarely unique; the same shape
+  likely exists in sibling code. Finding one → fix that one → grep for the
+  pattern → fix all of them in the same pass. Reporting "fixed the one you
+  pointed at" while leaving the identical bug two files over is a
+  half-fix that forces the user to point at the next instance. (feedback,
+  2026-07-31, after the `glyph snihunt <target>` UX gap — the same
+  "command only operates on a pre-existing catalog, not a direct target"
+  shape was likely present in other commands too.)
+
+## UX
+- **Long-running commands MUST show live progress.** A command that makes
+  N network calls (DNS, CT logs, reverse-IP) with no output looks frozen —
+  the user can't tell if it's working or hung. Print a progress line per
+  phase / per item so the terminal shows activity. This is especially true
+  on Windows PowerShell where there's no spinner by default. (feedback,
+  2026-07-31, after `glyph snihunt betika.com` hung silently for a minute.)
 
 ## Risk & approvals
 - Naming and scope are the user's call — judge a name on its own merit; do NOT couple a standalone tool to sibling projects. (correction, 2026-07-29)
