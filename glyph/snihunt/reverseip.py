@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional
 
-from glyph.snihunt._net import HttpGet, get_text
+from glyph.snihunt._net import HttpGet, default_http_get, get_text
 
 _ENDPOINT = "https://api.hackertarget.com/reverseiplookup/?q={ip}"
 
@@ -22,7 +22,7 @@ def reverse_ip(ip: str, http_get: Optional[HttpGet] = None,
     """Return the hostnames that share ``ip``, or ``[]`` on any error."""
     if not ip:
         return []
-    fetch = http_get or (lambda u, t: __import__("glyph.snihunt._net", fromlist=["default_http_get"]).default_http_get(u, t))
+    fetch = http_get or default_http_get
     text = get_text(_ENDPOINT.format(ip=ip), http_get=fetch, timeout=timeout)
     if not text:
         return []

@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS findings (
     value_sample TEXT,
     party TEXT,
     host TEXT,
+    score INTEGER,
     UNIQUE (kind, category, endpoint_id, location)
 );
 CREATE INDEX IF NOT EXISTS idx_flows_endpoint ON flows (endpoint_id);
@@ -161,6 +162,8 @@ class Catalog:
             self.conn.execute("ALTER TABLE findings ADD COLUMN party TEXT")
         if "host" not in fcols:
             self.conn.execute("ALTER TABLE findings ADD COLUMN host TEXT")
+        if "score" not in fcols:
+            self.conn.execute("ALTER TABLE findings ADD COLUMN score INTEGER")
 
     # -- lifecycle --------------------------------------------------------
     def __enter__(self) -> "Catalog":
@@ -425,13 +428,13 @@ class Catalog:
     def add_finding(self, f: Finding) -> int:
         cur = self.conn.execute(
             "INSERT INTO findings (kind, category, severity, location, evidence, "
-            "endpoint_id, value_sample, party, host) VALUES (?,?,?,?,?,?,?,?,?) "
+            "endpoint_id, value_sample, party, host, score) VALUES (?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT (kind, category, endpoint_id, location) DO UPDATE SET "
             "severity=excluded.severity, evidence=excluded.evidence, "
             "value_sample=excluded.value_sample, party=excluded.party, "
-            "host=excluded.host",
+            "host=excluded.host, score=excluded.score",
             (f.kind, f.category, f.severity, f.location, f.evidence,
-             f.endpoint_id, f.value_sample, f.party, f.host),
+             f.endpoint_id, f.value_sample, f.party, f.host, f.score),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -457,6 +460,7 @@ class Catalog:
                 severity=r["severity"], location=r["location"],
                 evidence=r["evidence"], endpoint_id=r["endpoint_id"],
                 value_sample=r["value_sample"], party=r["party"], host=r["host"],
+                score=r["score"] if "score" in r.keys() else None,
             )
             for r in rows
         ]

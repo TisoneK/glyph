@@ -116,12 +116,13 @@ class DictionaryEntry:
 
 @dataclass
 class Finding:
-    """A flagged observation — sensitive data, a sensitive endpoint, or a
-    passive risk indicator. The matched value is KEPT in ``value_sample``
-    (never redacted at rest); redaction is an opt-in export concern only.
-    """
+    """A flagged observation — sensitive data, a sensitive endpoint, a passive
+    risk indicator, or an SNI bug-host candidate. The matched value is KEPT in
+    ``value_sample`` (never redacted at rest); redaction is an opt-in export
+    concern only. ``score`` is an optional 0-100 ranking (used by the SNI hunt;
+    None for sensitive/risk findings)."""
 
-    kind: str          # FINDING_SENSITIVE_DATA | _ENDPOINT | _RISK
+    kind: str          # FINDING_SENSITIVE_DATA | _ENDPOINT | _RISK | _SNI_BUG_HOST
     category: str      # e.g. "email", "jwt", "admin_endpoint", "wildcard_cors"
     severity: str      # SEV_LOW | SEV_MEDIUM | SEV_HIGH | SEV_CRITICAL
     location: str      # where it is: json_path, "query:<k>", "header:<h>", "endpoint"
@@ -130,6 +131,7 @@ class Finding:
     value_sample: Optional[str] = None  # the actual matched value, kept intact
     party: Optional[str] = None  # first_party | third_party | unknown vs the target
     host: Optional[str] = None   # the host this finding is on (for vendor filtering)
+    score: Optional[int] = None  # 0-100 ranking (SNI hunt; None for sensitive/risk)
     id: Optional[int] = None
 
 

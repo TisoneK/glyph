@@ -10,11 +10,26 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from glyph.catalog import FINDING_SENSITIVE_DATA, FINDING_SNI_BUG_HOST, Catalog, Finding, severity_rank
+from glyph.catalog import (
+    FINDING_RISK,
+    FINDING_SENSITIVE_DATA,
+    FINDING_SENSITIVE_ENDPOINT,
+    FINDING_SNI_BUG_HOST,
+    Catalog,
+    Finding,
+    severity_rank,
+)
 from glyph.sensitive import endpoints as endpoints_mod
 from glyph.sensitive import party as party_mod
 from glyph.sensitive import risk as risk_mod
 from glyph.sensitive.detectors import _SECRET_NAME, scan_value
+
+# The kinds the sensitive stage owns and clears on a re-scan. A re-run must
+# NOT wipe other stages' findings (e.g. sni_bug_host from glyph.snihunt) —
+# that was a Session 16 bug (run_scan cleared ALL findings, destroying SNI
+# candidates if `glyph sensitive` ran after `glyph snihunt`).
+_SENSITIVE_KINDS = (FINDING_SENSITIVE_DATA, FINDING_SENSITIVE_ENDPOINT,
+                    FINDING_RISK)
 
 _AUTH_HEADERS = {"authorization", "cookie", "set-cookie", "x-api-key",
                  "x-auth-token", "x-access-token", "proxy-authorization"}
@@ -90,7 +105,11 @@ def scan_data(catalog: Catalog, target: Optional[str] = None) -> List[Finding]:
 
 def run_scan(catalog: Catalog) -> Dict[str, Any]:
     """Run every flag stage and persist findings. Returns a summary."""
-    catalog.clear_findings()
+    # Clear ONLY this stage's own kinds — leave other stages' findings (e.g.
+    # sni_bug_host) intact. Session 16 fix: the old `clear_findings()` (no
+    # kind) wiped everything, destroying SNI candidates on a standalone re-run.
+    for k in _SENSITIVE_KINDS:
+        catalog.clear_findings(kind=k)
     target = catalog.target()
     data = scan_data(catalog, target)
     for f in data:
@@ -119,7 +138,10 @@ def is_noise(finding) -> bool:
 
 
 def summarize(catalog: Catalog) -> Dict[str, Any]:
-    findings = catalog.findings()
+    # Count ONLY this stage's own kinds — a sensitive summary that includes
+    # sni_bug_host findings would inflate actionable_total / by_severity.
+    # Session 16 fix: the old `findings()` (no kind) counted everything.
+    findings = [f for k in _SENSITIVE_KINDS for f in catalog.findings(kind=k)]
     by_kind: Dict[str, int] = {}
     by_severity: Dict[str, int] = {}
     by_party: Dict[str, int] = {}

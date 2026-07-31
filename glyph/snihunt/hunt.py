@@ -271,6 +271,7 @@ def run_hunt(catalog: Catalog, target: Optional[str] = None, *,
             value_sample=cand["host"],
             party=None,
             host=cand["host"],
+            score=cand["score"],
         ))
         persisted += 1
 
@@ -293,7 +294,11 @@ def summarize(catalog: Catalog, discovered: Optional[int] = None,
     for f in findings:
         by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
         by_cat[f.category] = by_cat.get(f.category, 0) + 1
-        # Pull the CDN name out of the evidence string for the summary.
+        # CDN name lives in the signals dict at hunt time, but at read time
+        # we only have the finding. Parse it from the evidence string (the
+        # only place the CDN name is recorded) — bounded, not load-bearing.
+        # The SCORE is a real column now (Session 16 fix); this CDN parse is
+        # best-effort summary cosmetics only.
         if "-fronted" in (f.evidence or ""):
             for tok in f.evidence.split("·"):
                 tok = tok.strip()

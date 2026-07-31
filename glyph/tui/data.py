@@ -172,20 +172,6 @@ def rosetta_rows(cat: Catalog) -> Rows:
     return headers, rows
 
 
-def _sni_score(evidence: str) -> str:
-    """Pull the integer score out of an SNI finding's evidence string."""
-    if not evidence:
-        return "0"
-    for tok in evidence.split("·"):
-        tok = tok.strip()
-        if tok.startswith("score "):
-            try:
-                return tok.split()[1]
-            except (ValueError, IndexError):
-                return "0"
-    return "0"
-
-
 _SNI_CAT_LABEL = {
     "sni_zero_rated": "zero-rated",
     "sni_frontable_cdn": "cdn-front",
@@ -199,11 +185,11 @@ def snihunt_rows(cat: Catalog) -> Rows:
     headers = ["SEV", "SCORE", "TYPE", "SNI HOST", "EVIDENCE"]
     rows: List[List[str]] = []
     findings = cat.findings(kind="sni_bug_host")
-    # Sort by score desc (parsed from evidence) — findings() already sorts
-    # by severity, but score is finer-grained.
-    findings = sorted(findings, key=lambda f: -int(_sni_score(f.evidence) or 0))
+    # Sort by score desc (a real column now, Session 16 fix — no longer
+    # parsed out of the evidence string).
+    findings = sorted(findings, key=lambda f: -(f.score or 0))
     for f in findings:
-        rows.append([f.severity.upper(), _sni_score(f.evidence),
+        rows.append([f.severity.upper(), str(f.score or 0),
                      _SNI_CAT_LABEL.get(f.category, f.category),
                      f.host or "", (f.evidence or "")[:100]])
     return headers, rows

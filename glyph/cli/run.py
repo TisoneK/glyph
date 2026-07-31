@@ -34,6 +34,9 @@ def add_parser(sub) -> None:
                       help="skip the sensitive/risk scan")
     rhar.add_argument("--no-snihunt", action="store_true",
                       help="skip the SNI bug-host hunt")
+    rhar.add_argument("--snihunt-no-net", action="store_true", dest="snihunt_no_net",
+                      help="run the SNI hunt with local heuristics only (no DoH / "
+                           "CT logs / reverse-IP — faster, no outbound calls)")
     rhar.set_defaults(func=run_har)
     rlive = with_live(with_db(rsub.add_parser(
         "live", help="live-capture a page, then open the dashboard")))
@@ -41,6 +44,9 @@ def add_parser(sub) -> None:
                        help="skip the sensitive/risk scan")
     rlive.add_argument("--no-snihunt", action="store_true",
                        help="skip the SNI bug-host hunt")
+    rlive.add_argument("--snihunt-no-net", action="store_true", dest="snihunt_no_net",
+                       help="run the SNI hunt with local heuristics only (no DoH / "
+                            "CT logs / reverse-IP — faster, no outbound calls)")
     rlive.add_argument("--no-tui", action="store_true",
                        help="print the summary instead of opening the dashboard")
     rlive.set_defaults(func=run_live)
@@ -64,10 +70,11 @@ def _gather(cat, args, cap: dict) -> dict:
         d["sens"] = run_scan(cat)
     # SNI hunt runs AFTER sensitive: it reads the captured host surface and
     # does bounded active recon (reverse-IP, CT logs, CDN detection). Opt
-    # out with --no-snihunt. See ADR-10.
+    # out with --no-snihunt. --snihunt-no-net keeps it local-only (no DoH /
+    # CT / reverse-IP — faster, no outbound calls). See ADR-10.
     if not getattr(args, "no_snihunt", False):
         from glyph.snihunt import run_hunt
-        d["sni"] = run_hunt(cat)
+        d["sni"] = run_hunt(cat, net=not getattr(args, "snihunt_no_net", False))
     return d
 
 

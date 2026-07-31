@@ -57,7 +57,7 @@ def run(args: argparse.Namespace) -> int:
             max_domains=args.max_domains,
         )
         findings = [f for f in cat.findings(kind="sni_bug_host")
-                    if _score(f.evidence) >= args.min_score]
+                    if (f.score or 0) >= args.min_score]
     finally:
         cat.close()
 
@@ -73,23 +73,9 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _score(evidence: str) -> int:
-    """Pull the integer score out of an evidence string ('score 72 · ...')."""
-    if not evidence:
-        return 0
-    for tok in evidence.split("·"):
-        tok = tok.strip()
-        if tok.startswith("score "):
-            try:
-                return int(tok.split()[1])
-            except (ValueError, IndexError):
-                return 0
-    return 0
-
-
 def _rows(findings):
     for f in findings:
-        yield (f, _score(f.evidence),
+        yield (f, f.score or 0,
                _CAT_LABEL.get(f.category, f.category))
 
 

@@ -209,6 +209,55 @@ def test_hunt_does_not_wipe_sensitive_findings():
     cat.close()
 
 
+def test_sensitive_does_not_wipe_snihunt_findings():
+    # The REVERSE cross-stage bug: running `glyph sensitive` AFTER
+    # `glyph snihunt` must NOT wipe the SNI findings. Session 16 fix:
+    # run_scan now clears only its own kinds, not all findings.
+    from glyph.sensitive import run_scan
+    cat = Catalog(":memory:")
+    cat.add_flow(Flow(method="GET", url="https://0.facebook.com/x", host="", path=""))
+    run_hunt(cat, net=False)
+    sni_before = len(cat.findings(kind="sni_bug_host"))
+    assert sni_before > 0
+    run_scan(cat)  # sensitive re-run — must not touch sni_bug_host
+    assert len(cat.findings(kind="sni_bug_host")) == sni_before  # untouched
+    cat.close()
+
+
+def test_sensitive_summary_excludes_snihunt_findings():
+    # The sensitive summary must NOT count sni_bug_host findings in its
+    # actionable_total / by_severity. Session 16 fix: summarize filters to
+    # sensitive-stage kinds only.
+    from glyph.sensitive import run_scan, summarize as sens_summarize
+    cat = Catalog(":memory:")
+    cat.add_flow(Flow(method="POST", url="https://a.t/api/login", host="", path="",
+                      resp_mime="application/json", status=200,
+                      resp_body=json.dumps({"email": "x@y.com"})))
+    run_scan(cat)
+    sens_only = sens_summarize(cat)
+    run_hunt(cat, net=False)  # now SNI findings exist too
+    sni_count = len(cat.findings(kind="sni_bug_host"))
+    assert sni_count > 0
+    # Re-summarize sensitive — the counts must NOT have grown by sni_count.
+    sens_after = sens_summarize(cat)
+    assert sens_after["total"] == sens_only["total"]  # unchanged
+    assert sens_after["actionable_total"] == sens_only["actionable_total"]
+    cat.close()
+
+
+def test_snihunt_score_is_a_real_column():
+    # The score is stored in a dedicated column, not parsed from the evidence
+    # string (Session 16 fix). Read it directly off the Finding.
+    cat = Catalog(":memory:")
+    cat.add_flow(Flow(method="GET", url="https://0.facebook.com/x", host="", path=""))
+    run_hunt(cat, net=False)
+    f = [x for x in cat.findings(kind="sni_bug_host") if x.host == "0.facebook.com"][0]
+    # Offline, no captured IP: zero-rate(30) + captured(10) = 40. CDN can't
+    # fire without a resolved/captured IP. The point is score is a real int.
+    assert f.score is not None and f.score == 40
+    cat.close()
+
+
 def test_summarize_counts():
     cat = Catalog(":memory:")
     cat.add_flow(Flow(method="GET", url="https://0.facebook.com/x", host="", path=""))
