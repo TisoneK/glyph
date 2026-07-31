@@ -188,3 +188,13 @@ DoubleClick, adnxs, Hotjar, Clarity...) is noise; CDNs/object stores are explici
 Findings now carry host; is_noise() drives the default. On Betika this restored the
 storage.googleapis.com CDN data finding that was wrongly hidden. 95 tests. Lesson: don't conflate
 "third-party host" with "irrelevant" — the axis is data/behavior vs tracking-hygiene noise.
+
+### Fix (2026-07-31, Session 10 cont.) — reference-join scoped to registrable domain
+Flashscore live test (528 flows, 9 websockets) exposed a real Rosetta bug: reference-join used a
+GLOBAL id->name index, so a sports eventStageId=12 resolved to a cookie-consent purposeId=12
+("Selection of personalised content") from cookielaw.org — cross-host integer-id collision.
+Fixed universally: index keyed by registrable domain; ids resolve within their own site only.
+Moved registrable_domain to catalog.normalize (shared with rosetta; party re-exports). Verified
+on flash.db: 0 cross-domain consent decodings after a clean re-decode. 97 tests. Also noted:
+flashscore.com data also served from lsapp.eu (Livesport backend) — related-org domains won't
+cross-join (conservative, acceptable). Lesson: single-host test fixtures hid a cross-host bug.
