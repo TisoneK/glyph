@@ -125,6 +125,7 @@ class Finding:
     endpoint_id: Optional[int] = None
     value_sample: Optional[str] = None  # the actual matched value, kept intact
     party: Optional[str] = None  # first_party | third_party | unknown vs the target
+    host: Optional[str] = None   # the host this finding is on (for vendor filtering)
     id: Optional[int] = None
 
 

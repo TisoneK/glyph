@@ -55,7 +55,7 @@ def scan_data(catalog: Catalog, target: Optional[str] = None) -> List[Finding]:
             kind=FINDING_SENSITIVE_DATA, category=category, severity=sev,
             location=location, endpoint_id=ep_id,
             evidence=f"{category} in {where}", value_sample=str(value)[:512],
-            party=party_mod.classify(host, target),
+            party=party_mod.classify(host, target), host=host,
         ))
 
     for ep in catalog.endpoints():
@@ -102,18 +102,34 @@ def run_scan(catalog: Catalog) -> Dict[str, Any]:
     return summarize(catalog)
 
 
+def is_noise(finding) -> bool:
+    """A finding is 'noise' only when it's hygiene chatter on a known
+    tracking/ad vendor — NOT merely because its host is third-party.
+    Anything carrying real data/behavior is never noise."""
+    if finding.kind == FINDING_SENSITIVE_DATA:
+        return False
+    if finding.category in ("unauthenticated_sensitive_data",
+                            "sensitive_data_in_url", "verbose_error"):
+        return False
+    return party_mod.is_tracking_vendor(finding.host)
+
+
 def summarize(catalog: Catalog) -> Dict[str, Any]:
     findings = catalog.findings()
     by_kind: Dict[str, int] = {}
     by_severity: Dict[str, int] = {}
     by_party: Dict[str, int] = {}
-    first_by_severity: Dict[str, int] = {}
+    actionable_by_severity: Dict[str, int] = {}
+    noise = 0
     for f in findings:
         by_kind[f.kind] = by_kind.get(f.kind, 0) + 1
         by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
         by_party[f.party or "unknown"] = by_party.get(f.party or "unknown", 0) + 1
-        if f.party in (None, "first_party", "unknown"):
-            first_by_severity[f.severity] = first_by_severity.get(f.severity, 0) + 1
+        if is_noise(f):
+            noise += 1
+        else:
+            actionable_by_severity[f.severity] = \
+                actionable_by_severity.get(f.severity, 0) + 1
 
     def sevmap(src: Dict[str, int]) -> Dict[str, int]:
         return {s: src[s] for s in ("critical", "high", "medium", "low")
@@ -125,7 +141,8 @@ def summarize(catalog: Catalog) -> Dict[str, Any]:
         "by_kind": by_kind,
         "by_severity": sevmap(by_severity),
         "by_party": by_party,
-        # First-party (incl. unknown when no target) — the trustworthy view.
-        "first_party_total": sum(v for k, v in by_party.items() if k != "third_party"),
-        "first_party_by_severity": sevmap(first_by_severity),
+        # Actionable = everything except tracking/ad hygiene noise.
+        "actionable_total": len(findings) - noise,
+        "actionable_by_severity": sevmap(actionable_by_severity),
+        "tracking_noise": noise,
     }

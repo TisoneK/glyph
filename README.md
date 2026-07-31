@@ -185,19 +185,26 @@ analysis for authorized assessment — no active scanning or exploitation.
 
 ```bash
 glyph run live <url>               # the scan runs automatically at the end of a run
-glyph sensitive                    # (re-)scan; first-party findings, most severe first
+glyph sensitive                    # (re-)scan; actionable findings, most severe first
 glyph sensitive --severity high    # only high/critical
 glyph sensitive --kind risk        # just the risk indicators
-glyph sensitive --all              # include third-party (analytics/ads/CDN)
+glyph sensitive --all              # include tracking/ad hygiene noise too
 ```
 
-**First-party vs third-party.** A page load pulls in analytics, ad, and CDN hosts alongside
-the target, and flagging *their* CORS or headers as the target's risk is misleading. Glyph
-records the capture's primary host and tags every finding by registrable domain
-(`api.betika.com` and `www.betika.com` are both first-party; `googletagmanager.com` is not,
-and multi-part TLDs like `.co.ke` are handled). `glyph sensitive` shows first-party findings
-by default; `--all` or `--party third` reveal the rest, and `--target HOST` overrides which
-host counts as first-party.
+**Noise, not third-party.** A page load pulls in analytics, ad, and CDN hosts alongside the
+target. The line Glyph draws is *actionable vs noise*, **not** first-party vs third-party —
+because a target's own data routinely lives on third-party hosts (S3, `storage.googleapis.com`,
+Cloudinary, Firebase). So:
+
+- **Sensitive data is never hidden, on any host** — PII on a CDN the target uses is exactly
+  what you need to see.
+- Only **hygiene chatter (CORS / missing headers) on known tracking-and-ad vendors** (Google
+  Tag Manager, DoubleClick, adnxs, Hotjar, Clarity…) is treated as noise and hidden by default.
+- CDNs and object stores are **not** noise.
+
+Each finding is still tagged first-party / third-party (by registrable domain, multi-part TLDs
+like `.co.ke` handled) and shows its host. `glyph sensitive` hides tracking noise by default;
+`--all` shows it, `--party` filters by first/third, and `--target HOST` sets the primary host.
 
 Three kinds of finding:
 

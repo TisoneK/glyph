@@ -232,31 +232,34 @@ def cmd_sensitive(args: argparse.Namespace) -> int:
     finally:
         cat.close()
 
-    # Party filter: default hides third-party (analytics/ads/CDN noise) when a
-    # target is known; --all shows everything; --party picks one explicitly.
+    from glyph.sensitive.scan import is_noise
+    # Default hides ONLY tracking/ad hygiene noise — never data findings, and
+    # never generic third-party hosts (a target's data lives on CDNs/stores).
+    # --all shows the tracking noise too; --party filters by first/third.
     if args.party:
         want = {"first": "first_party", "third": "third_party"}[args.party]
         findings = [f for f in findings if f.party == want]
-    elif not args.all:
-        findings = [f for f in findings if f.party != "third_party"]
+    if not args.all:
+        findings = [f for f in findings if not is_noise(f)]
 
     if args.json:
         _emit({"summary": summary,
                "findings": [f.__dict__ for f in findings]}, True)
         return 0
 
-    tp = summary.get("by_party", {}).get("third_party", 0)
-    head = f"{summary['first_party_total']} first-party finding(s)"
-    head += f": {_sev_line(summary.get('first_party_by_severity', {}))}"
-    if tp and not args.all and not args.party:
-        head += f"   (+{tp} third-party hidden — --all to show)"
+    noise = summary.get("tracking_noise", 0)
+    head = f"{summary['actionable_total']} finding(s)"
+    head += f": {_sev_line(summary.get('actionable_by_severity', {}))}"
+    if noise and not args.all:
+        head += f"   (+{noise} tracking/ad noise hidden — --all to show)"
     print(f"target: {summary.get('target') or '(unknown)'}")
     print(head + "\n")
     for f in findings:
-        tag = "" if f.party in ("first_party", None) else f" ({f.party.replace('_', '-')})"
+        host = f" [{f.host}]" if f.host else ""
+        tag = " (third-party)" if f.party == "third_party" else ""
         val = f"  [value: {f.value_sample}]" if f.value_sample else ""
         loc = f" @ {f.location}" if f.location != "endpoint" else ""
-        print(f"[{f.severity.upper():8}] {f.category}{loc}{tag}\n"
+        print(f"[{f.severity.upper():8}] {f.category}{loc}{tag}{host}\n"
               f"           {f.evidence}{val}")
     if not findings:
         print("(no findings match the filter)")
@@ -336,11 +339,11 @@ def _analyze_and_report(cat, args) -> None:
     if not getattr(args, "no_sensitive", False):
         from glyph.sensitive import run_scan
         sens = run_scan(cat)
-        line = (f"sensitive: {sens['first_party_total']} first-party finding(s) "
-                f"({_sev_line(sens.get('first_party_by_severity', {}))})")
-        tp = sens.get("by_party", {}).get("third_party", 0)
-        if tp:
-            line += f", +{tp} third-party"
+        line = (f"sensitive: {sens['actionable_total']} finding(s) "
+                f"({_sev_line(sens.get('actionable_by_severity', {}))})")
+        noise = sens.get("tracking_noise", 0)
+        if noise:
+            line += f", +{noise} tracking/ad noise"
         print(line)
         hint += ", 'glyph sensitive' for findings"
     print(f"\nCatalog: {args.db}  —  {hint}, 'glyph codegen' to export.")

@@ -36,6 +36,40 @@ _MULTI_SUFFIX = {
 }
 _IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 
+# Known analytics / advertising / tracking / session-replay vendors. These
+# are pure infrastructure noise — a target's own data never lives here, so
+# their CORS/header hygiene is not the target's concern. This is DELIBERATELY
+# NOT a CDN/storage list: a target's data DOES live on CDNs and object stores
+# (S3, googleapis storage, Cloudinary, Firebase, CloudFront), so those are
+# never treated as noise — findings on them are surfaced like any other.
+_TRACKING_VENDORS = {
+    "google-analytics.com", "googletagmanager.com", "googlesyndication.com",
+    "googletagservices.com", "googleadservices.com", "doubleclick.net",
+    "adnxs.com", "adsrvr.org", "rubiconproject.com", "pubmatic.com",
+    "criteo.com", "criteo.net", "taboola.com", "outbrain.com", "adform.net",
+    "facebook.com", "facebook.net", "hotjar.com", "mixpanel.com",
+    "segment.com", "segment.io", "amplitude.com", "fullstory.com",
+    "clarity.ms", "mouseflow.com", "crazyegg.com", "quantserve.com",
+    "scorecardresearch.com", "newrelic.com", "nr-data.net", "sentry.io",
+    "bugsnag.com", "optimizely.com", "branch.io", "appsflyer.com",
+    "adjust.com", "onesignal.com", "cookiebot.com", "onetrust.com",
+    "yandex.ru", "bat.bing.com", "snowplowanalytics.com", "chartbeat.com",
+}
+
+
+def is_tracking_vendor(host: Optional[str]) -> bool:
+    """True if the host is a known analytics/ads/tracking vendor (noise).
+
+    CDNs and object stores are intentionally excluded — a target's own data
+    lives on those, so they are never treated as noise.
+    """
+    host = (host or "").split(":")[0].strip(".").lower()
+    if not host:
+        return False
+    if registrable_domain(host) in _TRACKING_VENDORS:
+        return True
+    return any(host == v or host.endswith("." + v) for v in _TRACKING_VENDORS)
+
 
 def registrable_domain(host: Optional[str]) -> str:
     """Return the eTLD+1 for a host ('' if it has none / is an IP)."""

@@ -80,14 +80,42 @@ def test_scan_tags_party_from_target():
     cat.close()
 
 
-def test_summary_splits_party():
+def test_tracking_vendor_hygiene_is_noise():
+    from glyph.sensitive.party import is_tracking_vendor
+    assert is_tracking_vendor("secure.adnxs.com") is True
+    assert is_tracking_vendor("www.googletagmanager.com") is True
+    # CDNs / object stores are NOT vendors — a target's data lives there
+    assert is_tracking_vendor("storage.googleapis.com") is False
+    assert is_tracking_vendor("d1234.cloudfront.net") is False
+
     cat = Catalog(":memory:")
     cat.set_target("www.betika.com")
     cat.add_flow(Flow(method="GET", url="https://secure.adnxs.com/y", host="", path="",
                       resp_headers={"Access-Control-Allow-Origin": "*"}))
     s = run_scan(cat)
-    assert s["by_party"].get("third_party", 0) >= 1
-    assert s["first_party_total"] == s["total"] - s["by_party"]["third_party"]
+    assert s["tracking_noise"] >= 1
+    assert s["actionable_total"] == s["total"] - s["tracking_noise"]
+    cat.close()
+
+
+def test_sensitive_data_on_third_party_cdn_is_not_hidden():
+    # The core fix: PII on a third-party host the target uses (a CDN/store)
+    # must NOT be treated as noise — only tracking-vendor hygiene is.
+    from glyph.sensitive.scan import is_noise
+    cat = Catalog(":memory:")
+    cat.set_target("www.betika.com")
+    cat.add_flow(Flow(
+        method="GET",
+        url="https://storage.googleapis.com/betika-cdn/users.json",
+        host="", path="", resp_mime="application/json",
+        resp_body='{"users":[{"email":"real.user@example.com"}]}'))
+    run_scan(cat)
+    data = [f for f in cat.findings(kind="sensitive_data")]
+    assert any(f.category == "email" for f in data)
+    # third-party host, but a data finding -> never noise
+    email = [f for f in data if f.category == "email"][0]
+    assert email.party == "third_party"
+    assert is_noise(email) is False
     cat.close()
 
 

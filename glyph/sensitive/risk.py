@@ -63,7 +63,7 @@ def _sensitive_in_url(data_findings: List[Finding]) -> List[Finding]:
                 evidence=f"{f.category} carried in a URL query parameter "
                          f"({f.location}) — leaks via logs, history, Referer",
                 value_sample=f.value_sample,
-                party=f.party,  # inherit the data finding's party
+                party=f.party, host=f.host,  # inherit the data finding's host
             ))
     return out
 
@@ -99,7 +99,7 @@ def _unauthenticated_sensitive_data(catalog: Catalog,
             location="endpoint", endpoint_id=ep_id,
             evidence=f"{ep.key} returns sensitive data ({', '.join(cats)}) "
                      f"with no authentication observed",
-            party=party_mod.classify(ep.host, target),
+            party=party_mod.classify(ep.host, target), host=ep.host,
         ))
     return out
 
@@ -124,7 +124,7 @@ def _cors_and_headers(catalog: Catalog,
                 location="header:access-control-allow-origin",
                 evidence=f"{flow.host} returns Access-Control-Allow-Origin: *"
                          + (" WITH credentials" if creds else ""),
-                party=party_mod.classify(flow.host, target),
+                party=party_mod.classify(flow.host, target), host=flow.host,
             ))
         # Track security-header presence on HTML documents per host.
         if (flow.resp_mime or "") == "text/html":
@@ -142,7 +142,7 @@ def _cors_and_headers(catalog: Catalog,
                     kind=FINDING_RISK, category="missing_security_header",
                     severity=sev, location=f"header:{header}",
                     evidence=f"{host} HTML responses never set {header}",
-                    party=party_mod.classify(host, target),
+                    party=party_mod.classify(host, target), host=host,
                 ))
     return out
 
@@ -166,7 +166,8 @@ def _verbose_errors(catalog: Catalog,
                 severity=SEV_MEDIUM, location=f"response:{flow.path}",
                 evidence=f"{flow.host}{flow.path} response leaks a stack "
                          f"trace / server error detail",
-                value_sample=snippet,
+                value_sample=snippet, host=flow.host,
+                party=party_mod.classify(flow.host, target),
             ))
     return out
 
@@ -189,6 +190,6 @@ def _guessable_ids(catalog: Catalog,
                 evidence=f"{ep.key} uses small sequential-looking numeric ids "
                          f"(e.g. {sorted(ids)[:5]}) — IDOR/BOLA candidate; "
                          f"verify object-level authorization",
-                party=party_mod.classify(ep.host, target),
+                party=party_mod.classify(ep.host, target), host=ep.host,
             ))
     return out

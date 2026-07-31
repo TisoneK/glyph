@@ -61,7 +61,7 @@ def classify(catalog: Catalog, target: Optional[str] = None) -> List[Finding]:
                     evidence=f"{ep.method} {ep.host}{ep.path_template} "
                              f"matches {category.replace('_', ' ')}",
                     endpoint_id=ep.id,
-                    party=party_mod.classify(ep.host, target),
+                    party=party_mod.classify(ep.host, target), host=ep.host,
                 ))
                 break  # one classification per endpoint (most severe first)
     return findings
