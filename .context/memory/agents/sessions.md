@@ -217,3 +217,11 @@ cross-join (conservative, acceptable). Lesson: single-host test fixtures hid a c
 - **Outcome:** done. `glyph/cli/` = one module per subcommand (each `add_parser`+`run`) + `_shared`/`_output`/`_format` helpers; `__init__` builds the parser by iterating command modules, `__main__` keeps `python -m glyph.cli`. Business logic untouched (stage packages remain the source of truth). `dict` now distinguishes empty-catalog / rosetta-not-run / rosetta-ran-nothing (new `rosetta_ran` meta flag; added generic `Catalog.get_meta/set_meta`). `glyph sensitive` renders a masked table (`prefix***suffix`, location, severity, party, host); `--json` still returns full raw values (values kept at rest per ADR-4). ADR-5 marked implemented/accepted. **97 tests pass.**
 - **Open items:** the ADRs the user flagged as missing are NOT yet written — a capture-scope ADR (HTTP/HAR level vs raw packet `.cap`/pcap) and a mobile-package ADR (APK/IPA static mining; XAPK/split-APK + OBB handling). Also all Session 10 sensitive-stage follow-ups in `tasks/backlog.md`.
 - **Report:** none (this entry + ADR-5 carry it).
+
+### Update (2026-07-31, Session 12) — ADR-5 polish (the actual point)
+User clarified ADR-5's intent was beauty/intuition, not just the package split. Added TTY-aware
+color to `glyph/cli/_format.py`: severity color-coding (critical/high/medium/low) shared across
+the sensitive table, run summary, and counts; ANSI-aware table alignment; bold labels/headers,
+dim separators/hints; cyan paths/hosts; green success lines. Auto-off on non-TTY/NO_COLOR/--json
+so pipes and tests stay plain. 97 tests. Lesson: implement the *user-visible* intent of a UX ADR,
+not only its structural half.
