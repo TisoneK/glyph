@@ -171,3 +171,11 @@ scan now runs automatically at the end of `glyph run live` and `glyph run har` (
 already-captured data), with a one-line summary and a `--no-sensitive` opt-out. Also fixed a
 credit-card false positive surfaced by the Juice Shop live test (Luhn-valid ms timestamp) via
 a card-network-prefix gate. 90 tests.
+
+### Update (2026-07-31, Session 10 cont.) — first/third-party host scoping
+Betika live test (318 flows, Rosetta decoded sub_type_id 60→'1st Half 1x2', 186→'WINNER')
+exposed that most sensitive findings were on third-party hosts (GTM, adnxs) — the 2 "criticals"
+weren't Betika's. Added first/third-party scoping: capture records the primary target host,
+a registrable-domain matcher (eTLD+1 incl. .co.ke) tags each finding's party, and
+`glyph sensitive` defaults to first-party (--all/--party/--target to control). Cut Betika's
+50 findings to 10 trustworthy first-party ones. `party` column on findings (+migration). 94 tests.
