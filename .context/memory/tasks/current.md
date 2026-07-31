@@ -11,8 +11,9 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — Session 12 (2026-07-31) implemented ADR-5 (cli/ package split + UX
-  fixes) and cleared. Open: still-missing ADRs (capture-scope .cap/pcap; mobile APK/XAPK) +
-  Session 10 sensitive follow-ups. See `agents/sessions.md` Session 12 and `tasks/backlog.md`.
-- **Status:** idle
+- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 13)
+- **Task:** Online research + write two scope ADRs the user flagged as missing:
+  (A) capture scope — HTTP/HAR level vs raw-packet (.cap/pcap); (B) mobile package
+  handling — APK/IPA vs XAPK/APKS/split-APK/OBB. Research first for context, then
+  record grounded ADRs.
+- **Status:** in-progress
