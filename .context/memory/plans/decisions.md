@@ -129,3 +129,8 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   bloating a single file. Shared formatting in `_format.py` ensures consistent table look
   across `sensitive`, `dict`, and `schema` output. No business logic moves — the stage
   modules (`glyph.sensitive`, `glyph.rosetta`, etc.) remain the single source of truth.
+
+- **Implemented:** 2026-07-31 (Session 12) — the `cli/` package split (one module per
+  subcommand + `_shared`/`_output`/`_format`), the `dict` empty-state fix (via a `rosetta_ran`
+  meta flag), and the `glyph sensitive` masked-table output all landed. Status → accepted.
+  97 tests pass; `glyph.cli:main` / console script / `python -m glyph.cli` unchanged.

@@ -11,10 +11,8 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-07-31 — Claude Code / claude-opus-4-8 (Session 12)
-- **Task:** Implement ADR-5 — split `glyph/cli.py` (517 lines) into a `glyph/cli/`
-  package (one module per subcommand + `_output.py`/`_format.py` shared helpers),
-  fix the dict/run empty-state messaging inconsistency, and give `glyph sensitive`
-  table output (masked values, location, severity, filters, --json). Presentation
-  only — stage modules stay the single source of truth.
-- **Status:** in-progress
+- **Session:** —
+- **Task:** none — Session 12 (2026-07-31) implemented ADR-5 (cli/ package split + UX
+  fixes) and cleared. Open: still-missing ADRs (capture-scope .cap/pcap; mobile APK/XAPK) +
+  Session 10 sensitive follow-ups. See `agents/sessions.md` Session 12 and `tasks/backlog.md`.
+- **Status:** idle

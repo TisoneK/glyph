@@ -208,3 +208,12 @@ Moved registrable_domain to catalog.normalize (shared with rosetta; party re-exp
 on flash.db: 0 cross-domain consent decodings after a clean re-decode. 97 tests. Also noted:
 flashscore.com data also served from lsapp.eu (Livesport backend) — related-org domains won't
 cross-join (conservative, acceptable). Lesson: single-host test fixtures hid a cross-host bug.
+
+---
+## 2026-07-31 — Session 12
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Implement ADR-5 (written proposed by Session 11 on the Windows box) — split the 517-line `glyph/cli.py` into a `glyph/cli/` package, fix the dict/run empty-state messaging, and give `glyph sensitive` real table output.
+- **Commits:** 2 — `feat(cli)` (the split + UX fixes) + this `chore(context)`. See `git log`.
+- **Outcome:** done. `glyph/cli/` = one module per subcommand (each `add_parser`+`run`) + `_shared`/`_output`/`_format` helpers; `__init__` builds the parser by iterating command modules, `__main__` keeps `python -m glyph.cli`. Business logic untouched (stage packages remain the source of truth). `dict` now distinguishes empty-catalog / rosetta-not-run / rosetta-ran-nothing (new `rosetta_ran` meta flag; added generic `Catalog.get_meta/set_meta`). `glyph sensitive` renders a masked table (`prefix***suffix`, location, severity, party, host); `--json` still returns full raw values (values kept at rest per ADR-4). ADR-5 marked implemented/accepted. **97 tests pass.**
+- **Open items:** the ADRs the user flagged as missing are NOT yet written — a capture-scope ADR (HTTP/HAR level vs raw packet `.cap`/pcap) and a mobile-package ADR (APK/IPA static mining; XAPK/split-APK + OBB handling). Also all Session 10 sensitive-stage follow-ups in `tasks/backlog.md`.
+- **Report:** none (this entry + ADR-5 carry it).
