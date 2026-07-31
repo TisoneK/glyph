@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 
+from glyph.cli._format import style
 from glyph.cli._output import emit
 from glyph.cli._shared import catalog, with_db, with_json
 
@@ -31,19 +32,23 @@ def run(args: argparse.Namespace) -> int:
         print(_empty_message(args.review, ran, n_flows))
         return 0
     for e in entries:
-        flag = " [REVIEW]" if e.needs_review else ""
-        print(f"{e.json_path}  {e.code!r} -> {e.meaning!r}  "
-              f"(conf {e.confidence}, {e.strategy}){flag}")
+        flag = style(" [REVIEW]", "yellow") if e.needs_review else ""
+        arrow = style("→", "gray")
+        meta = style(f"(conf {e.confidence}, {e.strategy})", "gray")
+        print(f"{style(e.json_path, 'cyan')}  {e.code!r} {arrow} "
+              f"{style(repr(e.meaning), 'bold')}  {meta}{flag}")
     return 0
 
 
 def _empty_message(review: bool, rosetta_ran, n_flows: int) -> str:
     """Distinguish 'rosetta hasn't run' from 'it ran and found nothing'."""
     if review:
-        return "(nothing needs review)"
-    if n_flows == 0:
-        return "(catalog is empty — capture traffic first, e.g. 'glyph run har <file>')"
-    if not rosetta_ran:
-        return "(no decodings yet — run 'glyph rosetta')"
-    return ("(rosetta ran but found no code->meaning correlations in the "
-            "captured data)")
+        msg = "(nothing needs review)"
+    elif n_flows == 0:
+        msg = "(catalog is empty — capture traffic first, e.g. 'glyph run har <file>')"
+    elif not rosetta_ran:
+        msg = "(no decodings yet — run 'glyph rosetta')"
+    else:
+        msg = ("(rosetta ran but found no code->meaning correlations in the "
+               "captured data)")
+    return style(msg, "gray")

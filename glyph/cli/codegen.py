@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 
+from glyph.cli._format import style
 from glyph.cli._shared import catalog, with_db
 
 
@@ -22,7 +23,7 @@ def run(args: argparse.Namespace) -> int:
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             fh.write(spec)
-        print(f"Wrote OpenAPI spec to {args.out}")
+        print(style(f"Wrote OpenAPI spec to {args.out}", "green"))
     else:
         print(spec)
     return 0

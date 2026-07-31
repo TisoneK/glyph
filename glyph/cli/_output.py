@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from glyph.cli._format import label, style
+
 
 def emit(data: Any, as_json: bool) -> None:
     """Print ``data`` as indented JSON, or as a human-readable tree."""
@@ -19,12 +21,12 @@ def human(data: Any, indent: int = 0) -> str:
         lines = []
         for k, v in data.items():
             if isinstance(v, (dict, list)) and v:
-                lines.append(f"{pad}{k}:")
+                lines.append(f"{pad}{label(str(k))}:")
                 lines.append(human(v, indent + 1))
             else:
-                lines.append(f"{pad}{k}: {v}")
+                lines.append(f"{pad}{label(str(k))}: {v}")
         return "\n".join(lines)
     if isinstance(data, list):
         return "\n".join(human(item, indent) if isinstance(item, (dict, list))
-                         else f"{pad}- {item}" for item in data)
+                         else f"{pad}{style('-', 'gray')} {item}" for item in data)
     return f"{pad}{data}"

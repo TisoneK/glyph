@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from glyph.cli._format import sev_line
+from glyph.cli._format import label, sev_line, style
 from glyph.cli._shared import (
     catalog,
     live_kwargs,
@@ -37,21 +37,23 @@ def _analyze_and_report(cat, args) -> None:
     from glyph.rosetta import build_dictionary
     sch = infer_all(cat)
     ros = build_dictionary(cat)
-    print(f"schema:    {sch['fields']} fields, {sch['enum_candidates']} enum candidate(s)")
-    print(f"rosetta:   {ros['entries']} decoded "
+    print(f"{label('schema:   ')} {sch['fields']} fields, "
+          f"{sch['enum_candidates']} enum candidate(s)")
+    print(f"{label('rosetta:  ')} {ros['entries']} decoded "
           f"({ros['high_confidence']} high-confidence, {ros['needs_review']} to review)")
     hint = "'glyph dict' to view"
     if not getattr(args, "no_sensitive", False):
         from glyph.sensitive import run_scan
         sens = run_scan(cat)
-        line = (f"sensitive: {sens['actionable_total']} finding(s) "
+        line = (f"{label('sensitive:')} {sens['actionable_total']} finding(s) "
                 f"({sev_line(sens.get('actionable_by_severity', {}))})")
         noise = sens.get("tracking_noise", 0)
         if noise:
-            line += f", +{noise} tracking/ad noise"
+            line += style(f", +{noise} tracking/ad noise", "gray")
         print(line)
         hint += ", 'glyph sensitive' for findings"
-    print(f"\nCatalog: {args.db}  —  {hint}, 'glyph codegen' to export.")
+    tail = style(f"—  {hint}, 'glyph codegen' to export.", "gray")
+    print(f"\n{label('Catalog:')} {args.db}  {tail}")
 
 
 def run_har(args: argparse.Namespace) -> int:

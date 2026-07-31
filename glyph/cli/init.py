@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 
+from glyph.cli._format import style
 from glyph.cli._shared import catalog, with_db
 
 
@@ -13,5 +14,5 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     catalog(args).close()
-    print(f"Initialized catalog at {args.db}")
+    print(style(f"Initialized catalog at {args.db}", "green"))
     return 0

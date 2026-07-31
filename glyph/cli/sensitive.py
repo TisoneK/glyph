@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import argparse
 
-from glyph.cli._format import mask_value, sev_line, table
+from glyph.cli._format import label, mask_value, sev_label, sev_line, style, table
 from glyph.cli._output import emit
 from glyph.cli._shared import catalog, with_db, with_json
 
@@ -59,24 +59,27 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     noise = summary.get("tracking_noise", 0)
-    head = (f"{summary['actionable_total']} finding(s): "
+    head = (f"{label(str(summary['actionable_total']) + ' finding(s)')}: "
             f"{sev_line(summary.get('actionable_by_severity', {}))}")
     if noise and not args.all:
-        head += f"   (+{noise} tracking/ad noise hidden — --all to show)"
-    print(f"target: {summary.get('target') or '(unknown)'}")
+        head += style(f"   (+{noise} tracking/ad noise hidden — --all to show)",
+                      "gray")
+    print(f"{label('target:')} {style(summary.get('target') or '(unknown)', 'cyan')}")
     print(head)
     if not findings:
-        print("\n(no findings match the filter)")
+        print("\n" + style("(no findings match the filter)", "gray"))
         return 0
     rows = []
     for f in findings:
         party = {"third_party": "3p", "first_party": "1p"}.get(f.party, "?")
         rows.append([
-            f.severity.upper(), f.category, party, f.host or "",
+            sev_label(f.severity), f.category, style(party, "gray"),
+            style(f.host or "", "cyan"),
             "" if f.location == "endpoint" else f.location,
             mask_value(f.value_sample),
         ])
     print()
     print(table(rows, ["SEV", "TYPE", "P", "HOST", "LOCATION", "VALUE"]))
-    print("\n(values masked; --json for full values, --all for tracking noise)")
+    print(style("\n(values masked; --json for full values, --all for "
+                "tracking noise)", "gray"))
     return 0
