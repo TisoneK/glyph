@@ -35,8 +35,12 @@ schema = ["genson>=1.2"]
 analytics = ["duckdb>=0.10"]
 # Interactive terminal dashboard (Textual TUI over the catalog).
 tui = ["textual>=0.60"]
+# VPN-Config Decoder — AES/ChaCha20/PBKDF2 for decrypting .hc/.ehi/.ziv/.tls
+# config files (ADR-11). Graceful fallback: without it, plain formats (DARK
+# envelope, OVPN) still decode; crypto-dependent formats report no_decryptor.
+crypto = ["pycryptodome>=3.20"]
 # Everything, plus test tooling.
-dev = ["glyph-re[live,schema,analytics,tui]", "pytest>=7"]
+dev = ["glyph-re[live,schema,analytics,tui,crypto]", "pytest>=7"]
 
 [project.scripts]
 glyph = "glyph.cli:main"

@@ -33,13 +33,14 @@ from glyph.cli import (
     schema,
     sensitive,
     snihunt,
+    vpndec,
 )
 from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
 
 # Registration order = help-listing order.
 _COMMANDS = [
     init, capture, run, dashboard,
-    flows, dom, schema, rosetta, dict_cmd, sensitive, snihunt, review,
+    flows, dom, schema, rosetta, dict_cmd, sensitive, snihunt, vpndec, review,
     fingerprint, auth, gating, codegen, drift, mobile, catalog,
 ]
 

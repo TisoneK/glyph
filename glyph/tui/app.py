@@ -47,6 +47,7 @@ _VIEWS = [
     ("sensitive", "Sensitive", D.sensitive_rows),
     ("rosetta", "Rosetta", D.rosetta_rows),
     ("snihunt", "SNI Hunt", D.snihunt_rows),
+    ("vpndec", "VPN Dec", D.vpndec_rows),
 ]
 
 
@@ -70,6 +71,10 @@ def _summary_markup(s: dict) -> str:
             sni_color = c
             break
     sni_str = f"[{sni_color}]{sni} sni[/]" if sni else "[grey58]0 sni[/]"
+    vpns = s.get("vpn_configs", 0)
+    vpn_ok = s.get("vpn_decoded", 0)
+    vpn_str = (f"[green]{vpn_ok}[/]/[b]{vpns}[/] vpn" if vpns
+               else "[grey58]0 vpn[/]")
     return (
         f"  [b cyan]FLOWS[/] [b]{s.get('flows', 0)}[/] [grey58]{types}[/]"
         f"    [b cyan]SCHEMA[/] [b]{s.get('fields', 0)}[/] fields · {s.get('enums', 0)} enums"
@@ -77,6 +82,7 @@ def _summary_markup(s: dict) -> str:
         f"    [b cyan]DOM[/] [b]{s.get('dom_labels', 0)}[/] [grey58]{doms}[/]"
         f"    [b cyan]ROSETTA[/] [b]{s.get('decoded', 0)}[/]"
         f"    [b cyan]SNI[/] {sni_str}"
+        f"    [b cyan]VPN[/] {vpn_str}"
     )
 
 
@@ -182,6 +188,7 @@ if HAS_TEXTUAL:
             Binding("4", "show('sensitive')", "Sensitive"),
             Binding("5", "show('rosetta')", "Rosetta"),
             Binding("6", "show('snihunt')", "SNI Hunt"),
+            Binding("7", "show('vpndec')", "VPN Dec"),
             Binding("r", "reload", "Reload"),
             Binding("escape", "back", "Back"),
             Binding("q", "app.quit", "Quit"),

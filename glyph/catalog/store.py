@@ -20,6 +20,11 @@ from glyph.catalog.models import (
     PageObservation,
     severity_rank,
 )
+
+# VpnConfig is defined in glyph.vpndec.models, but importing it here would
+# create a cycle (vpndec imports nothing from catalog at module load — it
+# takes a Catalog at call time). We import it lazily inside the methods
+# that need it, so `import glyph.catalog` never pulls in vpndec.
 from glyph.catalog.normalize import split_url, template_path
 
 _SCHEMA = """
@@ -99,6 +104,36 @@ CREATE TABLE IF NOT EXISTS findings (
     host TEXT,
     score INTEGER,
     UNIQUE (kind, category, endpoint_id, location)
+);
+CREATE TABLE IF NOT EXISTS vpn_configs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    format TEXT NOT NULL,
+    is_encrypted INTEGER DEFAULT 0,
+    decryption_status TEXT NOT NULL,
+    scheme TEXT,
+    confidence REAL DEFAULT 0.0,
+    key_label TEXT,
+    host TEXT,
+    port INTEGER,
+    protocol TEXT,
+    ssh_server TEXT,
+    ssh_port INTEGER,
+    ssh_user TEXT,
+    ssh_pass TEXT,
+    proxy_host TEXT,
+    proxy_port INTEGER,
+    payload TEXT,
+    sni TEXT,
+    bug_host TEXT,
+    dns TEXT,
+    remote_dns TEXT,
+    raw_data TEXT,
+    errors TEXT,
+    warnings TEXT,
+    decoded_at TEXT,
+    UNIQUE (filepath)
 );
 CREATE INDEX IF NOT EXISTS idx_flows_endpoint ON flows (endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_fields_endpoint ON fields (endpoint_id);
@@ -485,11 +520,82 @@ class Catalog:
             self.conn.execute("DELETE FROM findings WHERE kind=?", (kind,))
         self.conn.commit()
 
+    # -- vpn configs (ADR-11: VPN-Config Decoder) -------------------------
+    def add_vpn_config(self, cfg) -> int:
+        """Persist a decoded :class:`~glyph.vpndec.models.VpnConfig`.
+
+        Upserts on ``filepath`` — re-decoding the same file replaces the row.
+        Credentials (ssh_user/ssh_pass) are KEPT (ADR-4 precedent).
+        """
+        from datetime import datetime, timezone
+        cur = self.conn.execute(
+            "INSERT INTO vpn_configs (filepath, filename, format, is_encrypted, "
+            "decryption_status, scheme, confidence, key_label, host, port, "
+            "protocol, ssh_server, ssh_port, ssh_user, ssh_pass, proxy_host, "
+            "proxy_port, payload, sni, bug_host, dns, remote_dns, raw_data, "
+            "errors, warnings, decoded_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(filepath) DO UPDATE SET "
+            "filename=excluded.filename, format=excluded.format, "
+            "is_encrypted=excluded.is_encrypted, "
+            "decryption_status=excluded.decryption_status, "
+            "scheme=excluded.scheme, confidence=excluded.confidence, "
+            "key_label=excluded.key_label, host=excluded.host, port=excluded.port, "
+            "protocol=excluded.protocol, ssh_server=excluded.ssh_server, "
+            "ssh_port=excluded.ssh_port, ssh_user=excluded.ssh_user, "
+            "ssh_pass=excluded.ssh_pass, proxy_host=excluded.proxy_host, "
+            "proxy_port=excluded.proxy_port, payload=excluded.payload, "
+            "sni=excluded.sni, bug_host=excluded.bug_host, dns=excluded.dns, "
+            "remote_dns=excluded.remote_dns, raw_data=excluded.raw_data, "
+            "errors=excluded.errors, warnings=excluded.warnings, "
+            "decoded_at=excluded.decoded_at",
+            (cfg.filepath, cfg.filename, cfg.format,
+             1 if cfg.is_encrypted else 0, cfg.decryption_status, cfg.scheme,
+             cfg.confidence, cfg.key_label, cfg.host, cfg.port, cfg.protocol,
+             cfg.ssh_server, cfg.ssh_port, cfg.ssh_user, cfg.ssh_pass,
+             cfg.proxy_host, cfg.proxy_port, cfg.payload, cfg.sni,
+             cfg.bug_host, cfg.dns, cfg.remote_dns, _dumps(cfg.raw_data),
+             _dumps(cfg.errors), _dumps(cfg.warnings),
+             datetime.now(timezone.utc).isoformat()),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def vpn_configs(self) -> List[Dict[str, Any]]:
+        """Return all decoded VPN configs, newest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM vpn_configs ORDER BY id DESC"
+        ).fetchall()
+        out = []
+        for r in rows:
+            out.append({
+                "id": r["id"], "filepath": r["filepath"], "filename": r["filename"],
+                "format": r["format"], "is_encrypted": bool(r["is_encrypted"]),
+                "decryption_status": r["decryption_status"], "scheme": r["scheme"],
+                "confidence": r["confidence"], "key_label": r["key_label"],
+                "host": r["host"], "port": r["port"], "protocol": r["protocol"],
+                "ssh_server": r["ssh_server"], "ssh_port": r["ssh_port"],
+                "ssh_user": r["ssh_user"], "ssh_pass": r["ssh_pass"],
+                "proxy_host": r["proxy_host"], "proxy_port": r["proxy_port"],
+                "payload": r["payload"], "sni": r["sni"], "bug_host": r["bug_host"],
+                "dns": r["dns"], "remote_dns": r["remote_dns"],
+                "raw_data": _loads(r["raw_data"], None),
+                "errors": _loads(r["errors"], []) or [],
+                "warnings": _loads(r["warnings"], []) or [],
+                "decoded_at": r["decoded_at"],
+            })
+        return out
+
+    def clear_vpn_configs(self) -> None:
+        """Drop all decoded VPN configs."""
+        self.conn.execute("DELETE FROM vpn_configs")
+        self.conn.commit()
+
     def reset(self) -> None:
         """Empty the catalog — a fresh start for a new target/run. Keeps the
         schema; clears all captured data, analysis, and meta (except version)."""
         for tbl in ("flows", "endpoints", "fields", "dictionary",
-                    "page_observations", "findings"):
+                    "page_observations", "findings", "vpn_configs"):
             self.conn.execute("DELETE FROM " + tbl)
         self.conn.execute("DELETE FROM meta WHERE key != 'schema_version'")
         self.conn.commit()
@@ -510,4 +616,5 @@ class Catalog:
             ).fetchone()["n"]),
             "dictionary": count("dictionary"),
             "pages": count("page_observations"),
+            "vpn_configs": count("vpn_configs"),
         }

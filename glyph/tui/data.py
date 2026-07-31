@@ -72,6 +72,8 @@ def summary(cat: Catalog) -> Dict[str, Any]:
     dic = cat.dictionary()
     sni = cat.findings(kind="sni_bug_host")
     sni_by_sev = Counter(f.severity for f in sni)
+    vpns = cat.vpn_configs()
+    vpn_ok = sum(1 for c in vpns if c["decryption_status"] in ("success", "partial"))
     return {
         "flows": len(flows),
         "by_type": dict(by_type),
@@ -86,6 +88,8 @@ def summary(cat: Catalog) -> Dict[str, Any]:
         "decoded_review": sum(1 for d in dic if d.needs_review),
         "sni_candidates": len(sni),
         "sni_by_severity": dict(sni_by_sev),
+        "vpn_configs": len(vpns),
+        "vpn_decoded": vpn_ok,
         "target": cat.target(),
     }
 
@@ -192,4 +196,24 @@ def snihunt_rows(cat: Catalog) -> Rows:
         rows.append([f.severity.upper(), str(f.score or 0),
                      _SNI_CAT_LABEL.get(f.category, f.category),
                      f.host or "", (f.evidence or "")[:100]])
+    return headers, rows
+
+
+def vpndec_rows(cat: Catalog) -> Rows:
+    """Decoded VPN configs (ADR-11). One row per decoded file."""
+    headers = ["STATUS", "FORMAT", "HOST", "PORT", "PROTO", "SNI", "FILE"]
+    rows: List[List[str]] = []
+    for cfg in cat.vpn_configs():
+        mark = {"success": "✓", "partial": "◐", "not_encrypted": "○",
+                "failed": "✗", "no_decryptor": "—"}.get(
+            cfg["decryption_status"], "?")
+        rows.append([
+            f"{mark} {cfg['decryption_status']}",
+            cfg["format"],
+            cfg["host"] or "—",
+            str(cfg["port"] or "—"),
+            cfg["protocol"] or "—",
+            (cfg["sni"] or "—")[:30],
+            cfg["filename"],
+        ])
     return headers, rows
