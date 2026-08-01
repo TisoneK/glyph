@@ -294,38 +294,48 @@ if HAS_TEXTUAL:
             self._analyzing = True
             self.app.run_worker(self._analyze_once, thread=True, name="analyze")
 
+        def _target_host(self) -> Optional[str]:
+            """The capture target's host (from the live url), so analysis
+            lanes re-activate it — a fresh Catalog has no active target, and
+            writes would otherwise fall into the (unassigned) bucket."""
+            from urllib.parse import urlparse
+            url = (self.live or {}).get("url")
+            return urlparse(url).hostname if url else None
+
         def _analyze_once(self) -> None:
-            from glyph.rosetta import build_dictionary
-            from glyph.schema import infer_all
-            cat = Catalog(self.db_path)
+            # ADR-15: schema→rosetta + sensitive run CONCURRENTLY as lanes of
+            # glyph.pipeline.run_analysis (each lane target-anchored). The SNI
+            # hunt is finalize-only (ADR-10 — bounded network recon too slow
+            # to repeat every tick), so it's skipped on live ticks.
+            from glyph.pipeline import run_analysis
             try:
-                infer_all(cat)
-                build_dictionary(cat)
-                if not self._no_sensitive:
-                    from glyph.sensitive import run_scan
-                    run_scan(cat)
+                run_analysis(
+                    self.db_path,
+                    target=self._target_host(),
+                    no_sensitive=self._no_sensitive,
+                    no_snihunt=True,  # hunt runs once at finalize
+                )
             except Exception:
                 pass  # transient lock while capture writes: retry next tick
             finally:
-                cat.close()
                 self._analyzing = False
 
         def _finalize(self) -> None:
-            self._analyze_once()
-            # SNI hunt runs ONCE at finalize (not on every analyze tick) —
-            # it does bounded network recon (DNS, CT logs, reverse-IP) that
-            # would be too slow / too chatty to repeat every 4s. ADR-10.
-            # --no-snihunt skips it; --snihunt-no-net keeps it local-only.
-            if not self._no_snihunt:
-                try:
-                    from glyph.snihunt import run_hunt
-                    cat = Catalog(self.db_path)
-                    try:
-                        run_hunt(cat, net=not self._snihunt_no_net)
-                    finally:
-                        cat.close()
-                except Exception:
-                    pass  # network/lock hiccup — the snihunt CLI can re-run it
+            # Full parallel analysis INCLUDING the SNI hunt (ADR-15): all
+            # lanes (schema→rosetta, sensitive, snihunt) run concurrently, so
+            # the hunt no longer waits for the other stages. --no-snihunt
+            # skips it; --snihunt-no-net keeps it local-only (ADR-10).
+            from glyph.pipeline import run_analysis
+            try:
+                run_analysis(
+                    self.db_path,
+                    target=self._target_host(),
+                    no_sensitive=self._no_sensitive,
+                    no_snihunt=self._no_snihunt,
+                    snihunt_no_net=self._snihunt_no_net,
+                )
+            except Exception:
+                pass  # network/lock hiccup — the snihunt CLI can re-run it
             # stop the live timers now that capture is done (no more polling).
             for t in self._live_timers:
                 try:

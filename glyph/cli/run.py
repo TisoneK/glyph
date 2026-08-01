@@ -88,29 +88,21 @@ def _progress(msg: str) -> None:
 
 
 def _gather(cat, args, cap: dict) -> dict:
-    from glyph.schema import infer_all
-    from glyph.rosetta import build_dictionary
-    _progress("schema: inferring fields + enum candidates…")
-    d = {"cap": cap, "sch": infer_all(cat), "ros": build_dictionary(cat),
-         "sens": None, "sni": None}
-    _progress(f"rosetta: decoded {d['ros']['entries']} entries")
-    if not getattr(args, "no_sensitive", False):
-        _progress("sensitive: scanning for PII / secrets / risk…")
-        from glyph.sensitive import run_scan
-        d["sens"] = run_scan(cat)
-    # SNI hunt runs AFTER sensitive: it reads the captured host surface and
-    # does bounded active recon (reverse-IP, CT logs, CDN detection). Opt
-    # out with --no-snihunt. --snihunt-no-net keeps it local-only (no DoH /
-    # CT / reverse-IP — faster, no outbound calls). See ADR-10.
-    if not getattr(args, "no_snihunt", False):
-        from glyph.snihunt import run_hunt
-        if getattr(args, "snihunt_no_net", False):
-            _progress("snihunt: local heuristics only (--no-net)…")
-        else:
-            _progress("snihunt: reverse-IP + CT logs + CDN detection (network)…")
-        d["sni"] = run_hunt(cat, net=not getattr(args, "snihunt_no_net", False),
-                            progress=_progress)
-    return d
+    # ADR-15: the analysis stages run CONCURRENTLY (schema→rosetta chain,
+    # sensitive, and snihunt are independent lanes over a thread pool, each
+    # with its own target-anchored Catalog connection). The stage opt-out
+    # flags thread straight through. Result dict shape is unchanged so the
+    # renderers below don't care how the stages were run.
+    from glyph.pipeline import run_analysis
+    r = run_analysis(
+        cat.path,
+        target=cat.target(),
+        no_sensitive=getattr(args, "no_sensitive", False),
+        no_snihunt=getattr(args, "no_snihunt", False),
+        snihunt_no_net=getattr(args, "snihunt_no_net", False),
+        progress=_progress,
+    )
+    return {"cap": cap, **r}
 
 
 def _render(args, header: str, r: dict) -> None:

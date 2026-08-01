@@ -198,7 +198,7 @@ def test_live_dashboard_honors_stage_flags(tmp_path, monkeypatch):
     def fake_scan(cat):
         calls["scan"] += 1
 
-    def fake_hunt(cat, net=True):
+    def fake_hunt(cat, net=True, progress=None):
         calls["hunt"].append(net)
 
     monkeypatch.setattr(drv, "capture_url", fake_capture)
@@ -253,7 +253,7 @@ def test_live_dashboard_honors_no_snihunt(tmp_path, monkeypatch):
     def fake_scan(cat):
         calls["scan"] += 1
 
-    def fake_hunt(cat, net=True):
+    def fake_hunt(cat, net=True, progress=None):
         calls["hunt"] += 1
 
     monkeypatch.setattr(drv, "capture_url", fake_capture)
