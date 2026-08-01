@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 21 done — `pip install -e '.[dev]'` fixed on the Mac (mitmproxy floor lowered to >=9; install verified, 159 pass / 5 skip). Identity clarified: user is Tisone Kironget; "bao" is only the macOS account name.
+- **Task:** (cleared) Session 22 done — `playwright install chromium` installed on the Mac (browser binary), `glyph capture live https://example.com` smoke-tested end-to-end (46 flows, exit 0); the smoke test exposed a by-type display bug (types listed twice) — fixed with a shared by_type() aggregator + 2 regression tests. 161 pass / 5 skip.
 - **Status:** done

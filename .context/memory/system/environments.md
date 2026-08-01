@@ -40,14 +40,16 @@ block (and its "last verified" date) every time you run on it again.
 - **Verified commands (2026-08-01):**
   - `python3 -m venv .venv && .venv/bin/python -m pip install -e . pytest` — clean install of `glyph-re` (pure-stdlib base) + pytest
   - `.venv/bin/python -m pip install -e '.[dev]'` → **succeeds on this Mac** (Session 21; after the mitmproxy floor fix). Installs mitmproxy 9.0.1 (the last Python-3.9-compatible release), playwright 1.60.0, duckdb 1.4.5, pycryptodome, genson, textual, rich. NOTE: mitmproxy 10+ needs Python >=3.10 so pip pins 9.0.1 here; the Windows box (3.14) gets the latest.
-  - `.venv/bin/python -m pytest -q` → **159 passed, 5 skipped** (Session 21; up from 156/8 — playwright now installed so the 4 browse tests run+pass, and the graceful-without-playwright test now skips)
+  - `.venv/bin/python -m pytest -q` → **161 passed, 5 skipped** (Session 22; up from 159/5 — +2 by_type regression tests). Earlier: 159/5 (Session 21; playwright now installed so the 4 browse tests run+pass)
+  - `.venv/bin/playwright install chromium` → succeeds (Session 22; browser binary + deps installed — the last blocker to on-device live capture)
+  - `.venv/bin/glyph capture live https://example.com --db /tmp/glyph-smoke.db` → 46 flows + 46 DOM labels, exit 0 (Session 22 smoke test)
   - `.venv/bin/python -m pytest tests/test_tui.py tests/test_capture_live.py tests/test_capture.py tests/test_cli.py -q` → 37 passed, 4 skipped
   - `sh .context/core/bin/context-sync verify` → `core OK ... (0.5.0)`; `status` → up to date
   - `.venv/bin/glyph --version` → `glyph 0.1.0` (console script installs)
   - `python3 -m glyph.cli ...` runs without install when `PYTHONPATH=<repo>` is set
   - `git` with the `osxkeychain` credential helper — commit + push to `origin` work
 - **Quirks:**
-  - **`.venv` now has the FULL dev extra** (playwright + mitmproxy + duckdb + pycryptodome since Session 21). Live browser capture can now run on this Mac — but note `playwright install chromium` (the browser binary) has NOT been run here yet; do that before a live capture.
+  - **`.venv` now has the FULL dev extra** (playwright + mitmproxy + duckdb + pycryptodome since Session 21). Live browser capture now works on this Mac (Session 22): `playwright install chromium` has been run and `glyph capture live https://example.com` was smoke-tested end-to-end (46 flows + 46 DOM labels, exit 0).
   - **`$USER` is `bao` (macOS account name; hostname `Baos-Mac-mini`) but the USER is Tisone Kironget** — see the Identify-by note above; never conflate the account name with the person.
   - `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
 
