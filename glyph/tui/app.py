@@ -198,6 +198,12 @@ if HAS_TEXTUAL:
             super().__init__()
             self.db_path = db_path
             self.live = live
+            # Pipeline opt-out flags from `glyph run live` (threaded through
+            # the live dict by cli/run._open_live_dashboard) — the dashboard's
+            # own analysis must honor them like the headless path.
+            self._no_sensitive = bool((live or {}).get("no_sensitive"))
+            self._no_snihunt = bool((live or {}).get("no_snihunt"))
+            self._snihunt_no_net = bool((live or {}).get("snihunt_no_net"))
             self._start = None
             self._done = live is None
             self._analyzing = False   # guard: never overlap analysis passes
@@ -254,10 +260,12 @@ if HAS_TEXTUAL:
             finally:
                 cat.close()
 
-        def _status(self) -> Optional[str]:
+        def _capture_state(self) -> "tuple[Optional[str], Optional[str]]":
+            """(status, error) from one Catalog open — the 1s tick polls both
+            every second, so avoid two connections per tick."""
             cat = Catalog(self.db_path)
             try:
-                return cat.get_meta("capture_status")
+                return (cat.get_meta("capture_status"), cat.get_meta("capture_error"))
             finally:
                 cat.close()
 
@@ -266,8 +274,13 @@ if HAS_TEXTUAL:
             self._refresh_live()  # summary + visible tab only (cheap)
             elapsed = int(time.monotonic() - (self._start or time.monotonic()))
             mm, ss = divmod(elapsed, 60)
-            if self._status() == "done":
-                self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
+            status, err = self._capture_state()
+            if status == "done":
+                if err:
+                    # A failed capture must never look like success.
+                    self.app.sub_title = f"✗ failed · {mm:02d}:{ss:02d} · {err[:44]}"
+                else:
+                    self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
                 if not self._done:
                     self._done = True
                     # one final analysis + full reload, then stop polling.
@@ -284,12 +297,13 @@ if HAS_TEXTUAL:
         def _analyze_once(self) -> None:
             from glyph.rosetta import build_dictionary
             from glyph.schema import infer_all
-            from glyph.sensitive import run_scan
             cat = Catalog(self.db_path)
             try:
                 infer_all(cat)
                 build_dictionary(cat)
-                run_scan(cat)
+                if not self._no_sensitive:
+                    from glyph.sensitive import run_scan
+                    run_scan(cat)
             except Exception:
                 pass  # transient lock while capture writes: retry next tick
             finally:
@@ -301,15 +315,17 @@ if HAS_TEXTUAL:
             # SNI hunt runs ONCE at finalize (not on every analyze tick) —
             # it does bounded network recon (DNS, CT logs, reverse-IP) that
             # would be too slow / too chatty to repeat every 4s. ADR-10.
-            try:
-                from glyph.snihunt import run_hunt
-                cat = Catalog(self.db_path)
+            # --no-snihunt skips it; --snihunt-no-net keeps it local-only.
+            if not self._no_snihunt:
                 try:
-                    run_hunt(cat)
-                finally:
-                    cat.close()
-            except Exception:
-                pass  # network/lock hiccup — the snihunt CLI can re-run it
+                    from glyph.snihunt import run_hunt
+                    cat = Catalog(self.db_path)
+                    try:
+                        run_hunt(cat, net=not self._snihunt_no_net)
+                    finally:
+                        cat.close()
+                except Exception:
+                    pass  # network/lock hiccup — the snihunt CLI can re-run it
             # stop the live timers now that capture is done (no more polling).
             for t in self._live_timers:
                 try:

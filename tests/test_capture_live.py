@@ -3,7 +3,9 @@
 The live browser run itself needs the `live` extra and a network target,
 so it isn't unit-tested here; these cover the plumbing: subcommand
 registration, the GLYPH_PROXY fallback, and graceful degradation when
-Playwright is missing.
+Playwright is missing. The browse-mode tests inject a fake
+``playwright.sync_api`` and so need the `live` extra installed — they skip
+when it isn't.
 """
 from __future__ import annotations
 
@@ -172,6 +174,12 @@ def _patch_playwright(monkeypatch, chromium):
     monkeypatch.setattr(psa, "sync_playwright", _FakePlaywright(chromium))
 
 
+_BROWSE_SKIP = pytest.mark.skipif(
+    not _PLAYWRIGHT,
+    reason="browse tests patch the real playwright.sync_api module — install the live extra")
+
+
+@_BROWSE_SKIP
 def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
     """CDP-attach: connect_over_cdp called, a new tab opened + hooked, and
     a browser disconnect stops capture WITHOUT closing the user's browser
@@ -216,6 +224,7 @@ def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
     assert cap_status == "done"
 
 
+@_BROWSE_SKIP
 def test_browse_attach_all_traffic_hooks_every_tab(tmp_path, monkeypatch):
     """No url → all-traffic: every existing tab is hooked + context.on('page')."""
     import glyph.capture.driver as drv
@@ -250,6 +259,7 @@ def test_browse_attach_all_traffic_hooks_every_tab(tmp_path, monkeypatch):
     assert res["mode"] == "browse-attach"
 
 
+@_BROWSE_SKIP
 def test_browse_launch_fallback_when_no_cdp(tmp_path, monkeypatch):
     """CDP-attach fails → launch_persistent_context fallback with channel."""
     import glyph.capture.driver as drv
@@ -295,6 +305,7 @@ def test_browse_launch_fallback_when_no_cdp(tmp_path, monkeypatch):
     assert cap_mode == "browse-launch"
 
 
+@_BROWSE_SKIP
 def test_browse_launch_brave_needs_path_or_autodetect(tmp_path, monkeypatch):
     """Brave has no channel=; without a binary it raises a clear error."""
     import glyph.capture.driver as drv

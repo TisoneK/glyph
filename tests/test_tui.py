@@ -168,3 +168,148 @@ def test_home_screen_mounts(tmp_path):
             assert isinstance(app.screen, DashboardScreen)
 
     asyncio.run(go())
+
+def test_live_dashboard_honors_stage_flags(tmp_path, monkeypatch):
+    """The live dashboard honors --no-sensitive / --snihunt-no-net threaded
+    through the live dict (previously the TUI always ran sensitive + a
+    network SNI hunt regardless of the CLI flags)."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+
+    import glyph.capture.driver as drv
+    import glyph.sensitive as sens
+    import glyph.snihunt as sh
+    from glyph.catalog import Flow
+
+    calls = {"scan": 0, "hunt": []}
+
+    def fake_capture(cat, url, **kw):
+        cat.set_meta("capture_status", "running")
+        cat.add_flow(Flow(method="GET", url="https://x.test/api", host="",
+                          path="", source="playwright:xhr"))
+        cat.set_meta("capture_status", "done")
+        return {"flows": 1, "pages": 0, "labels": 0,
+                "by_source": {"playwright:xhr": 1}, "error": None}
+
+    def fake_scan(cat):
+        calls["scan"] += 1
+
+    def fake_hunt(cat, net=True):
+        calls["hunt"].append(net)
+
+    monkeypatch.setattr(drv, "capture_url", fake_capture)
+    monkeypatch.setattr(sens, "run_scan", fake_scan)
+    monkeypatch.setattr(sh, "run_hunt", fake_hunt)
+
+    from glyph.tui.app import GlyphApp
+    db = str(tmp_path / "f.db")
+    app = GlyphApp(home=False, db_path=db, live={
+        "url": "https://x.test", "kwargs": {},
+        "no_sensitive": True, "no_snihunt": False, "snihunt_no_net": True})
+
+    async def go():
+        async with app.run_test() as pilot:
+            # Poll until the finalize worker has run (capture is faked so it
+            # finishes fast; the 1s tick flips the header, then _finalize runs
+            # the analysis). Fixed sleeps are flaky on slow machines.
+            for _ in range(40):
+                await pilot.pause(0.1)
+                if calls["hunt"]:
+                    break
+
+    asyncio.run(go())
+    assert calls["scan"] == 0          # --no-sensitive honored
+    assert calls["hunt"] == [False]    # --snihunt-no-net honored (net=False)
+
+
+def test_live_dashboard_honors_no_snihunt(tmp_path, monkeypatch):
+    """--no-snihunt: the finalize skips the hunt entirely."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+
+    import glyph.capture.driver as drv
+    import glyph.sensitive as sens
+    import glyph.snihunt as sh
+    from glyph.catalog import Flow
+
+    calls = {"scan": 0, "hunt": 0}
+
+    def fake_capture(cat, url, **kw):
+        cat.set_meta("capture_status", "running")
+        cat.add_flow(Flow(method="GET", url="https://x.test/api", host="",
+                          path="", source="playwright:xhr"))
+        cat.set_meta("capture_status", "done")
+        return {"flows": 1, "pages": 0, "labels": 0,
+                "by_source": {"playwright:xhr": 1}, "error": None}
+
+    def fake_scan(cat):
+        calls["scan"] += 1
+
+    def fake_hunt(cat, net=True):
+        calls["hunt"] += 1
+
+    monkeypatch.setattr(drv, "capture_url", fake_capture)
+    monkeypatch.setattr(sens, "run_scan", fake_scan)
+    monkeypatch.setattr(sh, "run_hunt", fake_hunt)
+
+    from glyph.tui.app import GlyphApp
+    db = str(tmp_path / "n.db")
+    app = GlyphApp(home=False, db_path=db, live={
+        "url": "https://x.test", "kwargs": {},
+        "no_sensitive": False, "no_snihunt": True, "snihunt_no_net": False})
+
+    async def go():
+        async with app.run_test() as pilot:
+            # Poll until finalize's analysis has run (sensitive was NOT
+            # skipped, so run_scan firing proves _analyze_once completed).
+            for _ in range(40):
+                await pilot.pause(0.1)
+                if calls["scan"] >= 1:
+                    break
+
+    asyncio.run(go())
+    assert calls["scan"] >= 1      # sensitive still runs (flag off)
+    assert calls["hunt"] == 0      # --no-snihunt honored
+
+
+def test_live_dashboard_shows_capture_error(tmp_path, monkeypatch):
+    """A failed capture shows ✗ failed + the error in the header (previously
+    it looked like ✓ captured even when the capture worker errored)."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+
+    import glyph.capture.driver as drv
+
+    def fake_capture(cat, url, **kw):
+        raise RuntimeError("browser crashed")
+
+    monkeypatch.setattr(drv, "capture_url", fake_capture)
+
+    from glyph.tui.app import GlyphApp
+    db = str(tmp_path / "e.db")
+    app = GlyphApp(home=False, db_path=db,
+                   live={"url": "https://x.test", "kwargs": {}})
+
+    async def go():
+        async with app.run_test() as pilot:
+            # Poll until the 1s tick has flipped the header to the failed state.
+            for _ in range(40):
+                await pilot.pause(0.1)
+                if "failed" in app.sub_title:
+                    break
+            assert "failed" in app.sub_title
+            assert "browser crashed" in app.sub_title
+
+    asyncio.run(go())

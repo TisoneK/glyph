@@ -332,6 +332,8 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
             # domcontentloaded milestone, then settle + explore; best-effort so
             # a nav failure never discards what was already captured.
             try:
+                if progress:
+                    progress(f"loading {url}…")
                 page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
                 if wait_selector:
                     try:
@@ -344,9 +346,13 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
                     except Exception:
                         pass
                 if settle_ms > 0:
+                    if progress:
+                        progress(f"page loaded — settling {settle_ms}ms for late XHR…")
                     page.wait_for_timeout(settle_ms)
                 _snapshot(page)
-                for _ in range(max(0, explore)):
+                for i in range(max(0, explore)):
+                    if progress:
+                        progress(f"explore round {i + 1}/{explore}…")
                     _explore_round(page, timeout_ms)
                     _snapshot(page)
             except Exception as exc:

@@ -118,7 +118,13 @@ def _render(args, header: str, r: dict) -> None:
 
 def _open_live_dashboard(args) -> bool:
     """Open the live TUI dashboard (it runs the capture itself, in a worker,
-    and refreshes in real time). Returns True if it took over the screen."""
+    and refreshes in real time). Returns True if it took over the screen.
+
+    The pipeline opt-out flags travel into the ``live`` dict so the
+    dashboard's own analysis honors ``--no-sensitive`` / ``--no-snihunt`` /
+    ``--snihunt-no-net`` exactly like the headless path (they'd otherwise
+    be silently ignored once the TUI takes over).
+    """
     import sys
     if getattr(args, "no_tui", False) or not sys.stdout.isatty():
         return False
@@ -128,7 +134,13 @@ def _open_live_dashboard(args) -> bool:
         return False
     if not HAS_TEXTUAL:
         return False
-    run_dashboard(args.db, live={"url": args.url, "kwargs": live_kwargs(args)})
+    run_dashboard(args.db, live={
+        "url": args.url,
+        "kwargs": live_kwargs(args),
+        "no_sensitive": getattr(args, "no_sensitive", False),
+        "no_snihunt": getattr(args, "no_snihunt", False),
+        "snihunt_no_net": getattr(args, "snihunt_no_net", False),
+    })
     return True
 
 
@@ -275,16 +287,16 @@ def run_live(args: argparse.Namespace) -> int:
         return 0
     # Interactive: the live dashboard runs the capture itself and streams it
     # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
+    if not args.url:
+        print("error: a target URL is required (or use --browse for browse mode)",
+              file=__import__("sys").stderr)
+        return 1
     if _open_live_dashboard(args):
         return 0
     # Headless fallback (pipe / CI / --no-tui / no textual): capture
     # synchronously, then print the designed summary.
     from glyph.capture import capture_live
     from urllib.parse import urlparse
-    if not args.url:
-        print("error: a target URL is required (or use --browse for browse mode)",
-              file=__import__("sys").stderr)
-        return 1
     _progress(f"launching browser → {args.url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)
@@ -296,7 +308,8 @@ def run_live(args: argparse.Namespace) -> int:
         if host:
             cat.set_target(host)
             cat.clear_target()
-        cap = capture_live(cat, args.url, **live_kwargs(args))
+        cap = capture_live(cat, args.url, **live_kwargs(args),
+                           progress=_progress)
         _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
     finally:
