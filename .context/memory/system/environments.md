@@ -49,7 +49,7 @@ block (and its "last verified" date) every time you run on it again.
   - `python3 -m glyph.cli ...` runs without install when `PYTHONPATH=<repo>` is set
   - `git` with the `osxkeychain` credential helper — commit + push to `origin` work
 - **Quirks:**
-  - **`.venv` now has the FULL dev extra** (playwright + mitmproxy + duckdb + pycryptodome since Session 21). Live browser capture now works on this Mac (Session 22): `playwright install chromium` has been run and `glyph capture live https://example.com` was smoke-tested end-to-end (46 flows + 46 DOM labels, exit 0).
+  - **`.venv` now has the FULL dev extra** (playwright + mitmproxy + duckdb + pycryptodome since Session 21). Live browser capture now works on this Mac (Session 22: `playwright install chromium` run + headless smoke test). The live Textual DASHBOARD is verified on-device too (Session 23): `glyph run live https://example.com` in a real pty showed `● LIVE` → FLOWS streaming 0→46 → `✓ captured`, quit cleanly on `q`, catalog persisted 46 flows + 1 page. (No tmux here — use expect or a Python pty harness to drive full-screen TUIs.)
   - **`$USER` is `bao` (macOS account name; hostname `Baos-Mac-mini`) but the USER is Tisone Kironget** — see the Identify-by note above; never conflate the account name with the person.
   - `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
 
