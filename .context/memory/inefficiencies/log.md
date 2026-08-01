@@ -476,3 +476,12 @@ never harvested.
 - **Workaround / fix:** Added a `threading.Event` consumed by the Playwright worker, kept cleanup on the worker thread, tracked attached versus Glyph-owned browsers, de-duplicated hooked pages by identity, and normalized `--browser` argument order.
 - **Prevent next time:** Design explicit worker cancellation and ownership state before wiring a long-running browser backend into a UI; avoid optional CLI arguments when a positional URL follows.
 - **Upstream:** not a protocol issue
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 32)
+- **Problem:** Sync Playwright browser-close and response dispatch behavior is difficult to exercise without a real Chromium/CDP process; fake event emitters can verify wiring but not the underlying dispatcher.
+- **Cost:** Final review required an additional event-pump fallback for the last-tab-closed case and explicit documentation of the CDP external-process sandbox boundary.
+- **Cause:** Playwright sync objects are thread-bound and only dispatch events while their own API is being pumped; user-launched CDP browsers also retain command-line flags outside Glyph's control.
+- **Workaround / fix:** Pump an active page or context during the browse loop, persist stop reasons, and keep real Windows/CDP verification as an explicit follow-up.
+- **Prevent next time:** Add an optional on-device smoke test against a disposable Chromium profile when changing long-running Playwright lifecycle code.
+- **Upstream:** not a protocol issue

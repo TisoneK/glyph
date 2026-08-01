@@ -786,3 +786,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done — native Ctrl+Q/Ctrl+C now require confirmation; confirmed modal shutdown stays mounted, waits asynchronously for tracked workers, and has a visible 10-second timeout fallback. Added `run_pipeline()` so target-pinned SNI overlaps core analysis while preserving separate per-thread Catalog connections. Per-candidate SNI network work remains serial by design for bounded public lookups. Validation: 188 passed / 5 skipped; compileall and diff checks passed.
 - **Open items:** Verify real quit behavior and CDP/browser shutdown on Windows; consider independently reporting SNI failures from core-analysis failures in a future refinement.
 - **Report:** .context/memory/reviews/2026-08-01-quit-sni-parallel.md
+
+---
+## 2026-08-01 — Session 32
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** bao@local macOS (Darwin) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Fix live-browser capture warnings, missing flows, browser-close notification, stale launch targets, and browser executable/profile configuration.
+- **Commits:** product + context commits pending.
+- **Outcome:** done — sync Playwright is actively pumped during browse sessions; request/response and browser-close events are recorded; stop reasons reach CLI/TUI; stale owned-profile tabs are closed before requested target navigation; browser path/profile flags and environment variables are supported; all-tabs capture clears the prior target filter. Validation: 189 passed / 5 skipped; compileall and diff checks passed.
+- **Open items:** Verify real CDP attach, browser closure, sandbox behavior, custom executable/profile paths, and TUI notifications on Windows. Strict historical capture-session isolation for all-tabs mode remains a future schema feature.
+- **Report:** .context/memory/reviews/2026-08-01-live-browser-fixes.md
