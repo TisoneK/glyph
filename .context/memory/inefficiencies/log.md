@@ -397,3 +397,32 @@ never harvested.
 - **Cause:** (1) The browse tests patch the REAL `playwright.sync_api` module, so they need it importable — the skip-guard pattern existed in the file but was applied inconsistently (only the negative test got it). (2) Timing-based assertions on worker threads are inherently racy; fixed sleeps are the worst form. (3) Refactor left an old call site (`_status()` in `_tick`) updated but the method itself orphaned — I replaced the CALLERS before checking for now-unused methods.
 - **Workaround / fix:** (1) Added a shared `_BROWSE_SKIP = pytest.mark.skipif(not _PLAYWRIGHT, ...)` applied to all four browse tests + corrected the module docstring ("browse tests require the live extra"). They still run fully on the Windows box where playwright is installed. (2) Rewrote the three new tests to poll (`for _ in range(40): await pilot.pause(0.1); if <condition>: break`) with a final assert — deterministic on slow machines. (3) Deleted `_status()`.
 - **Prevent next time:** (1) When a test file patches a heavy optional dependency (playwright), EVERY test that does so needs the same skip guard as the first — grep for the import before trusting the file's "testable without X" claim. (2) For Textual worker-thread tests, always poll with a deadline for the expected condition; never fixed sleeps. (3) After any refactor that changes a helper's callers, grep for the old name and delete orphans in the same pass.
+
+
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 20, correction)
+- **Problem:** My first attempt to append the Session 20 inefficiency entry used the
+  Edit/str_replace tool on `.context/memory/inefficiencies/log.md` — but that file has MIXED
+  line endings (early entries CRLF from Windows sessions, Session 16+ entries LF from Linux
+  sandbox sessions). The tool rewrote the whole file with uniform endings, so git saw the
+  ENTIRE file as changed: the commit's diff showed 229 deletions in an APPEND-ONLY file,
+  violating Binding Rule 4 ("its git diff must show no removed lines"). I caught it only
+  because the commit stat (469 changed lines for a ~30-line append) looked wrong.
+- **Cost:** ~10 min — restore the original blob byte-for-byte (`git show <parent>:file > file`),
+  re-append with LF endings via a Python `open(..., newline='\\n')` append (NOT str_replace),
+  verify `git diff <parent>` shows only additions, then amend the pushed commit +
+  `push --force-with-lease` (protocol's prescribed recovery for a latest-commit mistake).
+- **Cause:** `inefficiencies/log.md` is mixed-ending because it has been appended by sessions
+  on both CRLF (Windows) and LF (Linux/macOS) machines, and git does not normalize
+  `.context/memory/*` (only `.context/core/*` has `eol=lf` in .gitattributes). The str_replace
+  tool normalizes a file's endings when it rewrites it — safe for overwrite-mode files,
+  destructive for mixed-ending append-only files.
+- **Workaround / fix:** For append-only memory files that may be mixed-ending, append via a
+  Python `open(path, 'a', newline='\n')` heredoc (preserves existing bytes, adds LF), then
+  verify `git diff <parent> -- <file> | grep '^-'` shows only the `--- a/` header line before
+  committing. Never use str_replace/write_file on an append-only log that predates this
+  session's machine.
+- **Prevent next time:** Check a memory file's line endings (`git show <parent>:<file> | od -c | head`)
+  before editing it with a rewriting tool. If mixed or CRLF, use the Python-append pattern.
+  Alternatively, add `.context/memory/* text eol=lf` to .gitattributes (project-local change;
+  would normalize the tree once — worth doing when convenient).
