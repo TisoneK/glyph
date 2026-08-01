@@ -17,3 +17,4 @@ If this file exceeds ~40 lines, prune entries older than the last 10.
 - 2026-08-01 — Buffy / deepseek-v4-flash — Session 28: added quit confirmation with tracked graceful shutdown, separated SNI into a target-pinned worker lifecycle, and added TUI target switching; 180 passed / 5 skipped. Product commit 21d3739. Report: reviews/2026-08-01-quit-sni-targets.md.
 
 - 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 29: added endpoint Data tab, payload classification, Windows/live-TUI diagnostics, final-analysis retries, and no-cache freshness policy; 181 passed / 5 skipped. Product commit df80a3e. Report: reviews/2026-08-01-endpoint-data-windows-tui.md.
+- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 30: added continuous CDP real-browser capture, TUI browser-live checkbox, safe stop/detach controls, all-tabs/target-tab scoping, and launch fallback ownership; 185 passed / 5 skipped. Product commit fd7948a. Report: reviews/2026-08-01-real-browser-live-capture.md.

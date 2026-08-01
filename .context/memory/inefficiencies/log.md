@@ -467,3 +467,12 @@ never harvested.
 - **Workaround / fix:** Inspected the exact bytes, corrected the fixture to use actual byte escapes, and reran focused and full suites.
 - **Prevent next time:** For binary-format tests, print `repr()` of decoded bytes and validate magic bytes directly before interpreting a classifier failure.
 - **Upstream:** not a protocol issue
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 30)
+- **Problem:** The existing Playwright browse loop relied on KeyboardInterrupt, which cannot reach a Textual background worker; adding a browser-live TUI stop required a separate signal. Optional argparse values also made `--browser <url>` ambiguous.
+- **Cost:** Several review/test iterations to harden worker stop behavior, parser normalization, browser ownership, and all-tabs page de-duplication.
+- **Cause:** Sync Playwright objects are thread-bound, while Textual UI actions run on the app thread; argparse optional values consume the following URL unless normalized.
+- **Workaround / fix:** Added a `threading.Event` consumed by the Playwright worker, kept cleanup on the worker thread, tracked attached versus Glyph-owned browsers, de-duplicated hooked pages by identity, and normalized `--browser` argument order.
+- **Prevent next time:** Design explicit worker cancellation and ownership state before wiring a long-running browser backend into a UI; avoid optional CLI arguments when a positional URL follows.
+- **Upstream:** not a protocol issue

@@ -768,3 +768,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done — Data tab lists body-bearing endpoints with type, encoding, size, status, headers, and preview; capture/analysis failures are persisted and surfaced; startup/refresh/teardown paths are guarded; final analysis retries transient contention; schema→Rosetta dependency remains chained; no stale response cache was added. Full suite: 181 passed / 5 skipped.
 - **Open items:** verify the real Playwright live TUI on Windows; consider a bounded graceful-shutdown timeout/fallback.
 - **Report:** .context/memory/reviews/2026-08-01-endpoint-data-windows-tui.md
+
+---
+## 2026-08-01 — Session 30
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** bao@local macOS (Darwin) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Implement continuous real-browser live capture from `glyph run live --browser` / `glyph capture live --browser` and TUI browser-live capture with safe stop/detach.
+- **Commits:** 1 product — `fd7948a` (`feat(capture): support continuous real-browser sessions`); context commit pending.
+- **Outcome:** done — CDP attach to the user's Chromium browser is primary; optional Chrome/Edge/Brave launch fallback is owned and cleaned up separately. Added target-tab + popup and explicit all-tabs modes, TUI browser checkbox, worker `stop_event`, `s` Stop capture, graceful shutdown propagation, page de-duplication, parser normalization, README docs, and regression coverage. Validation: 185 passed / 5 skipped; focused capture/TUI: 38 passed / 1 skipped.
+- **Open items:** Verify real CDP attach and TUI stop/detach on Windows; verify launch fallback cleanup; consider a bounded graceful-shutdown timeout/fallback.
+- **Report:** .context/memory/reviews/2026-08-01-real-browser-live-capture.md
