@@ -51,3 +51,30 @@ Friction caused by the `.context/` system or the protocol itself. See
   1. **Add a `.gitattributes` file to the protocol package** (in the root of the package clone) with the line `.context/core/* text eol=lf`. This ensures core files are always checked out with LF line endings regardless of the user's `core.autocrlf` setting.
   2. **Document the Windows CRLF pitfall** in the protocol's Common Pitfalls section and in the Windows-specific instructions in `templates/kickoff.md`: "If `context-sync verify` fails on Windows with every file reported as FAILED, your `core.autocrlf` setting is converting LF to CRLF on checkout. Run `git checkout -- .context/core/` to restore LF blobs, and add `.context/core/* text eol=lf` to `.gitattributes` to prevent recurrence."
 - **Status:** open — fixed locally in this project by adding `.gitattributes` (commit `0934faa`) and re-checking out core files, but the fix needs to be in the protocol package so new projects inherit it. Worth a 0.4.x patch release.
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 26)
+
+- **Flaw:** Rule 8 (never mix the product and `.context/` surfaces in one commit) assumes a
+  clean index, but the session-end bookkeeping stages `.context/memory/*` files first — a
+  later `git add <product> && git commit` (no pathspec) then commits EVERYTHING staged,
+  sweeping the context files into the product commit.
+- **Symptom:** The `feat(catalog): persist + restore active target` product commit
+  (7367194) contains 5 `.context/memory/*` files (agents/sessions.md, SUMMARY.md,
+  ai-models.md, tasks/current.md, and the review report 2026-08-01-target-filtered-tables.md);
+  the follow-up `chore(context):` commit then held only decisions.md (ADR-16). The mixing
+  is visible in `git show --stat 7367194` — 28 files instead of the expected 23 product/test
+  files.
+- **Root cause:** The protocol's two-surface rule provides no mechanism to enforce it: no
+  check for pre-staged files of the other surface before committing, and the example
+  session-end flow (`git add` everything changed, then commit) is exactly the pattern that
+  mixes surfaces when the index already holds staged context files.
+- **Suggested fix:** Two concrete changes to the package:
+  1. **Commit the context surface FIRST.** In the session-end steps, order the commits as
+     `git add .context/ && git commit` BEFORE staging/committing product code, so context
+     files can never ride along in the product commit.
+  2. **Use pathspec commits for product code** (`git commit glyph/ tests/ -m ...`), and add
+     a pre-commit check: `git diff --cached --name-only` must touch only one surface — fail
+     loudly otherwise.
+- **Status:** open — this project is affected (commit 7367194, pushed 2026-08-01). Not
+  rewritten; the content is correct and the commit is pushed. Logged here so future sessions
+  follow the context-first / pathspec pattern.
