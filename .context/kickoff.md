@@ -14,7 +14,7 @@ Generation rules for the bootstrapping agent:
    that stay symbolic are the token forms
    (`<..._WITH_TOKEN_IF_PRIVATE>`, `${GIT_TOKEN}`) — never a real token.
    After filling, scan:
-   `grep -n "<PROJECT\|<GIT_\|<LIVE_\|glyph" .context/kickoff.md` —
+   `grep -n "<PROJECT\|<GIT_\|<LIVE_\|<REPO>" .context/kickoff.md` —
    hits are allowed only inside this comment and in the token forms.
 2. Do NOT copy session parameters here — they live in
    memory/workflows/active.md (single source of truth). This file only
@@ -138,7 +138,8 @@ pwsh -File .context/core/bin/context-sync.ps1 status
 `workflows/active.md` → `agents/sessions.md` (last 3–5 entries) →
 `tasks/current.md` → `tasks/backlog.md` → `inefficiencies/log.md` →
 `flaws/log.md` → `plans/decisions.md` → `overrides/rules.md` →
-`system/` → `user/` → note what's in `secrets/` (never print values).
+`system/` → `user/` → note what's in
+`secrets/` (never print values).
 
 If `memory/tasks/current.md` shows another live session in progress,
 **do not start** — one agent per project repo at a time.
