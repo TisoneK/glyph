@@ -34,6 +34,28 @@ def test_run_live_registered():
     assert args.explore == 5
 
 
+def test_browser_and_target_short_aliases_are_accepted():
+    args = build_parser().parse_args(
+        ["run", "live", "-b", "brave", "-t", "google.com"])
+    assert args.browser == "brave"
+    assert args.target == "google.com"
+    assert args.url is None
+    assert _live_kwargs(args)["browse"] is True
+
+    args = build_parser().parse_args(
+        ["run", "live", "--browser", "brave", "--target", "google.com"])
+    assert args.browser == "brave"
+    assert args.target == "google.com"
+
+
+def test_target_url_normalizes_explicit_and_positional_forms():
+    from glyph.cli._shared import target_url
+    args = build_parser().parse_args(["capture", "live", "--target", "google.com"])
+    assert target_url(args) == "https://google.com"
+    args = build_parser().parse_args(["capture", "live", "https://google.com"])
+    assert target_url(args) == "https://google.com"
+
+
 def test_proxy_falls_back_to_env(monkeypatch):
     monkeypatch.setenv("GLYPH_PROXY", "http://env-proxy:8080")
     args = build_parser().parse_args(["capture", "live", "https://x.test"])
@@ -421,6 +443,14 @@ def test_live_kwargs_carries_browse_options(monkeypatch):
     assert _live_kwargs(args2)["cdp_url"] == "http://remote:9222"
 
 
+def test_geo_block_classifier_is_conservative():
+    from glyph.capture.driver import _geo_block_reason
+    assert _geo_block_reason(451, "")
+    assert _geo_block_reason(403, "This service is not available in your country")
+    assert _geo_block_reason(error="net::ERR_NETWORK_ACCESS_DENIED")
+    assert _geo_block_reason(403, "Access denied") is None
+
+
 def test_explicit_browser_path_and_profile_enable_browse_mode(monkeypatch):
     monkeypatch.setenv("GLYPH_BROWSER_PATH", "/opt/custom/chrome")
     monkeypatch.setenv("GLYPH_BROWSER_PROFILE", "/tmp/glyph-profile")
@@ -429,6 +459,7 @@ def test_explicit_browser_path_and_profile_enable_browse_mode(monkeypatch):
     assert kw["browse"] is True  # environment configuration enables browse mode
     assert kw["browser_path"] == "/opt/custom/chrome"
     assert kw["user_data_dir"] == "/tmp/glyph-profile"
+    assert kw["force_launch"] is True
 
     args = build_parser().parse_args([
         "capture", "live", "https://target.test",
@@ -437,6 +468,7 @@ def test_explicit_browser_path_and_profile_enable_browse_mode(monkeypatch):
     assert kw["browse"] is True
     assert kw["browser_path"] == "/custom/brave"
     assert kw["user_data_dir"] == "/custom/profile"
+    assert kw["force_launch"] is True
 
 
 def test_browse_command_registered():

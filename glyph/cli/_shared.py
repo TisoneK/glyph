@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from typing import Optional
 
 
 class _BrowserOption(argparse.Action):
@@ -58,8 +59,16 @@ def with_live(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
     sp.add_argument("url", nargs="?", default=None,
                     help="the page to drive and capture (optional with --browse: "
                          "absent = capture every tab in the attached browser)")
+    sp.add_argument("-t", "--target", dest="target", default=None,
+                    metavar="HOST_OR_URL",
+                    help="target host or URL (alternative to the positional target)")
     sp.add_argument("--proxy", default=None,
                     help="upstream proxy URL (or set GLYPH_PROXY env)")
+    sp.add_argument("-b", "--browser", nargs="?", const="chrome", default="chrome",
+                    action=_BrowserOption,
+                    help="enable real-browser capture; optionally choose the "
+                         "launch fallback (chrome, msedge, or brave). With no "
+                         "value, attaches to the default Chrome CDP endpoint")
     sp.add_argument("--explore", type=int, default=2, metavar="N",
                     help="target-agnostic interaction rounds "
                          "(scroll + generic clicks); default 2")
@@ -82,11 +91,6 @@ def with_live(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
                     help="CDP-attach port (default 9222)")
     sp.add_argument("--cdp-host", default="localhost", dest="cdp_host",
                     help="CDP-attach host (default localhost)")
-    sp.add_argument("--browser", nargs="?", const="chrome", default="chrome",
-                    action=_BrowserOption,
-                    help="enable real-browser capture; optionally choose the "
-                         "launch fallback (chrome, msedge, or brave). With no "
-                         "value, attaches to the default Chrome CDP endpoint")
     sp.add_argument("--browser-path", default=None, dest="browser_path",
                     help="explicit path to a browser binary (Brave needs this if "
                          "not auto-detected at the standard locations); or set "
@@ -98,6 +102,22 @@ def with_live(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
                     help="launch-fallback only: use a fresh ephemeral context "
                          "(no persistent profile at ~/.glyph/profiles/<host>/)")
     return sp
+
+
+def target_url(args: argparse.Namespace) -> Optional[str]:
+    """Return the canonical target from the positional or ``-t/--target`` form.
+
+    The CLI accepts both ``glyph run live example.com`` and the explicit
+    ``glyph run live --target example.com`` spelling. Playwright navigation
+    needs a scheme, so a bare host is treated as HTTPS.
+    """
+    value = getattr(args, "url", None) or getattr(args, "target", None)
+    if not value:
+        return None
+    value = value.strip()
+    if not value.startswith(("http://", "https://")):
+        value = "https://" + value
+    return value
 
 
 def is_browse_mode(args: argparse.Namespace) -> bool:
@@ -131,9 +151,17 @@ def live_kwargs(args: argparse.Namespace) -> dict:
         "browser": getattr(args, "browser", None) or "chrome",
         "user_data_dir": (getattr(args, "user_data_dir", None)
                            or os.environ.get("GLYPH_BROWSER_PROFILE")),
-        "incognito": getattr(args, "incognito", False),
-        "browser_path": (getattr(args, "browser_path", None)
-                          or os.environ.get("GLYPH_BROWSER_PATH")),
+        "incognito": getattr(args, "incognito", False),        "browser_path": (getattr(args, "browser_path", None)
+                           or os.environ.get("GLYPH_BROWSER_PATH")),
+        # An explicit binary/profile must not silently attach to an unrelated
+        # already-running CDP browser; launch the requested configuration.
+        "force_launch": bool(
+            getattr(args, "browser_path", None)
+            or getattr(args, "user_data_dir", None)
+            or os.environ.get("GLYPH_BROWSER_PATH")
+            or os.environ.get("GLYPH_BROWSER_PROFILE")
+            or getattr(args, "proxy", None)
+            or os.environ.get("GLYPH_PROXY")),
     }
 
 

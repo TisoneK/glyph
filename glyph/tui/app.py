@@ -120,6 +120,38 @@ if HAS_TEXTUAL:
             self.dismiss(False)
 
 
+    class GeoBlockedScreen(ModalScreen):
+        """Explain a likely regional restriction before offering proxy settings."""
+
+        BINDINGS = [Binding("escape", "dismiss_dialog", "Close")]
+
+        def __init__(self, reason: str) -> None:
+            super().__init__()
+            self.reason = reason
+
+        def compose(self) -> "ComposeResult":
+            with Vertical(id="geo-dialog"):
+                yield Static("Target appears geo-blocked", classes="dialog-title")
+                yield Static(
+                    "Glyph could not reach this target from the current network.\n"
+                    f"Signal: {self.reason}\n\n"
+                    "Configure an HTTP or SOCKS proxy, then retry the capture.",
+                    id="geo-copy", classes="dialog-copy")
+                with Horizontal(classes="dialog-actions"):
+                    yield Button("Okay — open settings", id="geo-settings",
+                                 variant="primary")
+                    yield Button("Dismiss", id="geo-dismiss")
+
+        def on_button_pressed(self, event) -> None:
+            if event.button.id == "geo-settings":
+                self.dismiss(True)
+            else:
+                self.dismiss(False)
+
+        def action_dismiss_dialog(self) -> None:
+            self.dismiss(False)
+
+
     class TargetPickerScreen(ModalScreen):
         """Choose a target already registered in the multi-target catalog."""
 
@@ -214,6 +246,11 @@ if HAS_TEXTUAL:
                         yield Static("[dim]Uses your existing Chrome/Edge/Brave via "
                                      "CDP. Leave URL empty to capture every open tab.[/dim]",
                                      id="browser-hint", markup=True)
+                        yield Input(placeholder="proxy URL (optional)", id="proxy-input")
+                        yield Input(placeholder="browser executable path (optional)",
+                                    id="browser-path-input")
+                        yield Input(placeholder="browser profile directory (optional)",
+                                    id="profile-input")
                         yield Static("ANALYSIS STAGES", classes="stages-title")
                         with Horizontal(classes="stages-row"):
                             for sid, label in self.STAGES[:2]:
@@ -247,6 +284,10 @@ if HAS_TEXTUAL:
         def _capture(self, url: str) -> None:
             url = (url or "").strip()
             browser_mode = self.query_one("#st_browser", Checkbox).value
+            proxy = self.query_one("#proxy-input", Input).value.strip()
+            browser_path = self.query_one("#browser-path-input", Input).value.strip()
+            user_data_dir = self.query_one("#profile-input", Input).value.strip()
+            browser_mode = browser_mode or bool(browser_path or user_data_dir or proxy)
             if not url and not browser_mode:
                 self.app.bell()
                 return
@@ -262,14 +303,19 @@ if HAS_TEXTUAL:
                 "url": url or None,
                 "kwargs": {"explore": 2, "settle_ms": 3000, "timeout_ms": 30000,
                            "wait_selector": None,
-                           "proxy": os.environ.get("GLYPH_PROXY"),
+                           "proxy": proxy or os.environ.get("GLYPH_PROXY"),
                            "browse": browser_mode,
                            "cdp_url": (os.environ.get("GLYPH_CDP_URL")
                                        or "http://localhost:9222") if browser_mode else None,
                            "browser": "chrome",
-                           "user_data_dir": os.environ.get("GLYPH_BROWSER_PROFILE"),
+                           "user_data_dir": user_data_dir or os.environ.get("GLYPH_BROWSER_PROFILE"),
                            "incognito": False,
-                           "browser_path": os.environ.get("GLYPH_BROWSER_PATH")},
+                           "browser_path": browser_path or os.environ.get("GLYPH_BROWSER_PATH"),
+                           "force_launch": bool(browser_path or user_data_dir
+                                                 or os.environ.get("GLYPH_BROWSER_PATH")
+                                                 or os.environ.get("GLYPH_BROWSER_PROFILE")
+                                                 or proxy
+                                                 or os.environ.get("GLYPH_PROXY"))},
                 "stages": self._checked_stages(),
                 "vpndec_file": vpn_file or None,
             }
@@ -352,6 +398,7 @@ if HAS_TEXTUAL:
             self._analysis_worker_error = None
             self._live_timers = []
             self._stop_event = threading.Event()
+            self._geo_prompted = False
 
         _MAX_ROWS = 800  # cap table rows so live refresh stays snappy
 
@@ -475,6 +522,8 @@ if HAS_TEXTUAL:
                     "analysis_error": cat.get_meta("analysis_error") or None,
                     "vpndec_status": cat.get_meta("vpndec_status"),
                     "vpndec_error": cat.get_meta("vpndec_error"),
+                    "geo_blocked": cat.get_meta("capture_geo_blocked") == "1",
+                    "geo_reason": cat.get_meta("capture_geo_reason") or "",
                 }
             finally:
                 cat.close()
@@ -507,6 +556,16 @@ if HAS_TEXTUAL:
             if self._analysis_worker_error:
                 self.app.sub_title = (f"⚠ analysis retry · {mm:02d}:{ss:02d} · "
                                       f"{self._analysis_worker_error[:44]}")
+            if st.get("geo_blocked") and not self._geo_prompted:
+                self._geo_prompted = True
+                self._done = True
+                self._stop_event.set()
+                self._stop_live_timers()
+                self.app.push_screen(
+                    GeoBlockedScreen(st.get("geo_reason") or
+                                     "the target rejected this network location"),
+                    self._geo_decision)
+                return
             if st["status"] == "done":
                 if st.get("analysis_error"):
                     self.app.sub_title = (f"✗ analysis failed · {mm:02d}:{ss:02d} · "
@@ -654,6 +713,56 @@ if HAS_TEXTUAL:
             # run_pipeline has awaited every enabled lane, including SNI.
             # Do not leave the periodic refresh running after finalization.
             self.app.call_from_thread(self._stop_live_timers)
+
+        def _geo_decision(self, open_settings: bool) -> None:
+            """Return to home after the geo acknowledgement settles.
+
+            Textual invokes a modal callback while the modal is still the
+            transient ``app.screen``. Schedule the stack operation for the
+            next refresh so we never pop the dialog instead of the dashboard.
+            """
+            if open_settings:
+                self.app.call_after_refresh(self._return_to_home)
+
+        def _return_to_home(self) -> None:
+            """Remove a stale dashboard or replace a direct dashboard."""
+            stack = list(self.app.screen_stack)
+            home = next((screen for screen in stack
+                         if isinstance(screen, HomeScreen)), None)
+            if home is not None:
+                # A home-originated dashboard is above HomeScreen.
+                while self.app.screen_stack and self.app.screen is not home:
+                    self.app.pop_screen()
+                return
+            # Direct `glyph run live` has no home underneath.  It is the root
+            # screen, so ``switch_screen`` is unsafe here: Textual assumes the
+            # outgoing screen was pushed with a result callback and can raise
+            # ``IndexError`` while popping the empty callback stack.  The live
+            # worker has already been stopped, so placing Home above this
+            # inert dashboard is safe and gives the user the requested settings
+            # destination without touching Textual's root bookkeeping.
+            self.app.push_screen(HomeScreen())
+
+        def _restart_capture(self) -> None:
+            """Retry the same target after the user changes network settings."""
+            self._geo_prompted = False
+            self._done = False
+            self._capture_worker_error = None
+            self._analysis_worker_error = None
+            self._stop_event = threading.Event()
+            cat = Catalog(self.db_path)
+            try:
+                cat.set_meta("capture_geo_blocked", "")
+                cat.set_meta("capture_geo_reason", "")
+                cat.set_meta("capture_error", "")
+                cat.set_meta("capture_status", "")
+            finally:
+                cat.close()
+            self._start = time.monotonic()
+            self.app.start_background(self._capture_worker, name="capture-retry")
+            self._live_timers.append(self.set_interval(1.0, self._tick))
+            self._live_timers.append(self.set_interval(4.0, self._analyze_tick))
+            self.app.sub_title = "● retrying with updated proxy settings"
 
         def action_stop_capture(self) -> None:
             """Stop a live capture without closing an attached browser.
@@ -872,6 +981,8 @@ if HAS_TEXTUAL:
         DashboardScreen TabbedContent { height: 1fr; }
         DashboardScreen DataTable { height: 1fr; }
         FlowDetail #detail { padding: 1 2; }
+        GeoBlockedScreen { align: center middle; background: $background 80%; }
+        GeoBlockedScreen #geo-dialog { width: 68; height: auto; padding: 2 3; border: round $warning; background: $surface; }
         """
 
         def __init__(self, home: bool = True, db_path: str = "glyph.db",
@@ -978,13 +1089,27 @@ if HAS_TEXTUAL:
 def run_home(db_path: str = "glyph.db") -> None:
     """Open the home/splash screen. Requires the `tui` extra."""
     _require_textual()
-    GlyphApp(home=True, db_path=db_path).run()
+    try:
+        GlyphApp(home=True, db_path=db_path).run()
+    except KeyboardInterrupt:
+        # Textual's asyncio Runner can re-enter Windows' Proactor cleanup
+        # after Ctrl+C. Convert the console interrupt into a normal return so
+        # Python does not print a shutdown traceback.
+        return
+
 
 
 def run_dashboard(db_path: str, live: Optional[dict] = None) -> None:
     """Open the dashboard directly (read-only, or a live capture)."""
     _require_textual()
-    GlyphApp(home=False, db_path=db_path, live=live).run()
+    try:
+        GlyphApp(home=False, db_path=db_path, live=live).run()
+    except KeyboardInterrupt:
+        # See run_home: on Windows/Python 3.14 a console Ctrl+C can arrive
+        # while asyncio.run is closing the Proactor loop. The capture worker
+        # has its own stop event; swallowing the second-level interrupt here
+        # prevents the misleading traceback after a graceful user stop.
+        return
 
 
 def _require_textual() -> None:

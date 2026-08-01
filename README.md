@@ -122,6 +122,10 @@ glyph browse --launch --browser brave --url https://target.example.com
 
 # 2. Attach + capture. Ctrl+C detaches (your browser + tabs stay open):
 glyph run live --browser https://target.example.com
+# Explicit target spelling; short aliases are also accepted:
+glyph run live --browser brave --target target.example.com
+# equivalent short form:
+glyph run live -b brave -t target.example.com
 # `--browse` is retained as an equivalent spelling; a browser name is optional:
 glyph run live --browse https://target.example.com --browser brave
 ```
@@ -131,9 +135,11 @@ glyph run live --browse https://target.example.com --browser brave
 | `--browser [chrome\|msedge\|brave]` | enable continuous capture from your real Chromium browser; with no name it attaches to CDP, with a name it selects the launch fallback |
 | `--browse` | equivalent legacy spelling for browser mode |
 | `--cdp-port N` / `--cdp-host H` | CDP-attach endpoint (default `localhost:9222`; or set `GLYPH_CDP_URL`) |
-| `--browser-path PATH` | explicit browser executable; also configurable with `GLYPH_BROWSER_PATH` |
+| `--browser-path PATH` | explicit browser executable; also configurable with `GLYPH_BROWSER_PATH`; forces Glyph to launch that binary instead of attaching to another CDP browser |
 | `--user-data-dir PATH` | launch-fallback profile directory; also configurable with `GLYPH_BROWSER_PROFILE` |
 | `--incognito` | launch-fallback only: fresh ephemeral context (no persistent profile) |
+| `-t HOST_OR_URL` / `--target HOST_OR_URL` | explicit target spelling; positional URLs remain supported |
+| `-b [chrome\|msedge\|brave]` | short alias for `--browser` |
 
 When a URL is supplied, a launch fallback closes any restored profile tabs before
 opening that URL, so it does not resume the previous target. When no URL is supplied,
@@ -216,6 +222,8 @@ them.
 |---------|---------|
 | `glyph run live <url>` | drive a live page, then the full pipeline |
 | `glyph run live --browser [<url>]` | continuous real-browser capture: you browse normally; stop with Ctrl+C or TUI `s` |
+| `glyph run live --browser brave --target HOST` | capture a target with a selected browser fallback |
+| `glyph run live -b brave -t HOST` | short spelling of the same command |
 | `glyph run live --browse <url>` | equivalent browse-mode spelling; pipeline runs after detach/close |
 | `glyph run har <file>` | run the full pipeline on a HAR |
 | `glyph browse --launch` | spawn your browser with the CDP debug port for `--browse` |

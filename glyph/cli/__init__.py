@@ -114,6 +114,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return _home_or_help(parser, args)
     try:
         return args.func(args)
+    except KeyboardInterrupt:
+        # Windows/Python 3.14 can deliver Ctrl+C while Textual is closing its
+        # Proactor event loop. Treat it as a normal user stop, not a traceback.
+        print("\nGlyph stopped safely.", file=sys.stderr)
+        return 130
     except (FileNotFoundError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

@@ -476,6 +476,64 @@ def test_live_dashboard_honors_no_snihunt(tmp_path, monkeypatch):
     assert calls["hunt"] == 0      # --no-snihunt honored
 
 
+def test_geo_blocked_capture_opens_home_settings(tmp_path):
+    """A geo-blocked live state opens the acknowledgement dialog and its OK
+    action returns the user to the main settings screen."""
+    import asyncio
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import DashboardScreen, GeoBlockedScreen, GlyphApp, HomeScreen
+    from textual.widgets import Input
+    app = GlyphApp(home=False, db_path=str(tmp_path / "geo.db"),
+                   live={"url": "https://blocked.test", "kwargs": {}})
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            dashboard = app.screen
+            assert isinstance(dashboard, DashboardScreen)
+            app.push_screen(GeoBlockedScreen("HTTP 451"), dashboard._geo_decision)
+            await pilot.pause()
+            assert isinstance(app.screen, GeoBlockedScreen)
+            await pilot.click("#geo-settings")
+            await pilot.pause()
+            assert isinstance(app.screen, HomeScreen)
+            assert app.screen.query_one("#proxy-input", Input).placeholder
+
+
+    asyncio.run(go())
+
+
+def test_geo_blocked_capture_returns_home_from_home_dashboard(tmp_path):
+    """The geo settings route also safely unwinds a dashboard pushed by Home."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import DashboardScreen, GeoBlockedScreen, GlyphApp, HomeScreen
+
+    app = GlyphApp(home=True, db_path=str(tmp_path / "geo-home.db"))
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            dashboard = DashboardScreen(app.db_path, live=None)
+            app.push_screen(dashboard)
+            await pilot.pause()
+            assert isinstance(app.screen, DashboardScreen)
+            app.push_screen(GeoBlockedScreen("HTTP 451"), dashboard._geo_decision)
+            await pilot.pause()
+            await pilot.click("#geo-settings")
+            await pilot.pause()
+            assert isinstance(app.screen, HomeScreen)
+
+    asyncio.run(go())
+
+
 def test_live_dashboard_shows_capture_error(tmp_path, monkeypatch):
     """A failed capture shows ✗ failed + the error in the header (previously
     it looked like ✓ captured even when the capture worker errored)."""
@@ -543,6 +601,38 @@ def test_home_screen_stage_checkbox_defaults(tmp_path):
             # loads in this Textual build — and no test caught it. The rules
             # now live in App.CSS; assert they actually apply.
             assert app.query_one("#shell").region.width == 82
+
+    asyncio.run(go())
+
+
+def test_home_screen_threads_browser_settings(tmp_path, monkeypatch):
+    """Home settings pass proxy, executable, profile, and force-launch into
+    the live capture payload even when the browser checkbox was not toggled."""
+    import asyncio
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import DashboardScreen, GlyphApp
+    from textual.widgets import Input
+    app = GlyphApp(home=True, db_path=str(tmp_path / "settings.db"))
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#url", Input).value = "google.com"
+            app.query_one("#proxy-input", Input).value = "http://proxy:8080"
+            app.query_one("#browser-path-input", Input).value = r"C:\\Program Files\\Brave\\brave.exe"
+            app.query_one("#profile-input", Input).value = r"C:\\Users\\you\\BraveProfile"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, DashboardScreen)
+            kwargs = app.screen.live["kwargs"]
+            assert kwargs["browse"] is True
+            assert kwargs["proxy"] == "http://proxy:8080"
+            assert kwargs["browser_path"].endswith("brave.exe")
+            assert kwargs["user_data_dir"].endswith("BraveProfile")
+            assert kwargs["force_launch"] is True
 
     asyncio.run(go())
 

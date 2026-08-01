@@ -31,6 +31,52 @@ from glyph.catalog import Catalog, Flow, PageObservation
 from glyph.capture.snapshot import harvest_labels, plain_text
 
 
+_GEO_BLOCK_MARKERS = (
+    "not available in your country",
+    "not available in your region",
+    "unavailable in your country",
+    "unavailable in your region",
+    "country restriction",
+    "region restriction",
+    "geo-block",
+    "geoblock",
+    "geoblocked",
+    "this content is not available",
+)
+
+
+def _response_status(response) -> Optional[int]:
+    """Read a Playwright/fake response status across API versions."""
+    value = getattr(response, "status", None)
+    try:
+        return int(value() if callable(value) else value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _geo_block_reason(status: Optional[int] = None, text: str = "",
+                      error: str = "") -> Optional[str]:
+    """Return a conservative geo-block signal for a navigation observation.
+
+    A plain 403 is often authentication or bot protection, so it is not
+    enough by itself. HTTP 451 and explicit region/country language are
+    strong signals; known network-denial errors are useful when a target
+    blocks the client's egress before returning HTML.
+    """
+    if status == 451:
+        return "HTTP 451 (unavailable for legal or geographic reasons)"
+    haystack = " ".join((text or "", error or "")).lower()
+    if any(marker in haystack for marker in _GEO_BLOCK_MARKERS):
+        return "the target reports that it is unavailable in this region"
+    if status == 403 and any(marker in haystack for marker in (
+            "country", "region")):
+        return "HTTP 403 with an access/region restriction"
+    if any(code in haystack for code in (
+            "err_network_access_denied", "err_tunnel_connection_failed")):
+        return "the network denied access before the target loaded"
+    return None
+
+
 def _parse_proxy(proxy: str) -> dict:
     """Parse a proxy URL into Playwright's ``{server, username, password}`` form.
 
@@ -204,6 +250,14 @@ def _make_recorders(catalog: Catalog, by_source, state, url: Optional[str],
             body = response.text()
         except Exception:
             body = None
+        reason = _geo_block_reason(_response_status(response), body or "", response.url)
+        if reason:
+            state["geo_blocked"] = True
+            state["geo_reason"] = reason
+            # Persist immediately so the TUI can explain a block while a
+            # browse session is still running, rather than waiting for close.
+            catalog.set_meta("capture_geo_blocked", "1")
+            catalog.set_meta("capture_geo_reason", reason)
         record(Flow(
             method=req.method, url=response.url, host="", path="",
             req_headers=dict(req.headers), status=response.status,
@@ -300,6 +354,7 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
                 user_data_dir: Optional[str] = None,
                 incognito: bool = False,
                 browser_path: Optional[str] = None,
+                force_launch: bool = False,
                 stop_event: Optional[threading.Event] = None,
                 progress=None) -> dict:
     """Capture a target's traffic into the catalog.
@@ -333,6 +388,7 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
             catalog, url, sync_playwright,
             cdp_url=cdp_url, browser=browser, user_data_dir=user_data_dir,
             incognito=incognito, browser_path=browser_path,
+            force_launch=force_launch,
             stop_event=stop_event, timeout_ms=timeout_ms, progress=progress)
 
     if not url:
@@ -344,7 +400,7 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
     catalog.set_meta("capture_mode", "auto")
     catalog.set_meta("capture_started", str(time.time()))
     by_source: Counter = Counter()
-    state = {"labels": 0}
+    state = {"labels": 0, "geo_blocked": False, "geo_reason": ""}
     launch_kwargs = {
         "headless": True,
         "chromium_sandbox": _chromium_sandbox_enabled(),
@@ -367,7 +423,14 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
             try:
                 if progress:
                     progress(f"loading {url}…")
-                page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+                response = page.goto(url, timeout=timeout_ms,
+                                     wait_until="domcontentloaded")
+                if response is not None:
+                    reason = _geo_block_reason(_response_status(response),
+                                               page.content(), url)
+                    if reason:
+                        state["geo_blocked"] = True
+                        state["geo_reason"] = reason
                 if wait_selector:
                     try:
                         page.wait_for_selector(wait_selector, timeout=timeout_ms)
@@ -390,6 +453,10 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
                     _snapshot(page)
             except Exception as exc:
                 nav_error = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+                reason = _geo_block_reason(error=nav_error)
+                if reason:
+                    state["geo_blocked"] = True
+                    state["geo_reason"] = reason
             try:
                 _snapshot(page)
             except Exception:
@@ -401,6 +468,8 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
         # alone would make a failed Windows navigation look like success.
         catalog.set_meta("capture_status", "done")
         catalog.set_meta("capture_error", nav_error or "")
+        catalog.set_meta("capture_geo_blocked", "1" if state["geo_blocked"] else "")
+        catalog.set_meta("capture_geo_reason", state["geo_reason"] or "")
 
     return {
         "flows": sum(by_source.values()),
@@ -409,13 +478,15 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
         "by_source": dict(by_source),
         "error": nav_error,
         "mode": "auto",
+        "geo_blocked": state["geo_blocked"],
+        "geo_reason": state["geo_reason"] or None,
     }
 
 
 def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                     cdp_url: Optional[str], browser: str,
                     user_data_dir: Optional[str], incognito: bool,
-                    browser_path: Optional[str],
+                    browser_path: Optional[str], force_launch: bool,
                     stop_event: Optional[threading.Event], timeout_ms: int,
                     progress=None) -> dict:
     """Browse mode — CDP-attach primary, launch fallback (ADR-14)."""
@@ -443,7 +514,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
     catalog.set_meta("capture_started", str(time.time()))
     catalog.set_meta("capture_stop_reason", "")
     by_source: Counter = Counter()
-    state = {"labels": 0}
+    state = {"labels": 0, "geo_blocked": False, "geo_reason": ""}
 
     # In browse mode we snapshot only the target tab (skip popups/all-traffic
     # tabs — their DOM is transient). When no url (all-traffic), skip snapshots
@@ -479,6 +550,8 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
             owns_browser = False
             # --- PRIMARY: CDP-attach to the user's real browser ---------------
             try:
+                if force_launch:
+                    raise RuntimeError("explicit browser path/profile requests launch")
                 browser_obj = pw.chromium.connect_over_cdp(cdp_target)
                 attached_browser = True
                 mode = "browse-attach"
@@ -546,11 +619,21 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 target_page = context.new_page()
                 hook_page(target_page)
                 try:
-                    target_page.goto(url, timeout=timeout_ms,
-                                     wait_until="domcontentloaded")
+                    response = target_page.goto(
+                        url, timeout=timeout_ms, wait_until="domcontentloaded")
+                    if response is not None:
+                        reason = _geo_block_reason(_response_status(response),
+                                                   target_page.content(), url)
+                        if reason:
+                            state["geo_blocked"] = True
+                            state["geo_reason"] = reason
                 except Exception as exc:
                     nav_error = (str(exc).splitlines()[0] if str(exc)
                                  else type(exc).__name__)
+                    reason = _geo_block_reason(error=nav_error)
+                    if reason:
+                        state["geo_blocked"] = True
+                        state["geo_reason"] = reason
                 # Snapshot the target tab now + on each navigation (Rosetta DOM).
                 try:
                     _snapshot(target_page)
@@ -703,6 +786,8 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
         catalog.set_meta("capture_status", "done")
         catalog.set_meta("capture_error", nav_error or "")
         catalog.set_meta("capture_stop_reason", locals().get("stop_reason", "error"))
+        catalog.set_meta("capture_geo_blocked", "1" if state["geo_blocked"] else "")
+        catalog.set_meta("capture_geo_reason", state["geo_reason"] or "")
 
     return {
         "flows": sum(by_source.values()),
@@ -712,4 +797,6 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
         "error": nav_error,
         "mode": mode,
         "stop_reason": stop_reason,
+        "geo_blocked": state["geo_blocked"],
+        "geo_reason": state["geo_reason"] or None,
     }

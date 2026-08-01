@@ -10,6 +10,7 @@ from glyph.cli._shared import (
     catalog,
     is_browse_mode,
     live_kwargs,
+    target_url,
     with_db,
     with_live,
 )
@@ -134,7 +135,7 @@ def _open_live_dashboard(args) -> bool:
     if not HAS_TEXTUAL:
         return False
     run_dashboard(args.db, live={
-        "url": args.url,
+        "url": target_url(args),
         "kwargs": live_kwargs(args),
         "no_sensitive": getattr(args, "no_sensitive", False),
         "no_snihunt": getattr(args, "no_snihunt", False),
@@ -257,6 +258,7 @@ def run_har(args: argparse.Namespace) -> int:
 
 
 def run_live(args: argparse.Namespace) -> int:
+    url = target_url(args)
     # Browse mode: the browser is visible + user-driven. No TUI takeover during
     # capture (the user needs the actual browser). Capture blocks until Ctrl+C
     # / browser-close, THEN run the pipeline + open the dashboard as a post-
@@ -268,25 +270,25 @@ def run_live(args: argparse.Namespace) -> int:
     if is_browse_mode(args) and getattr(args, "browse", False):
         from glyph.capture import capture_live
         from urllib.parse import urlparse
-        if not args.url:
+        if not url:
             _progress("⚠ browse-all mode: capturing EVERY tab in your browser.")
         else:
-            _progress(f"browse mode → {args.url}")
+            _progress(f"browse mode → {url}")
         _progress("(launching/attaching browser; navigate, log in, do your flows…)")
         cat = catalog(args)
         try:
-            if args.url:
-                host = urlparse(args.url).hostname
+            if url:
+                host = urlparse(url).hostname
                 if host:
                     cat.set_target(host)
                     cat.clear_target()
-            cap = capture_live(cat, args.url, **live_kwargs(args),
+            cap = capture_live(cat, url, **live_kwargs(args),
                                progress=_progress)
             _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
             r = _gather(cat, args, cap)
         finally:
             cat.close()
-        _render(args, args.url or "(all tabs)", r)
+        _render(args, url or "(all tabs)", r)
         # Optional post-capture dashboard (read-only; capture is already done).
         if not getattr(args, "no_tui", False):
             try:
@@ -299,7 +301,7 @@ def run_live(args: argparse.Namespace) -> int:
     # Interactive: the live dashboard runs the capture itself and streams it
     # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
     browser_requested = is_browse_mode(args)
-    if not args.url and not browser_requested:
+    if not url and not browser_requested:
         print("error: a target URL is required (or use --browse/--browser for browse mode)",
               file=__import__("sys").stderr)
         return 1
@@ -309,22 +311,22 @@ def run_live(args: argparse.Namespace) -> int:
     # synchronously, then print the designed summary.
     from glyph.capture import capture_live
     from urllib.parse import urlparse
-    _progress(f"launching browser → {args.url}")
+    _progress(f"launching browser → {url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)
     try:
         # Activate this target + clear its old rows — a re-run replaces,
         # other targets coexist (ADR-12). capture_live → driver.capture_url
         # calls set_target again (idempotent).
-        host = urlparse(args.url).hostname
+        host = urlparse(url).hostname
         if host:
             cat.set_target(host)
             cat.clear_target()
-        cap = capture_live(cat, args.url, **live_kwargs(args),
+        cap = capture_live(cat, url, **live_kwargs(args),
                            progress=_progress)
         _progress(f"captured {cap.get('flows', 0)} flows — running analysis…")
         r = _gather(cat, args, cap)
     finally:
         cat.close()
-    _render(args, args.url or "(all tabs)", r)
+    _render(args, url or "(all tabs)", r)
     return 0
