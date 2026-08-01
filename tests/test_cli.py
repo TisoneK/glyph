@@ -98,6 +98,38 @@ def test_missing_file_reports_error(tmp_path, capsys):
     assert "error" in capsys.readouterr().err
 
 
+def test_by_type_aggregates_request_and_response_sides():
+    """The driver tags response-side flows `playwright:<type>` and request-side
+    flows `playwright:request:<type>`. by_type() must SUM both sides per type,
+    not print each source key separately (the old split-on-colon behavior
+    reported every type twice, e.g. document=3 + document=3)."""
+    from glyph.cli._shared import by_type
+    res = {"by_source": {
+        "playwright:document": 3,
+        "playwright:request:document": 3,
+        "playwright:script": 2,
+        "playwright:request:script": 4,
+        "har:xhr": 1,  # no `request:` prefix — must stay its own type
+    }}
+    assert by_type(res) == {"document": 6, "script": 6, "xhr": 1}
+
+
+def test_report_live_prints_aggregated_types(capsys):
+    """`glyph capture live`'s by-type line shows each type ONCE with the
+    summed count (was: every type duplicated — request side + response side)."""
+    from glyph.cli._shared import report_live
+    report_live("https://example.com", {
+        "flows": 12, "labels": 5,
+        "by_source": {"playwright:document": 3, "playwright:request:document": 3,
+                       "playwright:script": 2, "playwright:request:script": 4},
+        "error": None,
+    })
+    out = capsys.readouterr().out
+    assert "by type: document=6, script=6" in out
+    # The duplicated pattern is gone — document must appear exactly once.
+    assert out.count("document=") == 1
+
+
 def _run_with_pending(tmp_path, make_entry):
     """Build a catalog file with a pending reference-join row; return its path."""
     import json

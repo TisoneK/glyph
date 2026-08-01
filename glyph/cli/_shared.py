@@ -88,12 +88,28 @@ def live_kwargs(args: argparse.Namespace) -> dict:
     }
 
 
+def by_type(res: dict) -> dict[str, int]:
+    """Aggregate the driver's per-source counters into per-TYPE totals.
+
+    The driver tags response-side flows ``playwright:<resource_type>`` and
+    request-side flows ``playwright:request:<resource_type>``. Splitting on
+    ``:`` naively would report each type TWICE (once per side) — or, with a
+    dict-comprehension, lose one side's count. Summing both sides per type
+    gives the real total (e.g. ``document=6`` not ``document=3`` x2).
+    """
+    types: dict[str, int] = {}
+    for k, v in (res.get("by_source") or {}).items():
+        t = str(k).split(":")[-1]
+        types[t] = types.get(t, 0) + v
+    return types
+
+
 def report_live(url: str, res: dict) -> None:
     print(f"Captured {res['flows']} flows + {res['labels']} DOM labels "
           f"from {url}")
-    if res.get("by_source"):
-        parts = ", ".join(f"{k.split(':')[-1]}={v}"
-                          for k, v in sorted(res["by_source"].items()))
+    types = by_type(res)
+    if types:
+        parts = ", ".join(f"{t}={n}" for t, n in sorted(types.items()))
         print(f"  by type: {parts}")
     if res.get("error"):
         print(f"  note: navigation did not fully complete ({res['error']}) — "

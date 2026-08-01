@@ -6,6 +6,7 @@ import argparse
 from glyph.cli import _console as C
 from glyph.cli._format import num, sev_line, style
 from glyph.cli._shared import (
+    by_type,
     catalog,
     live_kwargs,
     with_db,
@@ -67,7 +68,11 @@ def add_parser(sub) -> None:
 
 
 def _types_line(cap: dict) -> str:
-    types = {k.split(":")[-1]: v for k, v in (cap.get("by_source") or {}).items()}
+    # by_type() aggregates the driver's `playwright:<type>` (response) and
+    # `playwright:request:<type>` (request) source keys into one count per
+    # type — the old split-on-colon comprehension reported each type twice
+    # or dropped a side (see cli/_shared.by_type).
+    types = by_type(cap)
     prio = ["xhr", "fetch", "websocket", "document"]
     parts = [f"{t}={types[t]}" for t in prio if t in types]
     parts += [f"{t}={n}" for t, n in sorted(types.items()) if t not in prio]
