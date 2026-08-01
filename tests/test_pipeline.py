@@ -141,3 +141,54 @@ def test_snihunt_no_net_passes_net_false(tmp_path, make_entry, monkeypatch):
     res = run_analysis(db, target="s.t", snihunt_no_net=True)
     assert res["sni"] == {}
     assert nets == [False]  # local heuristics only (no DoH/CT/reverse-IP)
+
+
+def test_no_schema_and_no_rosetta_skip_lane_stages(tmp_path, make_entry, monkeypatch):
+    """Session 27: each stage of the schema->rosetta lane can be opted out
+    independently (the TUI checkboxes), without touching the other lanes.
+    A skipped stage leaves its result key ``None``."""
+    import glyph.schema as sch
+    import glyph.rosetta as ros
+    import glyph.sensitive as sens
+    import glyph.snihunt as sh
+
+    db = _seeded(tmp_path, make_entry)
+
+    def fake_schema(cat):
+        calls["schema"] += 1
+        return {}
+
+    def fake_rosetta(cat):
+        calls["rosetta"] += 1
+        return {"entries": 0}  # pipeline reads ros['entries'] for progress
+
+    def fake_scan(cat):
+        calls["scan"] += 1
+        return {}
+
+    def fake_hunt(cat, net=True, progress=None):
+        calls["hunt"] += 1
+        return {}
+
+    calls = {"schema": 0, "rosetta": 0, "scan": 0, "hunt": 0}
+    monkeypatch.setattr(sch, "infer_all", fake_schema)
+    monkeypatch.setattr(ros, "build_dictionary", fake_rosetta)
+    monkeypatch.setattr(sens, "run_scan", fake_scan)
+    monkeypatch.setattr(sh, "run_hunt", fake_hunt)
+
+    # no_schema: rosetta still runs (over existing fields), sch is None.
+    res = run_analysis(db, target="s.t", no_schema=True)
+    assert res["sch"] is None and res["ros"] == {"entries": 0}
+    assert calls == {"schema": 0, "rosetta": 1, "scan": 1, "hunt": 1}
+
+    # no_rosetta: schema still runs, ros is None.
+    calls = {"schema": 0, "rosetta": 0, "scan": 0, "hunt": 0}
+    res = run_analysis(db, target="s.t", no_rosetta=True)
+    assert res["ros"] is None and res["sch"] == {}
+    assert calls == {"schema": 1, "rosetta": 0, "scan": 1, "hunt": 1}
+
+    # both off: the whole lane is dropped, other lanes unaffected.
+    calls = {"schema": 0, "rosetta": 0, "scan": 0, "hunt": 0}
+    res = run_analysis(db, target="s.t", no_schema=True, no_rosetta=True)
+    assert res["sch"] is None and res["ros"] is None
+    assert calls == {"schema": 0, "rosetta": 0, "scan": 1, "hunt": 1}

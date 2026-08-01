@@ -17,13 +17,13 @@ try:
     from textual.containers import (
         Center,
         Horizontal,
-        Middle,
         Vertical,
         VerticalScroll,
     )
     from textual.screen import ModalScreen, Screen
     from textual.widgets import (
         Button,
+        Checkbox,
         DataTable,
         Footer,
         Header,
@@ -38,7 +38,7 @@ except ImportError:  # pragma: no cover
 
 from glyph.catalog import Catalog
 from glyph.tui import data as D
-from glyph.tui.logo import TAGLINE, logo_renderable
+from glyph.tui.logo import TAGLINE, logo_compact, logo_renderable
 
 _VIEWS = [
     ("flows", "Flows", D.flow_rows),
@@ -116,40 +116,57 @@ if HAS_TEXTUAL:
             self.app.pop_screen()
 
     class HomeScreen(Screen):
-        CSS = """
-        HomeScreen { align: center middle; }
-        #box { width: 66; height: auto; }
-        #logo { content-align: center middle; height: auto; padding: 1 0 0 0; }
-        #tag { content-align: center middle; color: $text-muted; padding: 0 0 1 0; }
-        #url { margin: 1 0; }
-        #actions { height: auto; align: center middle; padding: 1 0; }
-        #actions Button { margin: 0 1; }
-        #hint { content-align: center middle; color: $text-muted; }
-        """
         BINDINGS = [Binding("q,escape", "app.quit", "Quit")]
+
+        #: analysis stages the user can tick. Every stage ships ON by default
+        #: except vpndec — it needs a config FILE to point at, not captured
+        #: traffic, so it gets its own file input below the list.
+        STAGES = [
+            ("schema", "Schema inference"),
+            ("rosetta", "Rosetta decode"),
+            ("sensitive", "Sensitive / risk scan"),
+            ("snihunt", "SNI bug-host hunt"),
+        ]
 
         def compose(self) -> "ComposeResult":
             yield Header(show_clock=True)
-            with Middle():
-                with Center():
-                    with Vertical(id="box"):
-                        yield Static(logo_renderable(), id="logo")
-                        yield Static(TAGLINE, id="tag")
+            with Center():
+                with Vertical(id="shell"):
+                    yield Static(logo_renderable(), id="logo")
+                    yield Static(TAGLINE, id="tag")
+                    yield Input(
+                        placeholder="https://target.example.com  —  enter a URL to capture",
+                        id="url")
+                    with Vertical(id="stages"):
+                        yield Static("ANALYSIS STAGES", classes="stages-title")
+                        with Horizontal(classes="stages-row"):
+                            for sid, label in self.STAGES[:2]:
+                                yield Checkbox(label, id=f"st_{sid}", value=True)
+                        with Horizontal(classes="stages-row"):
+                            for sid, label in self.STAGES[2:]:
+                                yield Checkbox(label, id=f"st_{sid}", value=True)
+                            yield Checkbox("VPN config decode", id="st_vpndec")
                         yield Input(
-                            placeholder="https://target.example.com  —  enter a URL to capture",
-                            id="url")
-                        with Horizontal(id="actions"):
-                            yield Button("Capture ▶", id="capture", variant="primary")
-                            yield Button("Open catalog", id="open")
-                            yield Button("Quit", id="quit", variant="error")
-                        yield Static("[dim]Enter a URL and press Enter · "
-                                     "or open the existing catalog[/]", id="hint")
+                            placeholder="path to a VPN config (.hc/.ehi/.dark/.ziv/.tls)",
+                            id="vpnfile", disabled=True)
+                    with Horizontal(id="actions"):
+                        yield Button("Capture ▶", id="capture", variant="primary")
+                        yield Button("Open catalog", id="open")
+                        yield Button("Quit", id="quit", variant="error")
+                    yield Static("[dim]Enter a URL and press Enter · "
+                                 "or open the existing catalog[/]", id="hint")
             yield Footer()
 
         def on_mount(self) -> None:
             self.app.title = "GLYPH"
             self.app.sub_title = "reverse-engineering toolkit"
             self.query_one("#url", Input).focus()
+
+        def _checked_stages(self) -> list:
+            """The analysis stages currently ticked (excludes vpndec — it's
+            file-based and handled separately via ``vpndec_file``)."""
+            return [sid for sid, _ in self.STAGES
+                    if self.query_one(f"#st_{sid}", Checkbox).value]
 
         def _capture(self, url: str) -> None:
             url = (url or "").strip()
@@ -158,10 +175,27 @@ if HAS_TEXTUAL:
                 return
             if not url.startswith(("http://", "https://")):
                 url = "https://" + url
-            live = {"url": url, "kwargs": {
-                "explore": 2, "settle_ms": 3000, "timeout_ms": 30000,
-                "wait_selector": None, "proxy": os.environ.get("GLYPH_PROXY")}}
+            vpn_file = ""
+            if self.query_one("#st_vpndec", Checkbox).value:
+                vpn_file = self.query_one("#vpnfile", Input).value.strip()
+                if not vpn_file:
+                    # Tick the stage but no file: never a silent no-op.
+                    self.app.bell()
+            live = {
+                "url": url,
+                "kwargs": {"explore": 2, "settle_ms": 3000, "timeout_ms": 30000,
+                           "wait_selector": None,
+                           "proxy": os.environ.get("GLYPH_PROXY")},
+                "stages": self._checked_stages(),
+                "vpndec_file": vpn_file or None,
+            }
             self.app.push_screen(DashboardScreen(self.app.db_path, live=live))
+
+        def on_checkbox_changed(self, event) -> None:
+            # The VPN Dec stage needs a config FILE — reveal its input only
+            # when the stage is checked.
+            if event.checkbox.id == "st_vpndec":
+                self.query_one("#vpnfile", Input).disabled = not event.value
 
         def on_input_submitted(self, event) -> None:
             self._capture(event.value)
@@ -175,12 +209,6 @@ if HAS_TEXTUAL:
                 self.app.exit()
 
     class DashboardScreen(Screen):
-        CSS = """
-        #summary { height: 1; }
-        TabbedContent { height: 1fr; }
-        DataTable { height: 1fr; }
-        #detail { padding: 1 2; }
-        """
         BINDINGS = [
             Binding("1", "show('flows')", "Flows"),
             Binding("2", "show('dom')", "DOM"),
@@ -198,14 +226,26 @@ if HAS_TEXTUAL:
             super().__init__()
             self.db_path = db_path
             self.live = live
-            # Pipeline opt-out flags from `glyph run live` (threaded through
-            # the live dict by cli/run._open_live_dashboard) — the dashboard's
-            # own analysis must honor them like the headless path.
-            self._no_sensitive = bool((live or {}).get("no_sensitive"))
-            self._no_snihunt = bool((live or {}).get("no_snihunt"))
-            self._snihunt_no_net = bool((live or {}).get("snihunt_no_net"))
+            live = live or {}
+            # Stage selection: the home screen checkboxes (Session 27) take
+            # precedence; `glyph run live` still threads the opt-out flags
+            # through cli/run._open_live_dashboard, so both surfaces work.
+            stages = live.get("stages")
+            if stages is not None:
+                sel = set(stages)
+                self._no_schema = "schema" not in sel
+                self._no_rosetta = "rosetta" not in sel
+                self._no_sensitive = "sensitive" not in sel
+                self._no_snihunt = "snihunt" not in sel
+            else:
+                self._no_schema = False
+                self._no_rosetta = False
+                self._no_sensitive = bool(live.get("no_sensitive"))
+                self._no_snihunt = bool(live.get("no_snihunt"))
+            self._snihunt_no_net = bool(live.get("snihunt_no_net"))
+            self._vpndec_file = live.get("vpndec_file") or None
             self._start = None
-            self._done = live is None
+            self._done = live.get("url") is None
             self._analyzing = False   # guard: never overlap analysis passes
             self._live_timers = []
 
@@ -213,6 +253,7 @@ if HAS_TEXTUAL:
 
         def compose(self) -> "ComposeResult":
             yield Header(show_clock=True)
+            yield Static("", id="brand", markup=True)
             yield Static("", id="summary", markup=True)
             with TabbedContent(initial="flows"):
                 for tab_id, title, _ in _VIEWS:
@@ -223,6 +264,7 @@ if HAS_TEXTUAL:
         def on_mount(self) -> None:
             import time
             self.app.title = "GLYPH"
+            self._set_brand()
             self.action_reload()
             if self.live:
                 self._start = time.monotonic()
@@ -233,9 +275,31 @@ if HAS_TEXTUAL:
             else:
                 cat = Catalog(self.db_path, restore_active=True)
                 try:
-                    self.app.sub_title = cat.target() or "catalog"
+                    self.app.sub_title = D.clip(cat.target() or "catalog", 48)
                 finally:
                     cat.close()
+
+        def _set_brand(self) -> None:
+            """One-line brand row: the compact logo + the current host. The
+            host is clipped so a single long host can't stretch the header
+            (Session 27)."""
+            from urllib.parse import urlparse
+            from rich.text import Text
+            host = ""
+            url = (self.live or {}).get("url")
+            if url:
+                host = urlparse(url).hostname or ""
+            if not host:
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    host = cat.target() or ""
+                finally:
+                    cat.close()
+            t = Text()
+            t.append_text(logo_compact())
+            if host:
+                t.append("  " + D.clip(host, 44), style="dim")
+            self.query_one("#brand", Static).update(t)
 
         # -- live capture + refresh --------------------------------------
         def _capture_worker(self) -> None:
@@ -260,12 +324,17 @@ if HAS_TEXTUAL:
             finally:
                 cat.close()
 
-        def _capture_state(self) -> "tuple[Optional[str], Optional[str]]":
-            """(status, error) from one Catalog open — the 1s tick polls both
-            every second, so avoid two connections per tick."""
+        def _capture_state(self) -> dict:
+            """Capture + vpndec status/error in ONE Catalog open — the 1s tick
+            polls every second, so avoid several connections per tick."""
             cat = Catalog(self.db_path, restore_active=True)
             try:
-                return (cat.get_meta("capture_status"), cat.get_meta("capture_error"))
+                return {
+                    "status": cat.get_meta("capture_status"),
+                    "error": cat.get_meta("capture_error"),
+                    "vpndec_status": cat.get_meta("vpndec_status"),
+                    "vpndec_error": cat.get_meta("vpndec_error"),
+                }
             finally:
                 cat.close()
 
@@ -274,13 +343,20 @@ if HAS_TEXTUAL:
             self._refresh_live()  # summary + visible tab only (cheap)
             elapsed = int(time.monotonic() - (self._start or time.monotonic()))
             mm, ss = divmod(elapsed, 60)
-            status, err = self._capture_state()
-            if status == "done":
-                if err:
+            st = self._capture_state()
+            if st["status"] == "done":
+                if st["error"]:
                     # A failed capture must never look like success.
-                    self.app.sub_title = f"✗ failed · {mm:02d}:{ss:02d} · {err[:44]}"
+                    self.app.sub_title = (f"✗ failed · {mm:02d}:{ss:02d} · "
+                                          f"{st['error'][:44]}")
                 else:
-                    self.app.sub_title = f"✓ captured · {mm:02d}:{ss:02d}"
+                    sub = f"✓ captured · {mm:02d}:{ss:02d}"
+                    if self._vpndec_file:
+                        if st["vpndec_error"]:
+                            sub += f" · vpndec ✗ {st['vpndec_error'][:32]}"
+                        elif st["vpndec_status"]:
+                            sub += f" · vpndec ✓ {st['vpndec_status']}"
+                    self.app.sub_title = sub
                 if not self._done:
                     self._done = True
                     # one final analysis + full reload, then stop polling.
@@ -312,6 +388,8 @@ if HAS_TEXTUAL:
                 run_analysis(
                     self.db_path,
                     target=self._target_host(),
+                    no_schema=self._no_schema,
+                    no_rosetta=self._no_rosetta,
                     no_sensitive=self._no_sensitive,
                     no_snihunt=True,  # hunt runs once at finalize
                 )
@@ -330,12 +408,16 @@ if HAS_TEXTUAL:
                 run_analysis(
                     self.db_path,
                     target=self._target_host(),
+                    no_schema=self._no_schema,
+                    no_rosetta=self._no_rosetta,
                     no_sensitive=self._no_sensitive,
                     no_snihunt=self._no_snihunt,
                     snihunt_no_net=self._snihunt_no_net,
                 )
             except Exception:
                 pass  # network/lock hiccup — the snihunt CLI can re-run it
+            if self._vpndec_file:
+                self._decode_vpndec()
             # stop the live timers now that capture is done (no more polling).
             for t in self._live_timers:
                 try:
@@ -344,6 +426,37 @@ if HAS_TEXTUAL:
                     pass
             self._live_timers = []
             self.app.call_from_thread(self.action_reload)  # one full refresh
+
+        def _decode_vpndec(self) -> None:
+            """Decode the VPN config file picked on the home screen into the
+            catalog — the same path as `glyph vpndec <file>` (ADR-11), run
+            once at finalize like the SNI hunt. Status/error land in meta so
+            the 1s tick can surface them in the header."""
+            import os
+            from glyph.vpndec import decode_file
+            from glyph.vpndec.keys import KeyStore
+            cat = Catalog(self.db_path, restore_active=True)
+            try:
+                cat.set_meta("vpndec_status", "")
+                cat.set_meta("vpndec_error", "")
+            finally:
+                cat.close()
+            try:
+                keys = KeyStore(os.environ.get("GLYPH_VPNKEYFILE"))
+                cfg = decode_file(self._vpndec_file, keys=keys)
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    cat.add_vpn_config(cfg)
+                    cat.set_meta("vpndec_status", cfg.decryption_status)
+                finally:
+                    cat.close()
+            except Exception as exc:
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    cat.set_meta("vpndec_error",
+                                 str(exc).splitlines()[0] or str(exc))
+                finally:
+                    cat.close()
 
         # -- rendering ---------------------------------------------------
         def _refresh_live(self) -> None:
@@ -418,6 +531,33 @@ if HAS_TEXTUAL:
 
     class GlyphApp(App):
         """Top-level app: opens on the home screen, or straight to a dashboard."""
+
+        # Screen CSS lives HERE (App.CSS), not on the Screen classes: this
+        # Textual build only loads a screen's CSS when the screen is pushed or
+        # switched — the DEFAULT screen's CSS never loads, so screen-scoped
+        # rules silently did nothing (the home page's pre-existing "squeezed
+        # top-left" layout). Selectors are type-scoped so rules never leak
+        # between screens.
+        CSS = """
+        HomeScreen { align: center middle; }
+        HomeScreen #shell { width: 82; max-width: 94%; height: auto; padding: 0 1; }
+        HomeScreen #logo { content-align: center middle; height: auto; }
+        HomeScreen #tag { content-align: center middle; color: $text-muted; margin: 0 0 1 0; }
+        HomeScreen #url { margin: 0 0 1 0; }
+        HomeScreen #stages { border: round $primary; padding: 1 2; height: auto; margin: 0 0 1 0; }
+        HomeScreen .stages-title { text-style: bold; color: $primary; margin: 0 0 1 0; }
+        HomeScreen .stages-row { height: auto; }
+        HomeScreen .stages-row Checkbox { margin: 0 4 0 0; }
+        HomeScreen #vpnfile { margin: 1 0 0 0; }
+        HomeScreen #actions { height: auto; align: center middle; margin: 0 0 1 0; }
+        HomeScreen #actions Button { margin: 0 1; }
+        HomeScreen #hint { content-align: center middle; color: $text-muted; }
+        DashboardScreen #brand { height: 1; }
+        DashboardScreen #summary { height: 1; }
+        DashboardScreen TabbedContent { height: 1fr; }
+        DashboardScreen DataTable { height: 1fr; }
+        FlowDetail #detail { padding: 1 2; }
+        """
 
         def __init__(self, home: bool = True, db_path: str = "glyph.db",
                      live: Optional[dict] = None) -> None:

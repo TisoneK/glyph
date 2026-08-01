@@ -46,17 +46,24 @@ from glyph.catalog import Catalog
 
 
 def run_analysis(db_path: str, *, target: Optional[str] = None,
+                 no_schema: bool = False,
+                 no_rosetta: bool = False,
                  no_sensitive: bool = False,
                  no_snihunt: bool = False,
                  snihunt_no_net: bool = False,
                  progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
-    """Run the analysis stages concurrently. Returns ``{sch, ros, sens, sni}``.
+    """Run the analysis stages concurrently. Returns ``{sch, ros, sens, sni}``
+    (a key is ``None`` when its stage was skipped).
 
-    Parameters mirror the ``glyph run`` opt-out flags so the CLI and TUI can
-    pass them straight through:
+    Parameters mirror the CLI/TUI opt-out flags so both surfaces can pass
+    them straight through:
 
     - ``target`` — the active capture host. Every lane re-activates it so
       all writes land on the ACTIVE target, never the ``(unassigned)`` bucket.
+    - ``no_schema`` — skip schema inference (the schema->rosetta lane then
+      only runs rosetta, over whatever fields already exist).
+    - ``no_rosetta`` — skip the Rosetta decode (the lane then only infers
+      schema).
     - ``no_sensitive`` — skip the sensitive/risk scan lane.
     - ``no_snihunt`` — skip the SNI bug-host hunt lane.
     - ``snihunt_no_net`` — hunt lane runs local heuristics only (no DoH / CT /
@@ -88,16 +95,23 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
         return cat
 
     def _schema_rosetta() -> Dict[str, Any]:
+        # One lane, two optional stages (rosetta depends on schema's
+        # enum-candidate fields, so they share a worker — ADR-15). Either
+        # can be opted out independently (Session 27 TUI checkboxes).
         from glyph.schema import infer_all
         from glyph.rosetta import build_dictionary
         cat = _open()
         try:
-            _prog("schema: inferring fields + enum candidates…")
-            sch = infer_all(cat)
-            _prog("rosetta: decoding…")
-            ros = build_dictionary(cat)
-            _prog(f"rosetta: decoded {ros['entries']} entries")
-            return {"sch": sch, "ros": ros}
+            out: Dict[str, Any] = {}
+            if not no_schema:
+                _prog("schema: inferring fields + enum candidates…")
+                out["sch"] = infer_all(cat)
+            if not no_rosetta:
+                _prog("rosetta: decoding…")
+                ros = build_dictionary(cat)
+                _prog(f"rosetta: decoded {ros['entries']} entries")
+                out["ros"] = ros
+            return out
         finally:
             cat.close()
 
@@ -122,13 +136,17 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
         finally:
             cat.close()
 
-    lanes = [_schema_rosetta]
+    lanes: list = []
+    if not (no_schema and no_rosetta):
+        lanes.append(_schema_rosetta)
     if not no_sensitive:
         lanes.append(_sensitive)
     if not no_snihunt:
         lanes.append(_snihunt)
 
     out: Dict[str, Any] = {"sch": None, "ros": None, "sens": None, "sni": None}
+    if not lanes:
+        return out  # every stage opted out (all home-screen boxes unticked)
     with ThreadPoolExecutor(max_workers=len(lanes)) as ex:
         futures = [ex.submit(fn) for fn in lanes]
         for fut in futures:

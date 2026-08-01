@@ -16,6 +16,15 @@ from glyph.catalog.normalize import template_path
 Rows = Tuple[List[str], List[List[str]]]  # (headers, rows)
 
 
+def clip(text: Optional[str], limit: int = 64) -> str:
+    """Ellipsize long cell values so one long host/URL can't balloon a
+    table column into the neighbors (Session 27)."""
+    text = text or ""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1] + "…"
+
+
 def human_size(n: Optional[int]) -> str:
     if not n:
         return "—"
@@ -105,7 +114,8 @@ def flow_rows(cat: Catalog, text_filter: Optional[str] = None) -> Rows:
         if text_filter and text_filter.lower() not in (f.url + " " + f.method).lower():
             continue
         rows.append([str(f.id or ""), f.method, flow_type(f),
-                     str(f.status or "—"), human_size(_flow_size(f)), url])
+                     str(f.status or "—"), human_size(_flow_size(f)),
+                     clip(url, 72)])
     return headers, rows
 
 
@@ -161,7 +171,7 @@ def sensitive_rows(cat: Catalog, include_noise: bool = False) -> Rows:
         i += 1
         loc = "" if f.location == "endpoint" else f.location
         rows.append([str(i), f.severity.upper(), f.category,
-                     kind_label.get(f.kind, f.kind), f.host or "",
+                     kind_label.get(f.kind, f.kind), clip(f.host, 36),
                      loc, mask_value(f.value_sample)])
     return headers, rows
 
@@ -170,7 +180,7 @@ def rosetta_rows(cat: Catalog) -> Rows:
     headers = ["PATH", "CODE", "MEANING", "CONF", "STRATEGY", "STATUS"]
     rows: List[List[str]] = []
     for d in cat.dictionary():
-        rows.append([d.json_path, repr(d.code), str(d.meaning),
+        rows.append([clip(d.json_path, 48), repr(d.code), str(d.meaning),
                      f"{d.confidence:.2f}", d.strategy,
                      "REVIEW" if d.needs_review else "ok"])
     return headers, rows
@@ -207,7 +217,7 @@ def snihunt_rows(cat: Catalog) -> Rows:
         if ev.get("reverse_siblings"): sigs.append(f"rip+{ev['reverse_siblings']}")
         if ev.get("reverse_sourced"): sigs.append("rip-sourced")
         if ev.get("probe_ok"): sigs.append("cert✓")
-        rows.append([f.severity.upper(), str(f.score or 0), f.host or "",
+        rows.append([f.severity.upper(), str(f.score or 0), clip(f.host, 44),
                      status_str, ip, cdn,
                      _SNI_CAT_LABEL.get(f.category, f.category),
                      " ".join(sigs) or "—"])
@@ -225,10 +235,10 @@ def vpndec_rows(cat: Catalog) -> Rows:
         rows.append([
             f"{mark} {cfg['decryption_status']}",
             cfg["format"],
-            cfg["host"] or "—",
+            clip(cfg["host"] or "—", 36),
             str(cfg["port"] or "—"),
             cfg["protocol"] or "—",
-            (cfg["sni"] or "—")[:30],
-            cfg["filename"],
+            clip(cfg["sni"] or "—", 30),
+            clip(cfg["filename"], 32),
         ])
     return headers, rows

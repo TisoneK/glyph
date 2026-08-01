@@ -28,3 +28,15 @@ def logo_renderable():
         t.append(line + ("\n" if i < len(lines) - 1 else ""),
                  style=f"bold {_GRAD[min(i, len(_GRAD) - 1)]}")
     return t
+
+
+def logo_compact():
+    """A one-line gradient wordmark for the dashboard header — the full
+    banner is too tall to share the output page with the tables, so the
+    dashboard inherits the same gradient in a single row."""
+    from rich.text import Text
+    t = Text()
+    t.append("◈ ", style=f"bold {_GRAD[2]}")
+    for i, ch in enumerate("GLYPH"):
+        t.append(ch, style=f"bold {_GRAD[i % len(_GRAD)]}")
+    return t

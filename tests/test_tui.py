@@ -313,3 +313,119 @@ def test_live_dashboard_shows_capture_error(tmp_path, monkeypatch):
             assert "browser crashed" in app.sub_title
 
     asyncio.run(go())
+
+
+def test_home_screen_stage_checkbox_defaults(tmp_path):
+    """Session 27: the home screen lets the user pick which analysis stages
+    run — every stage is ON by default EXCEPT VPN Dec, whose file input is
+    hidden until the stage is ticked."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from textual.widgets import Checkbox, Input
+    from glyph.tui.app import GlyphApp
+    app = GlyphApp(home=True, db_path=str(tmp_path / "h.db"))
+
+    async def go():
+        # 100-wide so #shell (width 82, max-width 94%) is NOT capped by the
+        # terminal width — the region check below must see the full 82.
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            for sid in ("schema", "rosetta", "sensitive", "snihunt"):
+                assert app.query_one(f"#st_{sid}", Checkbox).value is True
+            assert app.query_one("#st_vpndec", Checkbox).value is False
+            assert app.query_one("#vpnfile", Input).disabled is True
+            # CSS regression guard (Session 27): the home layout used to be
+            # squeezed top-left because screen CSS on the DEFAULT screen never
+            # loads in this Textual build — and no test caught it. The rules
+            # now live in App.CSS; assert they actually apply.
+            assert app.query_one("#shell").region.width == 82
+
+    asyncio.run(go())
+
+
+def test_home_screen_threads_stage_selection(tmp_path, monkeypatch):
+    """Unchecking a stage on the home screen threads that choice into the
+    dashboard's analysis flags (capture is faked)."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+
+    import glyph.capture.driver as drv
+    from textual.widgets import Checkbox
+
+    def fake_capture(cat, url, **kw):
+        cat.set_meta("capture_status", "done")
+        return {"flows": 0, "pages": 0, "labels": 0, "by_source": {}, "error": None}
+
+    monkeypatch.setattr(drv, "capture_url", fake_capture)
+    from glyph.tui.app import DashboardScreen, GlyphApp
+    app = GlyphApp(home=True, db_path=str(tmp_path / "h.db"))
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#st_sensitive", Checkbox).value = False
+            app.query_one("#st_snihunt", Checkbox).value = False
+            app.query_one("#url").value = "example.com"
+            await pilot.press("enter")          # submit URL -> dashboard
+            await pilot.pause()
+            assert isinstance(app.screen, DashboardScreen)
+            assert app.screen._no_sensitive is True
+            assert app.screen._no_snihunt is True
+            assert app.screen._no_schema is False  # untouched stage stays on
+            assert app.screen._no_rosetta is False
+
+    asyncio.run(go())
+
+
+def test_dashboard_has_compact_brand_row(tmp_path):
+    """The dashboard inherits the logo as a compact one-line brand row so the
+    big banner doesn't crowd the tables (Session 27)."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import GlyphApp
+    app = GlyphApp(home=False, db_path=str(tmp_path / "d.db"), live=None)
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            brand = app.query_one("#brand")
+            assert "GLYPH" in str(brand.render())
+
+    asyncio.run(go())
+
+
+def test_clip_helper():
+    assert D.clip("short") == "short"
+    assert D.clip(None) == ""
+    out = D.clip("x" * 100, 64)
+    assert len(out) == 64 and out.endswith("…")
+
+
+def test_rows_clip_long_host(tmp_path, make_entry):
+    """A single long host/URL must not balloon the flows column (Session 27)."""
+    from glyph.capture import ingest_har
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "c.db")
+    cat = Catalog(db)
+    har = tmp_path / "s.har"
+    # flow_rows prefers the stored PATH over the host part of the URL, so
+    # make the path itself long to prove the clip applies.
+    long = "https://x.example.com/" + "a" * 90
+    har.write_text(json.dumps({"log": {"entries": [make_entry("GET", long)]}}))
+    ingest_har(cat, str(har))
+    _, rows = D.flow_rows(cat)
+    assert len(rows[0][5]) <= 72
+    assert rows[0][5].endswith("…")
+    cat.close()
