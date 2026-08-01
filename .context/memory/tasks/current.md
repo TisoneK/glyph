@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 23 done — verified `glyph run live https://example.com` live Textual dashboard on-device via a pty harness: ● LIVE header, FLOWS streamed 0→46, ✓ captured at ~15s, clean q-quit, catalog persisted (46 flows, 1 page). No code changed.
+- **Task:** (cleared) Session 24 done — parallel analysis pipeline (ADR-15): schema→rosetta / sensitive / snihunt run as 3 concurrent lanes (new glyph/pipeline.py); per-lane target-anchored catalogs fixed the unassigned-bucket bug; CLI _gather + TUI rewired; 165 pass / 5 skip.
 - **Status:** done

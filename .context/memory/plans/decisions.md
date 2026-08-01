@@ -666,3 +666,43 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 - **Supersedes:** ADR-13 (proposed, unimplemented). ADR-13's launch-persistent-context
   technique becomes the FALLBACK in ADR-14; ADR-14's CDP-attach is the PRIMARY. ADR-13 is
   kept for the research trail.
+
+---
+## ADR-15: Analysis stages run CONCURRENTLY as a parallel pipeline (2026-08-01)
+- **Status:** proposed → **accepted/implemented this session (Session 24)**.
+- **Context:** The user asked why the post-capture stages (schema, rosetta, sensitive,
+  snihunt) wait for each other during `run`/`run live`. They largely DON'T need to. The
+  real dependency graph: `schema -> rosetta` (rosetta's dom_attribute strategy reads the
+  enum-candidate fields schema inference writes — must chain), while `sensitive` and
+  `snihunt` are independent of both (sensitive scans flows directly; snihunt reads the
+  captured host surface). snihunt is the SLOWEST stage (bounded network recon: DoH, CT
+  logs, reverse-IP), yet historically ran last — after everything had finished.
+- **Decision:**
+  - New `glyph/pipeline.py::run_analysis(db_path, target=..., no_sensitive=...,
+    no_snihunt=..., snihunt_no_net=..., progress=...)` runs THREE LANES concurrently over
+    a ThreadPoolExecutor: lane 1 = schema→rosetta (chained), lane 2 = sensitive, lane 3
+    = snihunt. Opt-out flags skip lanes. Result dict shape `{sch, ros, sens, sni}`
+    unchanged, so the CLI renderers are untouched.
+  - **Every lane opens its OWN Catalog connection and re-activates the target first**
+    (`set_target(target)`). Two reasons: sqlite3 connections are bound to their creating
+    thread (no cross-thread sharing), and a fresh Catalog has no active target — without
+    set_target every write silently falls into the reserved `(unassigned)` bucket (id=0).
+  - **This fixes a latent bug the parallelization forced into the open:** the TUI's
+    analysis workers (`_analyze_once`/`_finalize`) opened a fresh Catalog WITHOUT
+    set_target, so the live dashboard's fields/dictionary/findings landed in the
+    (unassigned) bucket instead of the capture target. Session 23's on-device run proved
+    it: `glyph target show example.com` reported findings 0 / fields 0 / dictionary 0
+    while the dashboard displayed findings. run_analysis's per-lane set_target fixes it
+    for both the TUI and the headless CLI (`glyph/cli/run.py::_gather` now delegates).
+  - WAL + busy_timeout=5000 already support concurrent writers (built for the TUI's
+    capture/analyze overlap, Session 15); findings writes are kind-scoped per stage
+    (Session 16 fix) so concurrent sensitive + snihunt lanes never wipe each other.
+  - Progress callbacks are lock-guarded in run_analysis so concurrent lane lines never
+    interleave mid-print. A lane exception propagates after the pool drains.
+- **Consequences:** wall-clock for `run har`/`run live` drops toward
+  max(schema+rosetta, sensitive, snihunt) instead of the sum; the TUI's live ticks
+  (schema+rosetta ∥ sensitive) and finalize (all three incl. snihunt) parallelize the
+  same way; the (unassigned) bucket stops silently accumulating analysis rows.
+- **Supersedes / amends:** nothing. Builds on ADR-10 (snihunt finalize-only in the TUI —
+  unchanged: live ticks still skip the hunt), ADR-12 (multi-target — per-lane set_target
+  keeps every write stamped with the active target_id).
