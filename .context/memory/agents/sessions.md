@@ -759,3 +759,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done. Added quit modal and tracked worker shutdown, separate target-pinned `run_snihunt()` lifecycle, and dashboard target picker (`t`). Added lifecycle, pipeline, and target-selection regression tests. Full suite: 180 passed / 5 skipped.
 - **Open items:** Windows live-TUI verification; consider a bounded shutdown timeout/fallback for pathological hangs.
 - **Report:** .context/memory/reviews/2026-08-01-quit-sni-targets.md
+
+---
+## 2026-08-01 — Session 29
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** bao@local macOS (Darwin) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Add an endpoint-data TUI tab; diagnose Windows empty live statistics/data; ensure Rosetta remains populated under parallel analysis; decide whether caching is safe.
+- **Commits:** 2 — product `df80a3e` (`feat(tui): add endpoint data view and live diagnostics`) + context bookkeeping (pending).
+- **Outcome:** done — Data tab lists body-bearing endpoints with type, encoding, size, status, headers, and preview; capture/analysis failures are persisted and surfaced; startup/refresh/teardown paths are guarded; final analysis retries transient contention; schema→Rosetta dependency remains chained; no stale response cache was added. Full suite: 181 passed / 5 skipped.
+- **Open items:** verify the real Playwright live TUI on Windows; consider a bounded graceful-shutdown timeout/fallback.
+- **Report:** .context/memory/reviews/2026-08-01-endpoint-data-windows-tui.md

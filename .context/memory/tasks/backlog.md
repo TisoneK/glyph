@@ -296,3 +296,8 @@ for the authoritative implementation — read ADR-14, not ADR-13.
 
 ---
 - [x] **TUI target picker** (added 2026-07-31 in the Session 18 follow-ups; completed Session 28, product commit `21d3739`) — the dashboard now opens a `t` picker over registered real targets, activates the selected target, reloads all views, excludes `(unassigned)`, and blocks switching while capture/analysis workers are active.
+
+
+### Session 29 follow-ups (2026-08-01)
+- [ ] Verify the real Playwright live TUI on Windows: startup, top-bar counts, streaming Flows/Data rows, final Schema/Rosetta population, and visible failure messages.
+- [ ] Consider a bounded graceful-shutdown timeout/fallback for pathological browser/network hangs.

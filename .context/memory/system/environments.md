@@ -94,3 +94,5 @@ block (and its "last verified" date) every time you run on it again.
   - `core.autocrlf=true` causes `.context/core/*` files to be checked out with CRLF on Windows, breaking `context-sync verify` against the LF-only MANIFEST.sha256. Workaround: `git checkout -- .context/core/` after any verify failure (rollback restores LF blobs from git history). `.gitattributes` added with `.context/core/* text eol=lf` to prevent renormalization.
   - `context-sync.ps1` is the Windows port of `context-sync`; use it instead of `sh` on this machine.
   - System Python is 3.14.2 — newer than the project's `>=3.9` requirement; code runs fine.
+
+  - `.venv/bin/python -m pytest -q` → **181 passed, 5 skipped** (Session 29; endpoint Data tab, payload classification, Windows failure diagnostics, final-analysis retries, and TUI lifecycle coverage).

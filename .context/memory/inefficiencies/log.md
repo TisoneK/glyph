@@ -458,3 +458,12 @@ never harvested.
 - **Cause:** Mixed line-ending conventions in legacy context files; new edits inherited CRLF while Git's whitespace check flags CR on added lines.
 - **Workaround / fix:** Converted only this session's exact added lines to LF using binary replacements; appended new records with Python append mode and explicit LF. Verified with `git diff --check`.
 - **Prevent next time:** Inspect line endings before editing context files; preserve old bytes and write new appended/replaced lines with LF without normalizing the full file.
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna
+- **Problem:** The first binary-payload regression fixture encoded literal backslash text (`\x03`) instead of actual ZIP/gzip magic bytes, so the test correctly exposed an apparent classifier failure.
+- **Cost:** One focused/full test rerun and a short source/fixture diagnosis.
+- **Cause:** Escaping was applied twice while constructing a test string through the editing tool.
+- **Workaround / fix:** Inspected the exact bytes, corrected the fixture to use actual byte escapes, and reran focused and full suites.
+- **Prevent next time:** For binary-format tests, print `repr()` of decoded bytes and validate magic bytes directly before interpreting a classifier failure.
+- **Upstream:** not a protocol issue
