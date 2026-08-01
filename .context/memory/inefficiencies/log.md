@@ -485,3 +485,12 @@ never harvested.
 - **Workaround / fix:** Pump an active page or context during the browse loop, persist stop reasons, and keep real Windows/CDP verification as an explicit follow-up.
 - **Prevent next time:** Add an optional on-device smoke test against a disposable Chromium profile when changing long-running Playwright lifecycle code.
 - **Upstream:** not a protocol issue
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 33)
+- **Problem:** Textual's `switch_screen` assumes the outgoing root screen has a result-callback entry; direct dashboard geo recovery therefore raised `IndexError`. The first test assertion also queried the app tree instead of the active Home screen, and one edit briefly joined two test statements on one line.
+- **Cost:** Several focused reruns and one source inspection of the installed Textual implementation.
+- **Cause:** Modal result callbacks are asynchronous, and Textual's root/default screen stack differs from screens pushed through `push_screen`.
+- **Workaround / fix:** Defer navigation until modal dismissal settles; pop only known pushed dashboards, push Home above an inert root dashboard, and assert widgets through `app.screen`. Added regression coverage for both stack shapes.
+- **Prevent next time:** Treat direct-root and Home-originated TUI navigation as separate lifecycle cases and inspect the exact edited test boundary before running the full suite.
+- **Upstream:** not a protocol issue

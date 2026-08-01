@@ -795,3 +795,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done — sync Playwright is actively pumped during browse sessions; request/response and browser-close events are recorded; stop reasons reach CLI/TUI; stale owned-profile tabs are closed before requested target navigation; browser path/profile flags and environment variables are supported; all-tabs capture clears the prior target filter. Validation: 189 passed / 5 skipped; compileall and diff checks passed.
 - **Open items:** Verify real CDP attach, browser closure, sandbox behavior, custom executable/profile paths, and TUI notifications on Windows. Strict historical capture-session isolation for all-tabs mode remains a future schema feature.
 - **Report:** .context/memory/reviews/2026-08-01-live-browser-fixes.md
+
+---
+## 2026-08-01 — Session 33
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** bao@local macOS (Darwin) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Complete geo-block recovery, explicit target/browser CLI forms, browser path/profile settings, and cross-platform live-capture lifecycle hardening.
+- **Commits:** 2 (`091cf0f` product + context commit pending)
+- **Outcome:** done — added target/browser aliases and URL normalization, conservative geo-block detection with immediate metadata, browser path/profile/proxy propagation with forced launch, deterministic geo recovery for direct and Home-originated dashboards, Windows-safe quit handling, and regression coverage. Validation: 195 passed / 5 skipped; compileall and diff checks passed.
+- **Open items:** Real Windows/CDP verification, external Ctrl+C worker cleanup verification, and strict historical isolation for all-tabs capture remain in backlog.
+- **Report:** .context/memory/reviews/2026-08-01-geo-browser-targeting.md
