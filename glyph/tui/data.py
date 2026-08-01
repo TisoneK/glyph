@@ -7,6 +7,8 @@ the analysis engine stays a headless backend (the TUI only reads).
 """
 from __future__ import annotations
 
+import base64
+import re
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -58,12 +60,84 @@ def flow_type(flow) -> str:
     return mime.split("/")[-1] or (src or "flow")
 
 
+def _header(flow, name: str) -> str:
+    wanted = name.lower()
+    for key, value in (flow.resp_headers or {}).items():
+        if key.lower() == wanted:
+            return str(value)
+    return ""
+
+
 def _flow_size(flow) -> int:
     headers = {k.lower(): v for k, v in (flow.resp_headers or {}).items()}
     cl = headers.get("content-length")
     if cl and str(cl).isdigit():
         return int(cl)
     return len((flow.resp_body or "").encode("utf-8", "ignore"))
+
+
+def _body_bytes(flow) -> bytes:
+    body = flow.resp_body or ""
+    raw = body.encode("utf-8", "ignore")
+    # HAR can carry base64-encoded binary bodies. We do not replace the
+    # stored body, but decode a plausible value for magic-byte classification.
+    if body and re.fullmatch(r"[A-Za-z0-9+/=\\s]+", body) and len(body.strip()) >= 8:
+        try:
+            decoded = base64.b64decode(body, validate=True)
+            if decoded[:4] in (b"PK\x03\x04", b"\x1f\x8b"):
+                return decoded
+        except (ValueError, TypeError):
+            pass
+    return raw
+
+
+def data_type(flow) -> str:
+    """Classify a response payload without trusting a single MIME header.
+
+    MIME, compression headers, and magic bytes are combined so JSON, gzip,
+    and ZIP payloads remain recognizable across HAR/Playwright/mitm captures.
+    Compression is exposed separately by :func:`data_encoding`.
+    """
+    mime_values = {
+        str(value).lower()
+        for value in (flow.resp_mime, _header(flow, "content-type"))
+        if value
+    }
+    mime = " ".join(sorted(mime_values))
+    encoding = _header(flow, "content-encoding").lower()
+    body = (flow.resp_body or "").lstrip()
+    raw = _body_bytes(flow)
+    if "json" in mime or body[:1] in "[{":
+        return "json"
+    if "zip" in mime or raw.startswith(b"PK\x03\x04"):
+        return "zip"
+    if "gzip" in mime or "gzip" in encoding or raw.startswith(b"\x1f\x8b"):
+        return "gzip"
+    if "html" in mime:
+        return "html"
+    if "xml" in mime or body.startswith("<?xml"):
+        return "xml"
+    if mime.startswith("text/"):
+        return "text"
+    if mime:
+        return mime.split("/", 1)[-1].split(";", 1)[0] or "data"
+    return "binary" if raw and not raw.decode("utf-8", "ignore").isprintable() else "data"
+
+
+def data_encoding(flow) -> str:
+    """Return the response compression/content encoding, if advertised."""
+    value = _header(flow, "content-encoding")
+    return value.strip() if value.strip() else "—"
+
+
+def _data_preview(flow, limit: int = 120) -> str:
+    body = (flow.resp_body or "").strip()
+    if not body:
+        return "—"
+    if data_type(flow) in ("gzip", "zip", "binary"):
+        return "[binary payload]"
+    body = re.sub(r"\\s+", " ", body)
+    return clip(body, limit)
 
 
 def summary(cat: Catalog) -> Dict[str, Any]:
@@ -83,8 +157,15 @@ def summary(cat: Catalog) -> Dict[str, Any]:
     sni_by_sev = Counter(f.severity for f in sni)
     vpns = cat.vpn_configs()
     vpn_ok = sum(1 for c in vpns if c["decryption_status"] in ("success", "partial"))
+    endpoints = cat.endpoints()
+    data_endpoints = sum(
+        1 for ep in endpoints
+        if ep.id is not None and any(f.resp_body for f in cat.flows_for_endpoint(ep.id))
+    )
     return {
         "flows": len(flows),
+        "endpoints": len(endpoints),
+        "data_endpoints": data_endpoints,
         "by_type": dict(by_type),
         "fields": len(fields),
         "enums": enums,
@@ -116,6 +197,37 @@ def flow_rows(cat: Catalog, text_filter: Optional[str] = None) -> Rows:
         rows.append([str(f.id or ""), f.method, flow_type(f),
                      str(f.status or "—"), human_size(_flow_size(f)),
                      clip(url, 72)])
+    return headers, rows
+
+
+def endpoint_data_rows(cat: Catalog) -> Rows:
+    """One row per captured endpoint that returned an actual response body.
+
+    The row uses the newest body-bearing observation while retaining a sample
+    count. Headers are shown as a compact name list and the preview is clipped;
+    selecting the corresponding flow still opens the full request/response
+    detail. This keeps the tab useful for JSON and binary/compressed payloads
+    without attempting to render arbitrary bytes in a terminal table.
+    """
+    headers = ["#", "METHOD", "ENDPOINT", "TYPE", "ENCODING", "SIZE",
+               "STATUS", "HEADERS", "DATA"]
+    rows: List[List[str]] = []
+    for ep in cat.endpoints():
+        if ep.id is None:
+            continue
+        observations = [f for f in cat.flows_for_endpoint(ep.id) if f.resp_body]
+        if not observations:
+            continue
+        flow = observations[-1]
+        header_names = ", ".join(sorted((flow.resp_headers or {}).keys(),
+                                         key=str.lower)) or "—"
+        endpoint = f"{ep.host}{ep.path_template}"
+        rows.append([
+            str(flow.id or ""), ep.method,
+            clip(endpoint, 64), data_type(flow), data_encoding(flow),
+            human_size(_flow_size(flow)), str(flow.status or "—"),
+            clip(header_names, 76), _data_preview(flow),
+        ])
     return headers, rows
 
 

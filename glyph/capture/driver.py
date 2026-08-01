@@ -363,7 +363,11 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
                 pass
             browser_obj.close()
     finally:
+        # Persist the same error that the headless result returns. The live
+        # TUI reads metadata from a separate connection, so returning a dict
+        # alone would make a failed Windows navigation look like success.
         catalog.set_meta("capture_status", "done")
+        catalog.set_meta("capture_error", nav_error or "")
 
     return {
         "flows": sum(by_source.values()),
@@ -551,6 +555,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
     finally:
         done.set()
         catalog.set_meta("capture_status", "done")
+        catalog.set_meta("capture_error", nav_error or "")
 
     return {
         "flows": sum(by_source.values()),

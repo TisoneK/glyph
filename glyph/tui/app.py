@@ -43,6 +43,7 @@ from glyph.tui.logo import TAGLINE, logo_compact, logo_renderable
 
 _VIEWS = [
     ("flows", "Flows", D.flow_rows),
+    ("data", "Data", D.endpoint_data_rows),
     ("dom", "DOM", D.dom_rows),
     ("schema", "Schema", D.schema_rows),
     ("sensitive", "Sensitive", D.sensitive_rows),
@@ -56,6 +57,7 @@ def _summary_markup(s: dict) -> str:
     t = s.get("by_type", {})
     types = " · ".join(f"{t[k]} {k}" for k in ("xhr", "fetch", "document", "script")
                        if t.get(k)) or "—"
+    data_endpoints = s.get("data_endpoints", 0)
     sev = s.get("by_severity", {})
     sevs = " · ".join(f"[{c}]{sev[k]} {k}[/]" for k, c in
                       (("critical", "bold red"), ("high", "red"),
@@ -78,6 +80,7 @@ def _summary_markup(s: dict) -> str:
                else "[grey58]0 vpn[/]")
     return (
         f"  [b cyan]FLOWS[/] [b]{s.get('flows', 0)}[/] [grey58]{types}[/]"
+        f"    [b cyan]DATA[/] [b]{data_endpoints}[/] endpoints with bodies"
         f"    [b cyan]SCHEMA[/] [b]{s.get('fields', 0)}[/] fields · {s.get('enums', 0)} enums"
         f"    [b cyan]FINDINGS[/] [b]{s.get('findings', 0)}[/] {sevs}{noise}"
         f"    [b cyan]DOM[/] [b]{s.get('dom_labels', 0)}[/] [grey58]{doms}[/]"
@@ -277,12 +280,13 @@ if HAS_TEXTUAL:
     class DashboardScreen(Screen):
         BINDINGS = [
             Binding("1", "show('flows')", "Flows"),
-            Binding("2", "show('dom')", "DOM"),
-            Binding("3", "show('schema')", "Schema"),
-            Binding("4", "show('sensitive')", "Sensitive"),
-            Binding("5", "show('rosetta')", "Rosetta"),
-            Binding("6", "show('snihunt')", "SNI Hunt"),
-            Binding("7", "show('vpndec')", "VPN Dec"),
+            Binding("2", "show('data')", "Data"),
+            Binding("3", "show('dom')", "DOM"),
+            Binding("4", "show('schema')", "Schema"),
+            Binding("5", "show('sensitive')", "Sensitive"),
+            Binding("6", "show('rosetta')", "Rosetta"),
+            Binding("7", "show('snihunt')", "SNI Hunt"),
+            Binding("8", "show('vpndec')", "VPN Dec"),
             Binding("r", "reload", "Reload"),
             Binding("escape", "back", "Back"),
             Binding("q", "confirm_quit", "Quit"),
@@ -317,6 +321,8 @@ if HAS_TEXTUAL:
             self._finalizing = False
             self._analysis_lock = threading.Lock()
             self._sni_running = False
+            self._capture_worker_error = None
+            self._analysis_worker_error = None
             self._live_timers = []
 
         _MAX_ROWS = 800  # cap table rows so live refresh stays snappy
@@ -334,8 +340,15 @@ if HAS_TEXTUAL:
         def on_mount(self) -> None:
             import time
             self.app.title = "GLYPH"
-            self._set_brand()
-            self.action_reload()
+            try:
+                self._set_brand()
+                self.action_reload()
+            except Exception as exc:
+                # Startup reads happen before the capture worker. On Windows,
+                # a bad path/permission or locked database must become a
+                # visible dashboard error rather than aborting Textual.
+                self._capture_worker_error = str(exc).splitlines()[0] or type(exc).__name__
+                self.app.sub_title = f"✗ catalog unavailable · {self._capture_worker_error[:56]}"
             if self.live:
                 self._start = time.monotonic()
                 self.app.start_background(self._capture_worker, name="capture")
@@ -343,11 +356,15 @@ if HAS_TEXTUAL:
                 self._live_timers.append(self.set_interval(1.0, self._tick))
                 self._live_timers.append(self.set_interval(4.0, self._analyze_tick))
             else:
-                cat = Catalog(self.db_path, restore_active=True)
                 try:
-                    self.app.sub_title = D.clip(cat.target() or "catalog", 48)
-                finally:
-                    cat.close()
+                    cat = Catalog(self.db_path, restore_active=True)
+                    try:
+                        self.app.sub_title = D.clip(cat.target() or "catalog", 48)
+                    finally:
+                        cat.close()
+                except Exception as exc:
+                    self._capture_worker_error = str(exc).splitlines()[0] or type(exc).__name__
+                    self.app.sub_title = f"✗ catalog unavailable · {self._capture_worker_error[:56]}"
 
         def _set_brand(self) -> None:
             """One-line brand row: the compact logo + the current host. The
@@ -375,8 +392,17 @@ if HAS_TEXTUAL:
         def _capture_worker(self) -> None:
             from glyph.capture.driver import capture_url
             from urllib.parse import urlparse
-            cat = Catalog(self.db_path)
+            cat = None
             try:
+                # Catalog construction itself can fail on Windows (bad path,
+                # permissions, or a locked/network-backed file). Keep that
+                # failure on the worker's visible error channel instead of
+                # letting the thread die before capture_status is written.
+                cat = Catalog(self.db_path)
+                self._capture_worker_error = None
+                cat.set_meta("capture_error", "")
+                cat.set_meta("analysis_status", "")
+                cat.set_meta("analysis_error", "")
                 # ADR-12: activate this target + clear only its old rows.
                 # Other targets in the catalog coexist; a re-run of the
                 # same target replaces its data.
@@ -386,13 +412,24 @@ if HAS_TEXTUAL:
                     cat.clear_target()
                 capture_url(cat, self.live["url"], **self.live["kwargs"])
             except Exception as exc:
+                error = str(exc).splitlines()[0] or type(exc).__name__
+                self._capture_worker_error = error
+                if cat is not None:
+                    try:
+                        cat.set_meta("capture_status", "done")
+                        cat.set_meta("capture_error", error)
+                    except Exception:
+                        pass
+            else:
+                # A successful retry must not inherit a previous failed
+                # capture's error marker in the same catalog.
                 try:
-                    cat.set_meta("capture_status", "done")
-                    cat.set_meta("capture_error", str(exc).splitlines()[0])
+                    cat.set_meta("capture_error", "")
                 except Exception:
                     pass
             finally:
-                cat.close()
+                if cat is not None:
+                    cat.close()
 
         def _capture_state(self) -> dict:
             """Capture + vpndec status/error in ONE Catalog open — the 1s tick
@@ -401,7 +438,9 @@ if HAS_TEXTUAL:
             try:
                 return {
                     "status": cat.get_meta("capture_status"),
-                    "error": cat.get_meta("capture_error"),
+                    "error": cat.get_meta("capture_error") or None,
+                    "analysis_status": cat.get_meta("analysis_status"),
+                    "analysis_error": cat.get_meta("analysis_error") or None,
                     "vpndec_status": cat.get_meta("vpndec_status"),
                     "vpndec_error": cat.get_meta("vpndec_error"),
                 }
@@ -410,12 +449,37 @@ if HAS_TEXTUAL:
 
         def _tick(self) -> None:
             import time
-            self._refresh_live()  # summary + visible tab only (cheap)
+            try:
+                self._refresh_live()  # summary + visible tab only (cheap)
+                st = self._capture_state()
+            except Exception as exc:
+                worker_error = self._capture_worker_error
+                if worker_error:
+                    self._done = True
+                    self.app.sub_title = f"✗ capture failed · {worker_error[:56]}"
+                    self._stop_live_timers()
+                    return
+                # A transient SQLite/console issue must not kill Textual's
+                # timer. Keep the last rendered data and expose the failure
+                # instead of making Windows look completely blank.
+                self.app.sub_title = f"⚠ refresh retry · {str(exc)[:56]}"
+                return
             elapsed = int(time.monotonic() - (self._start or time.monotonic()))
             mm, ss = divmod(elapsed, 60)
-            st = self._capture_state()
+            if self._capture_worker_error:
+                self._done = True
+                self.app.sub_title = (f"✗ capture failed · {mm:02d}:{ss:02d} · "
+                                      f"{self._capture_worker_error[:44]}")
+                self._stop_live_timers()
+                return
+            if self._analysis_worker_error:
+                self.app.sub_title = (f"⚠ analysis retry · {mm:02d}:{ss:02d} · "
+                                      f"{self._analysis_worker_error[:44]}")
             if st["status"] == "done":
-                if st["error"]:
+                if st.get("analysis_error"):
+                    self.app.sub_title = (f"✗ analysis failed · {mm:02d}:{ss:02d} · "
+                                          f"{st['analysis_error'][:44]}")
+                elif st["error"]:
                     # A failed capture must never look like success.
                     self.app.sub_title = (f"✗ failed · {mm:02d}:{ss:02d} · "
                                           f"{st['error'][:44]}")
@@ -456,6 +520,12 @@ if HAS_TEXTUAL:
             # to repeat every tick), so it's skipped on live ticks.
             from glyph.pipeline import run_analysis
             try:
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    cat.set_meta("analysis_status", "running")
+                    cat.set_meta("analysis_error", "")
+                finally:
+                    cat.close()
                 with self._analysis_lock:
                     run_analysis(
                         self.db_path,
@@ -464,8 +534,25 @@ if HAS_TEXTUAL:
                         no_rosetta=self._no_rosetta,
                         no_sensitive=self._no_sensitive,
                     )
-            except Exception:
-                pass  # transient lock while capture writes: retry next tick
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    cat.set_meta("analysis_status", "done")
+                    cat.set_meta("analysis_error", "")
+                finally:
+                    cat.close()
+            except Exception as exc:
+                try:
+                    cat = Catalog(self.db_path, restore_active=True)
+                except Exception:
+                    self._analysis_worker_error = (
+                        str(exc).splitlines()[0] or type(exc).__name__)
+                    self._analyzing = False
+                    return
+                try:
+                    cat.set_meta("analysis_status", "failed")
+                    cat.set_meta("analysis_error", str(exc).splitlines()[0] or type(exc).__name__)
+                finally:
+                    cat.close()
             finally:
                 self._analyzing = False
 
@@ -478,23 +565,54 @@ if HAS_TEXTUAL:
             """
             from glyph.pipeline import run_analysis
             self._finalizing = True
+            analysis_error = None
+            analysis_ok = False
+            # A final pass can collide with the last capture commit on slower
+            # Windows filesystems. Retry the whole dependency chain briefly so
+            # a transient SQLite lock does not permanently produce an empty
+            # Rosetta tab and then stop the refresh loop.
+            for attempt in range(3):
+                try:
+                    with self._analysis_lock:
+                        run_analysis(
+                            self.db_path,
+                            target=self._target_host(),
+                            no_schema=self._no_schema,
+                            no_rosetta=self._no_rosetta,
+                            no_sensitive=self._no_sensitive,
+                        )
+                    analysis_ok = True
+                    break
+                except Exception as exc:
+                    analysis_error = str(exc).splitlines()[0] or type(exc).__name__
+                    if attempt < 2:
+                        time.sleep(0.25 * (attempt + 1))
             try:
-                with self._analysis_lock:
-                    run_analysis(
-                        self.db_path,
-                        target=self._target_host(),
-                        no_schema=self._no_schema,
-                        no_rosetta=self._no_rosetta,
-                        no_sensitive=self._no_sensitive,
-                    )
-                if self._vpndec_file:
+                if analysis_ok and self._vpndec_file:
                     self._decode_vpndec()
-            except Exception:
-                pass  # a later CLI stage can be re-run without losing capture
+                cat = Catalog(self.db_path, restore_active=True)
+                try:
+                    cat.set_meta("analysis_status", "done" if analysis_ok else "failed")
+                    cat.set_meta("analysis_error", analysis_error or "")
+                finally:
+                    cat.close()
+            except Exception as exc:
+                analysis_error = str(exc).splitlines()[0] or type(exc).__name__
+                try:
+                    cat = Catalog(self.db_path, restore_active=True)
+                    try:
+                        cat.set_meta("analysis_status", "failed")
+                        cat.set_meta("analysis_error", analysis_error)
+                    finally:
+                        cat.close()
+                except Exception:
+                    pass
             finally:
                 self._finalizing = False
             self.app.call_from_thread(self.action_reload)
-            if self._no_snihunt:
+            if not analysis_ok or self._no_snihunt:
+                # Do not present stale Rosetta output as complete and do not
+                # start network SNI work when the core catalog pass failed.
                 self.app.call_from_thread(self._stop_live_timers)
             else:
                 self.app.call_from_thread(self._start_snihunt)
@@ -561,7 +679,13 @@ if HAS_TEXTUAL:
 
         # -- rendering ---------------------------------------------------
         def _refresh_live(self) -> None:
-            """Cheap refresh: summary + only the visible tab's table."""
+            """Cheap refresh: summary + only the visible tab's table.
+
+            The data adapters are intentionally uncached: SQLite WAL reads are
+            cheap, and a cache here would make newly captured Windows rows look
+            missing. The only optimization is limiting work to the active tab;
+            a full reload still happens on completion/tab activation.
+            """
             cat = Catalog(self.db_path, restore_active=True)
             try:
                 self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
@@ -573,13 +697,30 @@ if HAS_TEXTUAL:
                 cat.close()
 
         def action_reload(self) -> None:
-            cat = Catalog(self.db_path, restore_active=True)
+            """Reload all tables when the screen is still mounted.
+
+            A worker may complete while the user is quitting or navigating
+            away. Treat a missing DOM tree as a normal lifecycle race rather
+            than allowing a Textual WorkerFailed exception to escape.
+            """
+            cat = None
             try:
+                cat = Catalog(self.db_path, restore_active=True)
                 self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
                 for tab_id, _, fn in _VIEWS:
                     self._fill(f"#t_{tab_id}", fn(cat))
+            except Exception as exc:
+                # NoMatches during teardown is expected; other failures are
+                # still surfaced while keeping the worker from crashing.
+                if self.is_mounted:
+                    self._capture_worker_error = str(exc).splitlines()[0] or type(exc).__name__
+                    try:
+                        self.app.sub_title = f"⚠ reload retry · {self._capture_worker_error[:56]}"
+                    except Exception:
+                        pass
             finally:
-                cat.close()
+                if cat is not None:
+                    cat.close()
 
         def _fill(self, selector: str, rows) -> None:
             headers, data = rows

@@ -5,6 +5,7 @@ adapters (the real logic) are pure and covered directly.
 """
 from __future__ import annotations
 
+import base64
 import json
 
 from glyph.capture import ingest_har
@@ -48,6 +49,48 @@ def test_flow_type_from_mime():
                             source="playwright:xhr")) == "xhr"
     assert D.flow_type(Flow(method="GET", url="x", host="", path="",
                             source="har", resp_mime="text/html")) == "document"
+
+
+def test_endpoint_data_rows_classify_payloads_and_headers(tmp_path):
+    """The Data tab exposes body-bearing endpoints, including binary bodies."""
+    from glyph.catalog import Flow
+
+    db = str(tmp_path / "data.db")
+    cat = Catalog(db)
+    cat.set_target("data.example")
+    cat.add_flow(Flow(
+        method="GET", url="https://data.example/api/items", host="", path="",
+        status=200, resp_mime="application/json",
+        resp_headers={"Content-Type": "application/json", "X-Trace": "json"},
+        resp_body='{"items":[1,2]}'))
+    cat.add_flow(Flow(
+        method="GET", url="https://data.example/archive", host="", path="",
+        status=200, resp_mime="application/octet-stream",
+        resp_headers={"Content-Encoding": "gzip", "Content-Length": "4096"},
+        resp_body=base64.b64encode(b"\x1f\x8bcompressed").decode("ascii")))
+    cat.add_flow(Flow(
+        method="GET", url="https://data.example/file.zip", host="", path="",
+        status=200, resp_mime="application/octet-stream",
+        resp_headers={"Content-Type": "application/zip"},
+        resp_body=base64.b64encode(b"PK\x03\x04archive").decode("ascii")))
+    # A request-only observation must not appear in Data.
+    cat.add_flow(Flow(
+        method="GET", url="https://data.example/ping", host="", path="",
+        status=0, resp_mime=None, resp_body=None))
+
+    headers, rows = D.endpoint_data_rows(cat)
+    cat.close()
+
+    assert headers == ["#", "METHOD", "ENDPOINT", "TYPE", "ENCODING",
+                       "SIZE", "STATUS", "HEADERS", "DATA"]
+    assert len(rows) == 3
+    by_endpoint = {row[2]: row for row in rows}
+    assert by_endpoint["data.example/api/items"][3] == "json"
+    assert "X-Trace" in by_endpoint["data.example/api/items"][7]
+    assert by_endpoint["data.example/archive"][3] == "gzip"
+    assert by_endpoint["data.example/archive"][4] == "gzip"
+    assert by_endpoint["data.example/archive"][5] == "4 KB"
+    assert by_endpoint["data.example/file.zip"][3] == "zip"
 
 
 def test_summary_counts(tmp_path, make_entry):
@@ -386,6 +429,9 @@ def test_live_dashboard_shows_capture_error(tmp_path, monkeypatch):
             assert "browser crashed" in app.sub_title
 
     asyncio.run(go())
+    with Catalog(db) as cat:
+        assert cat.get_meta("capture_status") == "done"
+        assert cat.get_meta("capture_error") == "browser crashed"
 
 
 def test_home_screen_stage_checkbox_defaults(tmp_path):
