@@ -73,7 +73,8 @@ def run_live(args: argparse.Namespace) -> int:
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)
     try:
-        res = capture_live(cat, args.url, **live_kwargs(args))
+        res = capture_live(cat, args.url, **live_kwargs(args),
+                           progress=_progress)
     finally:
         cat.close()
     _progress(f"captured {res.get('flows', 0)} flows — done")
