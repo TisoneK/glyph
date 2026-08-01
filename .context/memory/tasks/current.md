@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 24 done — parallel analysis pipeline (ADR-15): schema→rosetta / sensitive / snihunt run as 3 concurrent lanes (new glyph/pipeline.py); per-lane target-anchored catalogs fixed the unassigned-bucket bug; CLI _gather + TUI rewired; 165 pass / 5 skip.
+- **Task:** (cleared) Session 25 done — ADR-15 wall-clock profile: 1.00x offline (CPU-bound, GIL) / 1.44x controlled-I/O (snihunt network dominates, CPU hidden); no product code changed (throwaway benchmarks in /tmp).
 - **Status:** done
