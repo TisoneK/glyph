@@ -777,3 +777,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done — CDP attach to the user's Chromium browser is primary; optional Chrome/Edge/Brave launch fallback is owned and cleaned up separately. Added target-tab + popup and explicit all-tabs modes, TUI browser checkbox, worker `stop_event`, `s` Stop capture, graceful shutdown propagation, page de-duplication, parser normalization, README docs, and regression coverage. Validation: 185 passed / 5 skipped; focused capture/TUI: 38 passed / 1 skipped.
 - **Open items:** Verify real CDP attach and TUI stop/detach on Windows; verify launch fallback cleanup; consider a bounded graceful-shutdown timeout/fallback.
 - **Report:** .context/memory/reviews/2026-08-01-real-browser-live-capture.md
+
+---
+## 2026-08-01 — Session 31
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** bao@local macOS (Darwin) | **Role:** engineer | **Core:** 0.4.0
+- **Task:** Fix cross-platform TUI quit confirmation/shutdown and coordinate SNI with the parallel analysis pipeline.
+- **Commits:** product + context commits pending.
+- **Outcome:** done — native Ctrl+Q/Ctrl+C now require confirmation; confirmed modal shutdown stays mounted, waits asynchronously for tracked workers, and has a visible 10-second timeout fallback. Added `run_pipeline()` so target-pinned SNI overlaps core analysis while preserving separate per-thread Catalog connections. Per-candidate SNI network work remains serial by design for bounded public lookups. Validation: 188 passed / 5 skipped; compileall and diff checks passed.
+- **Open items:** Verify real quit behavior and CDP/browser shutdown on Windows; consider independently reporting SNI failures from core-analysis failures in a future refinement.
+- **Report:** .context/memory/reviews/2026-08-01-quit-sni-parallel.md
