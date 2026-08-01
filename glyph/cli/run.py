@@ -88,23 +88,18 @@ def _progress(msg: str) -> None:
 
 
 def _gather(cat, args, cap: dict) -> dict:
-    # ADR-15: schema→rosetta and sensitive run concurrently. SNI is a
-    # separate bounded-recon lifecycle: await it here so headless output is
-    # complete, while the TUI submits the same function independently.
-    from glyph.pipeline import run_analysis, run_snihunt
-    r = run_analysis(
+    # ADR-15: schema→rosetta, sensitive, and SNI run as coordinated lanes.
+    # Each lane owns a target-pinned Catalog connection; SNI remains a
+    # separate lifecycle but no longer waits for the core pool to finish.
+    from glyph.pipeline import run_pipeline
+    r = run_pipeline(
         cat.path,
         target=cat.target(),
         no_sensitive=getattr(args, "no_sensitive", False),
+        no_snihunt=getattr(args, "no_snihunt", False),
+        snihunt_no_net=getattr(args, "snihunt_no_net", False),
         progress=_progress,
     )
-    if not getattr(args, "no_snihunt", False):
-        r.update(run_snihunt(
-            cat.path,
-            target=cat.target(),
-            snihunt_no_net=getattr(args, "snihunt_no_net", False),
-            progress=_progress,
-        ))
     return {"cap": cap, **r}
 
 

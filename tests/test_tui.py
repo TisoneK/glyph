@@ -224,6 +224,86 @@ def test_quit_confirmation_can_cancel_and_confirm(tmp_path, monkeypatch):
     asyncio.run(go())
 
 
+def test_native_quit_shortcuts_require_confirmation(tmp_path):
+    """Textual's native Ctrl+Q/Ctrl+C routes must not bypass the dialog."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import GlyphApp, QuitConfirmScreen
+
+    async def go():
+        for key in ("ctrl+q", "ctrl+c"):
+            home = key == "ctrl+c"
+            app = GlyphApp(home=home, db_path=str(tmp_path / f"{key}.db"), live=None)
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                await pilot.press(key)
+                await pilot.pause()
+                assert isinstance(app.screen, QuitConfirmScreen)
+                assert app._shutdown_requested is False
+
+    asyncio.run(go())
+
+
+def test_confirmed_quit_waits_for_workers_and_finishes(tmp_path, monkeypatch):
+    """The real confirmation path signals workers and exits after they finish."""
+    import asyncio
+    import threading
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import GlyphApp, QuitConfirmScreen
+    from textual.widgets import Static
+
+    app = GlyphApp(home=False, db_path=str(tmp_path / "wait.db"), live=None)
+    release = threading.Event()
+    worker_started = threading.Event()
+    worker_finished = threading.Event()
+    shutdown_finished = threading.Event()
+
+    def worker():
+        worker_started.set()
+        release.wait(timeout=2)
+        worker_finished.set()
+
+    def finish():
+        shutdown_finished.set()
+
+    monkeypatch.setattr(app, "_finish_shutdown", finish)
+
+    async def go():
+        async with app.run_test() as pilot:
+            app.start_background(worker, name="test-worker")
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if worker_started.is_set():
+                    break
+            assert worker_started.is_set()
+            await pilot.press("q")
+            await pilot.pause()
+            assert isinstance(app.screen, QuitConfirmScreen)
+            await pilot.click("#quit-confirm")
+            await pilot.pause()
+            assert app._shutdown_requested is True
+            assert str(app.screen.query_one("#quit-copy", Static).render()) == (
+                "Finishing active work… Glyph will close when it is safe.")
+            assert worker_finished.is_set() is False
+            release.set()
+            for _ in range(30):
+                await pilot.pause(0.05)
+                if shutdown_finished.is_set():
+                    break
+            assert worker_finished.is_set() is True
+            assert shutdown_finished.is_set() is True
+
+    asyncio.run(go())
+
+
 def test_target_picker_switches_to_previous_target(tmp_path):
     """The TUI target picker activates a stored target and reloads its view."""
     import asyncio

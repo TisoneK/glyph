@@ -11,7 +11,7 @@ import threading
 
 from glyph.capture import ingest_har
 from glyph.catalog import Catalog
-from glyph.pipeline import run_analysis, run_snihunt
+from glyph.pipeline import run_analysis, run_pipeline, run_snihunt
 
 
 def _har(tmp_path, make_entry):
@@ -60,6 +60,33 @@ def test_core_lanes_overlap_without_snihunt(tmp_path, make_entry, monkeypatch):
     assert res["sch"] == {} and res["sens"] == {}
     assert res["ros"] == {"entries": 0, "needs_review": 0,
                           "high_confidence": 0}
+
+
+def test_pipeline_runs_sni_beside_core_analysis(tmp_path, monkeypatch):
+    """The coordinated pipeline overlaps the independent SNI lifecycle."""
+    import glyph.pipeline as pipeline
+
+    barrier = threading.Barrier(2)
+    calls = []
+
+    def fake_analysis(*args, **kwargs):
+        calls.append("analysis")
+        barrier.wait(timeout=10)
+        return {"sch": {}, "ros": {}, "sens": {}, "sni": None}
+
+    def fake_sni(*args, **kwargs):
+        calls.append("sni")
+        barrier.wait(timeout=10)
+        return {"sni": {"persisted": 0}}
+
+    monkeypatch.setattr(pipeline, "run_analysis", fake_analysis)
+    monkeypatch.setattr(pipeline, "run_snihunt", fake_sni)
+
+    result = run_pipeline(str(tmp_path / "unused.db"), target="s.t")
+
+    assert set(calls) == {"analysis", "sni"}
+    assert result["sni"] == {"persisted": 0}
+    assert result["sch"] == {} and result["ros"] == {}
 
 
 def test_snihunt_is_separate_and_target_pinned(tmp_path, make_entry, monkeypatch):

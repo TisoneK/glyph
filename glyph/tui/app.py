@@ -107,7 +107,14 @@ if HAS_TEXTUAL:
                     yield Button("Keep working", id="quit-cancel")
 
         def on_button_pressed(self, event) -> None:
-            self.dismiss(event.button.id == "quit-confirm")
+            # Keep the modal mounted while shutdown starts.  Dismissing first
+            # makes the callback race the screen transition on some Textual
+            # backends (notably Windows), so the confirmation appeared to do
+            # nothing while the app waited for workers in the background.
+            if event.button.id == "quit-confirm":
+                self.app.request_shutdown()
+            else:
+                self.dismiss(False)
 
         def action_cancel(self) -> None:
             self.dismiss(False)
@@ -284,11 +291,7 @@ if HAS_TEXTUAL:
             self._capture(event.value)
 
         def action_confirm_quit(self) -> None:
-            self.app.push_screen(QuitConfirmScreen(), self._quit_result)
-
-        def _quit_result(self, confirmed: bool) -> None:
-            if confirmed:
-                self.app.request_shutdown()
+            self.app.push_screen(QuitConfirmScreen())
 
         def on_button_pressed(self, event) -> None:
             if event.button.id == "capture":
@@ -345,7 +348,6 @@ if HAS_TEXTUAL:
             self._analyzing = False   # guard: never overlap analysis passes
             self._finalizing = False
             self._analysis_lock = threading.Lock()
-            self._sni_running = False
             self._capture_worker_error = None
             self._analysis_worker_error = None
             self._live_timers = []
@@ -522,8 +524,8 @@ if HAS_TEXTUAL:
                     self.app.sub_title = sub
                 if not self._done:
                     self._done = True
-                    # One final core analysis + detached SNI worker. Keep the
-                    # worker tracked so quit can wait for graceful shutdown.
+                    # One final coordinated analysis pass. Keep the worker
+                    # tracked so quit can wait for graceful shutdown.
                     self.app.start_background(self._finalize, name="final")
             else:
                 self.app.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
@@ -545,8 +547,8 @@ if HAS_TEXTUAL:
         def _analyze_once(self) -> None:
             # ADR-15: schema→rosetta + sensitive run CONCURRENTLY as lanes of
             # glyph.pipeline.run_analysis (each lane target-anchored). The SNI
-            # hunt is finalize-only (ADR-10 — bounded network recon too slow
-            # to repeat every tick), so it's skipped on live ticks.
+            # hunt is finalize-only (ADR-10 — bounded network recon is not
+            # repeated on every live tick), so it's skipped on live ticks.
             from glyph.pipeline import run_analysis
             try:
                 cat = Catalog(self.db_path, restore_active=True)
@@ -586,13 +588,14 @@ if HAS_TEXTUAL:
                 self._analyzing = False
 
         def _finalize(self) -> None:
-            """Finish core analysis, then launch SNI as a separate worker.
+            """Run the final analysis and SNI lanes concurrently.
 
-            SNI is intentionally outside ``run_analysis``'s core pool. The
-            dashboard keeps polling while that bounded network stage runs, so
-            candidates appear without holding the rest of the result hostage.
+            Schema→Rosetta remains chained inside ``run_analysis``; sensitive
+            and SNI use their own target-pinned Catalog connections. The
+            dashboard waits for both only at finalization, so the slow network
+            hunt no longer starts after the core stages have already finished.
             """
-            from glyph.pipeline import run_analysis
+            from glyph.pipeline import run_pipeline
             self._finalizing = True
             analysis_error = None
             analysis_ok = False
@@ -603,12 +606,14 @@ if HAS_TEXTUAL:
             for attempt in range(3):
                 try:
                     with self._analysis_lock:
-                        run_analysis(
+                        run_pipeline(
                             self.db_path,
                             target=self._target_host(),
                             no_schema=self._no_schema,
                             no_rosetta=self._no_rosetta,
                             no_sensitive=self._no_sensitive,
+                            no_snihunt=self._no_snihunt,
+                            snihunt_no_net=self._snihunt_no_net,
                         )
                     analysis_ok = True
                     break
@@ -639,33 +644,9 @@ if HAS_TEXTUAL:
             finally:
                 self._finalizing = False
             self.app.call_from_thread(self.action_reload)
-            if not analysis_ok or self._no_snihunt:
-                # Do not present stale Rosetta output as complete and do not
-                # start network SNI work when the core catalog pass failed.
-                self.app.call_from_thread(self._stop_live_timers)
-            else:
-                self.app.call_from_thread(self._start_snihunt)
-
-        def _start_snihunt(self) -> None:
-            if self._sni_running or self.app._shutdown_requested:
-                return
-            self._sni_running = True
-            self.app.start_background(self._run_snihunt, name="snihunt")
-
-        def _run_snihunt(self) -> None:
-            from glyph.pipeline import run_snihunt
-            try:
-                run_snihunt(
-                    self.db_path,
-                    target=self._target_host(),
-                    snihunt_no_net=self._snihunt_no_net,
-                )
-            except Exception:
-                pass
-            finally:
-                self._sni_running = False
-                self.app.call_from_thread(self.action_reload)
-                self.app.call_from_thread(self._stop_live_timers)
+            # run_pipeline has awaited every enabled lane, including SNI.
+            # Do not leave the periodic refresh running after finalization.
+            self.app.call_from_thread(self._stop_live_timers)
 
         def action_stop_capture(self) -> None:
             """Stop a live capture without closing an attached browser.
@@ -789,11 +770,7 @@ if HAS_TEXTUAL:
                     cat.close()
 
         def action_confirm_quit(self) -> None:
-            self.app.push_screen(QuitConfirmScreen(), self._quit_result)
-
-        def _quit_result(self, confirmed: bool) -> None:
-            if confirmed:
-                self.app.request_shutdown()
+            self.app.push_screen(QuitConfirmScreen())
 
         def action_targets(self) -> None:
             # Do not redirect a dashboard while its capture is still writing;
@@ -899,6 +876,23 @@ if HAS_TEXTUAL:
             self._shutdown_requested = False
             self._background = []
 
+        def action_confirm_quit(self) -> None:
+            """Open the same confirmation for every app-level quit route."""
+            if not isinstance(self.screen, QuitConfirmScreen):
+                self.push_screen(QuitConfirmScreen())
+
+        def action_quit(self) -> None:
+            """Intercept Textual's native Ctrl+Q quit action.
+
+            Textual's default action calls ``exit`` directly, which bypassed
+            confirmation on macOS and could stop a live write abruptly.
+            """
+            self.action_confirm_quit()
+
+        def action_help_quit(self) -> None:
+            """Treat Ctrl+C's quit hint as a real quit request in Glyph."""
+            self.action_confirm_quit()
+
         def start_background(self, fn, *, name: str):
             """Run a thread worker and retain a completion event for shutdown."""
             complete = threading.Event()
@@ -928,10 +922,9 @@ if HAS_TEXTUAL:
                 stop_event = getattr(screen, "_stop_event", None)
                 if stop_event is not None:
                     stop_event.set()
-            # The confirmation modal is dismissed before its callback runs,
-            # so put the status on the app chrome as well as the dialog when
-            # it is still mounted. The app remains visible while uncancellable
-            # Python workers finish their SQLite/Playwright work.
+            # Keep the confirmation modal mounted while the status is updated
+            # and while uncancellable Python workers finish their SQLite /
+            # Playwright work.
             self.title = "GLYPH · finishing active work…"
             self.sub_title = "Please wait — closing safely"
             try:
@@ -944,13 +937,25 @@ if HAS_TEXTUAL:
             # Textual cannot forcibly stop Python threads. Do not call
             # Worker.cancel(): it could prevent a not-yet-started wrapper from
             # setting its completion event. Waiting for the tracked bodies is
-            # the graceful, SQLite-safe shutdown contract.
-            self.run_worker(self._wait_for_shutdown, thread=True, name="shutdown")
+            # the graceful, SQLite-safe shutdown contract. This waiter is an
+            # async worker rather than a thread, so the final exit stays on
+            # Textual's event loop on Windows as well as macOS.
+            self.run_worker(self._wait_for_shutdown, name="shutdown")
 
-        def _wait_for_shutdown(self) -> None:
+        async def _wait_for_shutdown(self) -> None:
+            import asyncio
+            deadline = time.monotonic() + 10.0
             while any(not complete.is_set() for _, complete in self._background):
-                time.sleep(0.05)
-            self.call_from_thread(self._finish_shutdown)
+                if time.monotonic() >= deadline:
+                    # A broken browser/network worker must not make the TUI
+                    # impossible to close forever. The worker is still left
+                    # alone (Python cannot safely kill a thread); exit the UI
+                    # with an explicit warning rather than pretending all
+                    # work completed cleanly.
+                    self.sub_title = "shutdown timeout — exiting; active work may continue"
+                    break
+                await asyncio.sleep(0.05)
+            self._finish_shutdown()
 
         def _finish_shutdown(self) -> None:
             self.title = "GLYPH"

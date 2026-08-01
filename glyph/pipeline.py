@@ -1,11 +1,10 @@
-"""Parallel core analysis pipeline with an independent SNI-hunt lifecycle.
+"""Parallel analysis pipeline with a coordinated SNI-hunt lifecycle.
 
 The core stages have one dependency edge: schema inference must complete
 before Rosetta decoding. Sensitive scanning is independent, so the core runs
-those two lanes concurrently. SNI hunting is also independent, but it is
-bounded network reconnaissance and is deliberately *not* part of the core
-pool. Callers can await :func:`run_snihunt` (headless CLI) or submit it as a
-separate worker (live TUI).
+those two lanes concurrently. SNI hunting is independently target-pinned and
+runs beside the core through :func:`run_pipeline`; the lower-level
+:func:`run_snihunt` remains available when callers need only that stage.
 """
 from __future__ import annotations
 
@@ -31,9 +30,9 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
                  progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
     """Run schema/Rosetta and sensitive analysis concurrently.
 
-    Returns ``{sch, ros, sens, sni}``; ``sni`` is always ``None`` here to
-    preserve the renderer result shape. SNI work belongs to
-    :func:`run_snihunt` now.
+    Returns ``{sch, ros, sens, sni}``; ``sni`` is ``None`` here to preserve
+    the renderer result shape. Use :func:`run_pipeline` when SNI should run
+    concurrently with these core lanes.
     """
     lock = threading.Lock()
 
@@ -94,14 +93,65 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
     return out
 
 
+def run_pipeline(db_path: str, *, target: Optional[str] = None,
+                  no_schema: bool = False,
+                  no_rosetta: bool = False,
+                  no_sensitive: bool = False,
+                  no_snihunt: bool = False,
+                  snihunt_no_net: bool = False,
+                  progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    """Run core analysis and SNI hunting concurrently.
+
+    ``run_analysis`` owns the schema→Rosetta and sensitive lanes, while
+    ``run_snihunt`` owns its own target-pinned catalog connection. Keeping the
+    two jobs in separate futures lets slow network recon overlap the local
+    analysis without sharing sqlite connections or allowing one stage to
+    redirect another stage's writes.
+    """
+    lock = threading.Lock()
+
+    def _prog(message: str) -> None:
+        if progress is None:
+            return
+        with lock:
+            try:
+                progress(message)
+            except Exception:
+                pass
+
+    with ThreadPoolExecutor(max_workers=2 if not no_snihunt else 1) as ex:
+        analysis_future = ex.submit(
+            run_analysis,
+            db_path,
+            target=target,
+            no_schema=no_schema,
+            no_rosetta=no_rosetta,
+            no_sensitive=no_sensitive,
+            progress=_prog,
+        )
+        sni_future = None
+        if not no_snihunt:
+            sni_future = ex.submit(
+                run_snihunt,
+                db_path,
+                target=target,
+                snihunt_no_net=snihunt_no_net,
+                progress=_prog,
+            )
+        result = analysis_future.result()
+        if sni_future is not None:
+            result.update(sni_future.result())
+    return result
+
+
 def run_snihunt(db_path: str, *, target: Optional[str] = None,
                 snihunt_no_net: bool = False,
                 progress: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
-    """Run SNI hunting in its own catalog lifecycle.
+    """Run SNI hunting in its own target-pinned catalog lifecycle.
 
-    This function is intentionally not submitted to the core analysis pool.
-    Its explicit target prevents a later UI target switch from redirecting
-    findings to another target.
+    ``run_pipeline`` submits this function beside the core pool. Keeping it
+    independently callable is useful for a focused SNI rerun and preserves
+    the explicit target boundary against later UI target switches.
     """
     from glyph.snihunt import run_hunt
 
