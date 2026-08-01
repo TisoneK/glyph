@@ -6,6 +6,7 @@ import sys
 
 from glyph.cli._shared import (
     catalog,
+    is_browse_mode,
     live_kwargs,
     report_live,
     with_db,
@@ -48,8 +49,7 @@ def run_har(args: argparse.Namespace) -> int:
 
 def run_live(args: argparse.Namespace) -> int:
     from glyph.capture import capture_live
-    if (getattr(args, "browse", False)
-            or getattr(args, "browser_requested", False)):
+    if is_browse_mode(args):
         # Browse mode: the browser is visible + user-driven. No TUI takeover;
         # the capture blocks until Ctrl+C / browser-close. (ADR-14 point 6.)
         if not args.url:

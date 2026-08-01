@@ -131,8 +131,18 @@ glyph run live --browse https://target.example.com --browser brave
 | `--browser [chrome\|msedge\|brave]` | enable continuous capture from your real Chromium browser; with no name it attaches to CDP, with a name it selects the launch fallback |
 | `--browse` | equivalent legacy spelling for browser mode |
 | `--cdp-port N` / `--cdp-host H` | CDP-attach endpoint (default `localhost:9222`; or set `GLYPH_CDP_URL`) |
-| `--browser-path PATH` | explicit browser binary (Brave needs this if not auto-detected) |
+| `--browser-path PATH` | explicit browser executable; also configurable with `GLYPH_BROWSER_PATH` |
+| `--user-data-dir PATH` | launch-fallback profile directory; also configurable with `GLYPH_BROWSER_PROFILE` |
 | `--incognito` | launch-fallback only: fresh ephemeral context (no persistent profile) |
+
+When a URL is supplied, a launch fallback closes any restored profile tabs before
+opening that URL, so it does not resume the previous target. When no URL is supplied,
+Glyph intentionally enters all-tabs mode and clears the active target filter so newly
+captured flows remain visible. During a session, traffic and browser-close events are
+pumped continuously; closing the browser ends capture and reports `browser closed` in
+the TUI/CLI. On normal macOS/Windows and non-root Linux, Chromium's sandbox is enabled.
+A root Linux process cannot use Chromium's sandbox; run Glyph as a regular user to
+avoid Chromium's `--no-sandbox` warning.
 
 **Capture scoping (tab lineage):**
 

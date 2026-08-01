@@ -89,19 +89,34 @@ def with_live(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
                          "value, attaches to the default Chrome CDP endpoint")
     sp.add_argument("--browser-path", default=None, dest="browser_path",
                     help="explicit path to a browser binary (Brave needs this if "
-                         "not auto-detected at the standard locations)")
+                         "not auto-detected at the standard locations); or set "
+                         "GLYPH_BROWSER_PATH")
+    sp.add_argument("--user-data-dir", default=None, dest="user_data_dir",
+                    help="browser profile directory for the launch fallback "
+                         "(or set GLYPH_BROWSER_PROFILE)")
     sp.add_argument("--incognito", action="store_true",
                     help="launch-fallback only: use a fresh ephemeral context "
                          "(no persistent profile at ~/.glyph/profiles/<host>/)")
     return sp
 
 
+def is_browse_mode(args: argparse.Namespace) -> bool:
+    """Whether live capture should use a visible real-browser session."""
+    return bool(
+        getattr(args, "browse", False)
+        or getattr(args, "browser_requested", False)
+        or getattr(args, "browser_path", None) is not None
+        or getattr(args, "user_data_dir", None) is not None
+        or bool(os.environ.get("GLYPH_BROWSER_PATH"))
+        or bool(os.environ.get("GLYPH_BROWSER_PROFILE"))
+    )
+
+
 def live_kwargs(args: argparse.Namespace) -> dict:
     """Driver options from CLI args, with a GLYPH_PROXY env fallback so the
     proxy (which may carry credentials) need not sit on the command line."""
     cdp_url = None
-    browser_mode = (getattr(args, "browse", False)
-                    or getattr(args, "browser_requested", False))
+    browser_mode = is_browse_mode(args)
     if browser_mode:
         cdp_url = (os.environ.get("GLYPH_CDP_URL")
                    or f"http://{args.cdp_host}:{args.cdp_port}")
@@ -114,9 +129,11 @@ def live_kwargs(args: argparse.Namespace) -> dict:
         "browse": browser_mode,
         "cdp_url": cdp_url,
         "browser": getattr(args, "browser", None) or "chrome",
-        "user_data_dir": None,
+        "user_data_dir": (getattr(args, "user_data_dir", None)
+                           or os.environ.get("GLYPH_BROWSER_PROFILE")),
         "incognito": getattr(args, "incognito", False),
-        "browser_path": getattr(args, "browser_path", None),
+        "browser_path": (getattr(args, "browser_path", None)
+                          or os.environ.get("GLYPH_BROWSER_PATH")),
     }
 
 
@@ -139,6 +156,11 @@ def by_type(res: dict) -> dict[str, int]:
 def report_live(url: str, res: dict) -> None:
     print(f"Captured {res['flows']} flows + {res['labels']} DOM labels "
           f"from {url}")
+    reason = res.get("stop_reason")
+    if reason == "browser_closed":
+        print("  live capture stopped: browser closed")
+    elif reason in ("user_stopped", "interrupted"):
+        print(f"  live capture stopped: {reason.replace('_', ' ')}")
     types = by_type(res)
     if types:
         parts = ", ".join(f"{t}={n}" for t, n in sorted(types.items()))

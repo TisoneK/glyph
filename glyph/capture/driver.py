@@ -148,6 +148,23 @@ def _platform_key() -> str:
     return "linux"
 
 
+def _chromium_sandbox_enabled() -> bool:
+    """Use Chromium's sandbox whenever the host permits it.
+
+    Playwright disables the sandbox by default in some versions, which makes
+    Chromium print its ``--no-sandbox`` warning even though Glyph never adds
+    that flag itself.  A root Linux process cannot use the sandbox; retain the
+    compatibility fallback there, while enabling it on normal macOS, Windows,
+    and non-root Linux installations.
+    """
+    if _platform_key() == "linux":
+        try:
+            return os.geteuid() != 0
+        except AttributeError:  # pragma: no cover - Windows has no geteuid
+            pass
+    return True
+
+
 def _make_recorders(catalog: Catalog, by_source, state, url: Optional[str],
                     snapshot: bool = True):
     """Build the response/request/websocket handlers + a page-hook installer.
@@ -328,7 +345,10 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
     catalog.set_meta("capture_started", str(time.time()))
     by_source: Counter = Counter()
     state = {"labels": 0}
-    launch_kwargs = {"headless": True}
+    launch_kwargs = {
+        "headless": True,
+        "chromium_sandbox": _chromium_sandbox_enabled(),
+    }
     if proxy:
         launch_kwargs["proxy"] = _parse_proxy(proxy)
 
@@ -413,8 +433,15 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
     if host:
         catalog.set_target(host)
         catalog.clear_target()
+    else:
+        # All-tabs mode has no canonical host. Clear the persisted target so
+        # writes land in the reserved unassigned bucket and display readers
+        # intentionally show the complete live session rather than silently
+        # hiding it under the last previously processed target.
+        catalog.clear_active_target()
     catalog.set_meta("capture_status", "running")
     catalog.set_meta("capture_started", str(time.time()))
+    catalog.set_meta("capture_stop_reason", "")
     by_source: Counter = Counter()
     state = {"labels": 0}
 
@@ -428,6 +455,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
     mode: str
     nav_error: Optional[str] = None
     done = threading.Event()
+    stop_reason = "error"
 
     def _snapshot_cookies(ctx) -> None:
         """context.cookies() snapshot — document.cookie reads are invisible to
@@ -463,11 +491,19 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 # --- FALLBACK: launch the real-browser binary -----------------
                 _say(f"no browser on {cdp_target} ({exc.__class__.__name__}) "
                      f"— launching {browser} with a dedicated profile…")
-                launch_kwargs: dict = {"headless": False}
-                if browser in ("chrome", "msedge"):
+                launch_kwargs: dict = {
+                    "headless": False,
+                    "chromium_sandbox": _chromium_sandbox_enabled(),
+                }
+                if browser_path:
+                    # An explicit path always wins, regardless of the friendly
+                    # browser name. This is the portable escape hatch for
+                    # custom Chrome/Chromium/Brave installations.
+                    launch_kwargs["executable_path"] = browser_path
+                elif browser in ("chrome", "msedge"):
                     launch_kwargs["channel"] = browser
                 elif browser == "brave":
-                    path = browser_path or _browser_binary_path("brave")
+                    path = _browser_binary_path("brave")
                     if not path:
                         raise RuntimeError(
                             "Could not find the Brave binary. Pass --browser-path "
@@ -487,6 +523,21 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 mode = "browse-launch"
 
             catalog.set_meta("capture_mode", mode)
+            catalog.set_meta("capture_stop_reason", "")
+            if not _chromium_sandbox_enabled():
+                _say("warning: Chromium sandbox is unavailable for this root Linux process; "
+                     "the browser may display a --no-sandbox warning")
+
+            # A persistent profile can restore its last visible page. For a
+            # target-scoped launch, close those owned stale pages before
+            # opening the requested target. Never touch existing pages in CDP
+            # attach mode: those belong to the user's real browser session.
+            if owns_browser and url:
+                for old_page in list(context.pages):
+                    try:
+                        old_page.close()
+                    except Exception:
+                        pass
 
             # --- hook pages per the capture-scoping rule (ADR-14 point 7) ----
             if url:
@@ -535,10 +586,30 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
             # cookie snapshot runs INLINE here on the main thread (every ~5s);
             # a daemon thread would call Playwright's sync API cross-thread,
             # which is unsafe and floods shutdown with greenlet errors.
+            stop_reason = "completed"
+
+            def _live_page():
+                for candidate in list(getattr(context, "pages", []) or []):
+                    try:
+                        if not candidate.is_closed():
+                            return candidate
+                    except Exception:
+                        return candidate
+                return None
+
+            def _browser_closed() -> None:
+                nonlocal stop_reason
+                # A requested stop may close the owned context as part of
+                # cleanup. Preserve the more useful user-stopped reason rather
+                # than reporting that deliberate close as an external close.
+                if stop_event is None or not stop_event.is_set():
+                    stop_reason = "browser_closed"
+                done.set()
+
             try:
                 if browser_obj is not None:
                     try:
-                        browser_obj.on("disconnected", lambda: done.set())
+                        browser_obj.on("disconnected", _browser_closed)
                     except Exception:
                         pass
                 # Watch the context as well as the Browser. Persistent
@@ -547,15 +618,41 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 # a user closing a Glyph-owned launch-fallback browser.
                 if context is not None:
                     try:
-                        context.on("close", lambda: done.set())
+                        context.on("close", _browser_closed)
                     except Exception:
                         pass
                 _last_cookie_snap = 0.0
-                while not done.wait(0.2):
+                while not done.is_set():
+                    # Sync Playwright dispatches browser events while one of
+                    # its own API calls is running. A bare threading.Event
+                    # wait does not pump that loop, so responses and browser
+                    # close notifications could appear to stop arriving.
+                    # BrowserContext has no wait_for_timeout on every
+                    # Playwright version, so pump a live Page instead.
+                    pump_page = _live_page()
+                    try:
+                        if pump_page is not None:
+                            pump_page.wait_for_timeout(200)
+                        elif context is not None:
+                            # Keep the sync Playwright dispatcher alive after
+                            # the final tab closes. `time.sleep` alone would
+                            # delay BrowserContext.close/disconnect callbacks.
+                            context.cookies()
+                            time.sleep(0.2)
+                        else:  # lightweight fake compatibility
+                            time.sleep(0.2)
+                    except Exception:
+                        if stop_event is not None and stop_event.is_set():
+                            stop_reason = "user_stopped"
+                        else:
+                            stop_reason = "browser_closed"
+                        done.set()
+                        break
                     # Textual workers do not receive KeyboardInterrupt. The
                     # caller therefore supplies an Event for an explicit,
                     # thread-safe stop (TUI Stop / graceful app shutdown).
                     if stop_event is not None and stop_event.is_set():
+                        stop_reason = "user_stopped"
                         done.set()
                         break
                     now = time.time()
@@ -563,6 +660,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                         _snapshot_cookies(context)
                         _last_cookie_snap = now
                 if stop_event is not None and stop_event.is_set():
+                    stop_reason = "user_stopped"
                     if attached_browser:
                         _say("stop requested — detaching (browser stays open)…")
                     elif owns_browser:
@@ -580,6 +678,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                             except Exception:
                                 pass
             except KeyboardInterrupt:
+                stop_reason = "interrupted"
                 done.set()  # stop the poll loop first; no more cookie snaps
                 if attached_browser:
                     _say("Ctrl+C — detaching (browser stays open)…")
@@ -603,6 +702,7 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
         done.set()
         catalog.set_meta("capture_status", "done")
         catalog.set_meta("capture_error", nav_error or "")
+        catalog.set_meta("capture_stop_reason", locals().get("stop_reason", "error"))
 
     return {
         "flows": sum(by_source.values()),
@@ -611,4 +711,5 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
         "by_source": dict(by_source),
         "error": nav_error,
         "mode": mode,
+        "stop_reason": stop_reason,
     }

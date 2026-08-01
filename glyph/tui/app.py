@@ -267,9 +267,9 @@ if HAS_TEXTUAL:
                            "cdp_url": (os.environ.get("GLYPH_CDP_URL")
                                        or "http://localhost:9222") if browser_mode else None,
                            "browser": "chrome",
-                           "user_data_dir": None,
+                           "user_data_dir": os.environ.get("GLYPH_BROWSER_PROFILE"),
                            "incognito": False,
-                           "browser_path": None},
+                           "browser_path": os.environ.get("GLYPH_BROWSER_PATH")},
                 "stages": self._checked_stages(),
                 "vpndec_file": vpn_file or None,
             }
@@ -470,6 +470,7 @@ if HAS_TEXTUAL:
                 return {
                     "status": cat.get_meta("capture_status"),
                     "error": cat.get_meta("capture_error") or None,
+                    "stop_reason": cat.get_meta("capture_stop_reason") or None,
                     "analysis_status": cat.get_meta("analysis_status"),
                     "analysis_error": cat.get_meta("analysis_error") or None,
                     "vpndec_status": cat.get_meta("vpndec_status"),
@@ -515,7 +516,13 @@ if HAS_TEXTUAL:
                     self.app.sub_title = (f"✗ failed · {mm:02d}:{ss:02d} · "
                                           f"{st['error'][:44]}")
                 else:
-                    sub = f"✓ captured · {mm:02d}:{ss:02d}"
+                    reason = st.get("stop_reason")
+                    if reason == "browser_closed":
+                        sub = f"✓ live capture stopped · browser closed · {mm:02d}:{ss:02d}"
+                    elif reason in ("user_stopped", "interrupted"):
+                        sub = f"✓ live capture stopped · {reason.replace('_', ' ')} · {mm:02d}:{ss:02d}"
+                    else:
+                        sub = f"✓ captured · {mm:02d}:{ss:02d}"
                     if self._vpndec_file:
                         if st["vpndec_error"]:
                             sub += f" · vpndec ✗ {st['vpndec_error'][:32]}"

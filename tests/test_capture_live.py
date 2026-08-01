@@ -207,7 +207,7 @@ def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
                           progress=lambda m: None)
     cap_mode = cat.get_meta("capture_mode")
     cap_status = cat.get_meta("capture_status")
-    cat.close()
+    stop_reason = cat.get_meta("capture_stop_reason")
 
     assert chromium.connect_calls == ["http://localhost:9222"]
     # A fresh tab was opened in the user's existing context (target tab).
@@ -220,8 +220,11 @@ def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
     # driver only breaks its wait; it does not call browser.close()).
     assert target_browser.closed is False
     assert res["mode"] == "browse-attach"
+    assert res["stop_reason"] == "browser_closed"
     assert cap_mode == "browse-attach"
     assert cap_status == "done"
+    assert stop_reason == "browser_closed"
+    cat.close()
 
 
 @_BROWSE_SKIP
@@ -251,7 +254,9 @@ def test_browse_attach_stop_event_detaches_without_closing_browser(tmp_path, mon
     assert res["mode"] == "browse-attach"
     assert stop.is_set()
     assert target_browser.closed is False
+    assert res["stop_reason"] == "user_stopped"
     assert cat.get_meta("capture_status") == "done"
+    assert cat.get_meta("capture_stop_reason") == "user_stopped"
     cat.close()
 
 
@@ -331,6 +336,7 @@ def test_browse_launch_fallback_when_no_cdp(tmp_path, monkeypatch):
     profile, kw = chromium.persistent_calls[0]
     assert kw["headless"] is False
     assert kw["channel"] == "chrome"
+    assert isinstance(kw["chromium_sandbox"], bool)
     assert profile.endswith("target.test")
     assert res["mode"] == "browse-launch"
     assert cap_mode == "browse-launch"
@@ -413,6 +419,24 @@ def test_live_kwargs_carries_browse_options(monkeypatch):
     monkeypatch.setenv("GLYPH_CDP_URL", "http://remote:9222")
     args2 = build_parser().parse_args(["capture", "live", "--browse"])
     assert _live_kwargs(args2)["cdp_url"] == "http://remote:9222"
+
+
+def test_explicit_browser_path_and_profile_enable_browse_mode(monkeypatch):
+    monkeypatch.setenv("GLYPH_BROWSER_PATH", "/opt/custom/chrome")
+    monkeypatch.setenv("GLYPH_BROWSER_PROFILE", "/tmp/glyph-profile")
+    args = build_parser().parse_args(["capture", "live", "https://target.test"])
+    kw = _live_kwargs(args)
+    assert kw["browse"] is True  # environment configuration enables browse mode
+    assert kw["browser_path"] == "/opt/custom/chrome"
+    assert kw["user_data_dir"] == "/tmp/glyph-profile"
+
+    args = build_parser().parse_args([
+        "capture", "live", "https://target.test",
+        "--browser-path", "/custom/brave", "--user-data-dir", "/custom/profile"])
+    kw = _live_kwargs(args)
+    assert kw["browse"] is True
+    assert kw["browser_path"] == "/custom/brave"
+    assert kw["user_data_dir"] == "/custom/profile"
 
 
 def test_browse_command_registered():

@@ -8,6 +8,7 @@ from glyph.cli._format import num, sev_line, style
 from glyph.cli._shared import (
     by_type,
     catalog,
+    is_browse_mode,
     live_kwargs,
     with_db,
     with_live,
@@ -91,10 +92,13 @@ def _gather(cat, args, cap: dict) -> dict:
     # ADR-15: schema→rosetta, sensitive, and SNI run as coordinated lanes.
     # Each lane owns a target-pinned Catalog connection; SNI remains a
     # separate lifecycle but no longer waits for the core pool to finish.
+    # All-tabs browser capture deliberately clears the active target, so do
+    # not let Catalog.target()'s display fallback reselect the last target.
     from glyph.pipeline import run_pipeline
+    target = cat.target() if cat.target_id() not in (None, 0) else None
     r = run_pipeline(
         cat.path,
-        target=cat.target(),
+        target=target,
         no_sensitive=getattr(args, "no_sensitive", False),
         no_snihunt=getattr(args, "no_snihunt", False),
         snihunt_no_net=getattr(args, "snihunt_no_net", False),
@@ -167,6 +171,10 @@ def _print_rich(args, header: str, r: dict) -> None:
         g.add_row("", f"[grey58]{_types_line(cap)}[/]")
     if cap.get("error"):
         g.add_row("", f"[yellow]note: {cap['error']}[/]")
+    if cap.get("stop_reason") == "browser_closed":
+        g.add_row("", "[yellow]live capture stopped: browser closed[/]")
+    elif cap.get("stop_reason") in ("user_stopped", "interrupted"):
+        g.add_row("", f"[yellow]live capture stopped: {cap['stop_reason'].replace('_', ' ')}[/]")
     g.add_row("schema", f"[bold]{sch['fields']}[/] fields · "
                         f"{sch['enum_candidates']} enum candidates")
     g.add_row("rosetta", f"[bold]{ros['entries']}[/] decoded · "
@@ -202,6 +210,10 @@ def _print_plain(args, header: str, r: dict) -> None:
     print()
     print(f"  {style(header, 'bold')}\n")
     print(_row("capture", _cap_value(cap)))
+    if cap.get("stop_reason") == "browser_closed":
+        print(_sub("live capture stopped: browser closed"))
+    elif cap.get("stop_reason") in ("user_stopped", "interrupted"):
+        print(_sub(f"live capture stopped: {cap['stop_reason'].replace('_', ' ')}"))
     if cap.get("by_source"):
         print(_sub(_types_line(cap)))
     print(_row("schema", f"{num(sch['fields'])} fields · "
@@ -253,7 +265,7 @@ def run_live(args: argparse.Namespace) -> int:
     # The new --browser spelling is intended for a live terminal dashboard
     # while the user's real browser remains open, so it flows through the
     # normal TUI/live-worker path below.
-    if getattr(args, "browse", False):
+    if is_browse_mode(args) and getattr(args, "browse", False):
         from glyph.capture import capture_live
         from urllib.parse import urlparse
         if not args.url:
@@ -286,7 +298,7 @@ def run_live(args: argparse.Namespace) -> int:
         return 0
     # Interactive: the live dashboard runs the capture itself and streams it
     # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
-    browser_requested = getattr(args, "browser_requested", False)
+    browser_requested = is_browse_mode(args)
     if not args.url and not browser_requested:
         print("error: a target URL is required (or use --browse/--browser for browse mode)",
               file=__import__("sys").stderr)
