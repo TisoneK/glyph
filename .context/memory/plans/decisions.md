@@ -728,3 +728,31 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   current target — use a per-target proxy run or a fresh catalog for the unassigned fallback.
   Future display commands must pass `restore_active=True` (via `_shared.catalog`) or they
   will read ALL targets' rows again.
+
+---
+## ADR-17: TUI stage selection + App-level CSS (2026-08-01)
+- **Status:** accepted
+- **Context:** User review of the TUI: the home page was squeezed top-left and
+  poorly designed beyond the logo; there was no way to choose which analysis
+  stages run (wanted checkboxes, all ON except vpndec); VPN Dec had no input
+  form. The output page's host row grew huge with long hosts and reused the
+  tall banner logo. Root cause of the layout: this Textual build (8.2.8) only
+  loads a Screen's CSS when the screen is pushed/switched — the DEFAULT
+  screen's CSS never loads, so the home page's styling silently never applied
+  (and no test asserted CSS values).
+- **Decision:** (1) Home page redesigned: centered 82-col shell, an ANALYSIS
+  STAGES checkbox panel (schema/rosetta/sensitive/snihunt ON by default,
+  vpndec OFF) plus a VPN config file input revealed on tick; selection threads
+  into the dashboard via ``live["stages"]`` + ``live["vpndec_file"]``, and
+  ``run_analysis`` gained ``no_schema``/``no_rosetta`` so every stage is
+  skippable. (2) All screen CSS moved to ``GlyphApp.CSS`` with type-scoped
+  selectors — App CSS loads unconditionally; a Screen.CSS on a default screen
+  is dead styling in this Textual version. (3) Dashboard: compact ``◈ GLYPH``
+  brand row with clipped host; long host/URL cells ellipsized in the TUI data
+  adapters.
+- **Consequences:** New TUI screens must put CSS on GlyphApp (or the screen
+  must be pushed), not on the default screen. The CLI opt-out flags
+  (``--no-sensitive``/``--no-snihunt``) still work — the dashboard falls back
+  to them when ``stages`` is absent. ``FlowDetail #detail`` padding now applies
+  (previously scoped to the wrong screen). A ticked-but-empty vpndec path
+  bells instead of silently doing nothing.

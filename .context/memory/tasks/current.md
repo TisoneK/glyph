@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 26 done — tables scoped to current target: persisted active_target_id + Catalog(restore_active=True) for display/stage commands; run/capture pristine; target list marks current; 171 pass / 5 skip.
+- **Task:** (cleared) Session 27 done — TUI overhaul: home redesign + stage checkboxes + vpndec file input; App.CSS root-cause fix for the squeezed layout; dashboard compact brand row + host clipping; 177 pass / 5 skip.
 - **Status:** done

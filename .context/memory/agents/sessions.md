@@ -727,3 +727,27 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done. Root cause was in the WIRING, not the store: every read filters to the ACTIVE target, but the active target was in-memory only — so every display command opened a fresh Catalog with no active target and fell back to ALL targets' rows. Fix: persist active_target_id in meta (set_target/set_active_target write it; clear/remove clear it; restore_active Catalog kwarg restores it, refusing the reserved unassigned id=0 and self-cleaning stale ids). Display + stage CLI commands (flows, dom, dict, catalog, codegen, review, sensitive, snihunt, schema, rosetta, vpndec, fingerprint, gating, auth, mobile), all TUI read sites, pipeline._open(), and the mitm addon now restore the current target; run/capture write paths stay pristine (ADR-12 unchanged). glyph target list marks the current target (rich/plain/JSON); glyph target show persists the switch. Reviewer (5 passes) caught 3 real issues, all fixed: vpndec configs were still landing in (unassigned) and now invisible in the filtered VPN tab; pipeline._open() wrote to (unassigned) on target=None; set_active_target(0) nuked a real persisted current target (glyph target show 0 would reset the context) — now one-shot display only. 171 pass / 5 skip (+5 tests). Report: .context/memory/reviews/2026-08-01-target-filtered-tables.md
 - **Open items:** unchanged (capture-tool parallelism; Windows-box live-TUI optional).
 - **Report:** .context/memory/reviews/2026-08-01-target-filtered-tables.md
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 27)
+- **Task:** TUI overhaul from user review: home page squeezed top-left/poorly
+  designed, no analysis-stage selection, VPN Dec had no input form; output
+  page host row too big + banner logo too tall.
+- **Commits:** product commit (feat(tui): ...) + this chore(context)
+  bookkeeping. See `git log`.
+- **Outcome:** done. Root cause of the layout: Textual 8.2.8 never loads the
+  DEFAULT screen's CSS (only pushed/switched screens get `_load_screen_css`),
+  so the home styling silently never applied. Fixed by moving all screen CSS
+  into GlyphApp.CSS with type-scoped selectors (+ CSS regression guard test).
+  Home redesigned: centered shell + ANALYSIS STAGES checkboxes (all ON except
+  vpndec) + VPN config file input revealed on tick; selection threads through
+  the live dict (stages/vpndec_file) and run_analysis gained no_schema/
+  no_rosetta so every stage is skippable. Dashboard: compact GLYPH brand row
+  with clipped host; data.py clip() ellipsizes long hosts/URLs in tables.
+  Reviewer (7 passes) caught: empty-lane pool crash, dead Middle import, the
+  em-dash fallback regression, duplicate stages-row id, Static.renderable vs
+  .render(), the run_test 80x24 max-width trap, and the vpndec-empty silent
+  no-op. 177 pass / 5 skip.
+- **Open items:** Windows live-TUI check (carried); optional run
+  --no-schema/--no-rosetta CLI flags (pipeline supports, renderers need
+  None-guards).
+- **Report:** .context/memory/reviews/2026-08-01-tui-overhaul.md

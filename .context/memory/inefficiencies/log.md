@@ -426,3 +426,27 @@ never harvested.
   before editing it with a rewriting tool. If mixed or CRLF, use the Python-append pattern.
   Alternatively, add `.context/memory/* text eol=lf` to .gitattributes (project-local change;
   would normalize the tree once — worth doing when convenient).
+
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 27)
+- **Problem:** The TUI home page rendered squeezed top-left with zero test
+  failures because the screen's CSS never applied. Textual 8.2.8 only loads a
+  Screen subclass's CSS when the screen is pushed or switched
+  (``_load_screen_css`` is called from push_screen/switch_mode, never from the
+  default-screen mount path) — the home screen is the default screen, so its
+  ``#box { width: 66 }`` rule silently never loaded.
+- **Cost:** ~30 min debugging (region/computed-style probes vs the Textual
+  source) before pinning it to the default-screen CSS quirk; the layout bug
+  had been live for days.
+- **Cause:** Textual's ``_install_screen_stack`` mounts the default screen via
+  ``get_default_screen()`` + ``_register`` but never calls
+  ``_load_screen_css``. Screen-scoped CSS is a footgun for the default screen.
+- **Workaround / fix:** Moved ALL screen CSS into ``GlyphApp.CSS`` with
+  type-scoped selectors (``HomeScreen #shell``, ``DashboardScreen #brand``,
+  ...). Verified headlessly: ``#shell`` region x=9 w=82 centered on a 100x40
+  terminal. Added a CSS regression guard to the TUI tests (asserts ``#shell``
+  width at a 100-col size) so a regression is caught by the suite.
+- **Prevent next time:** When styling a default screen in Textual, put the CSS
+  on the App class, not the Screen class. Any new Screen with CSS must add it
+  to ``GlyphApp.CSS`` (or push the screen) or the styling silently won't apply
+  — and no widget-level test will catch it unless it asserts computed CSS/region.
