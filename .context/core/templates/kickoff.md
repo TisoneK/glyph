@@ -135,10 +135,12 @@ pwsh -File .context/core/bin/context-sync.ps1 status
 ### Step 2 — Read `.context/`
 
 `README.md` (the zone map) → then, under `memory/`:
-`workflows/active.md` → `agents/sessions.md` (last 3–5 entries) →
-`tasks/current.md` → `tasks/backlog.md` → `inefficiencies/log.md` →
-`flaws/log.md` → `plans/decisions.md` → `overrides/rules.md` →
-`system/` → `user/` → note what's in `secrets/` (never print values).
+`workflows/active.md` → `agents/sessions.md` (last 3–5 entries —
+if the active entry points to `sessions/<date>-N/notes.md`, skim it
+for the current state) → `tasks/current.md` → `tasks/backlog.md` →
+`inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
+`overrides/rules.md` → `system/` → `user/` → note what's in
+`secrets/` (never print values).
 
 If `memory/tasks/current.md` shows another live session in progress,
 **do not start** — one agent per project repo at a time.

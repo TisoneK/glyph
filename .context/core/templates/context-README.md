@@ -30,6 +30,10 @@ is committed to git and travels with the repo. It has **two zones**:
     ├── system/                  # machines + agent/model registry
     ├── user/                    # identity + preferences
     ├── overrides/rules.md       # project-local protocol adjustments
+    ├── sessions/                # per-session detailed notes (optional, deletable)
+    │   ├── SUMMARY.md           # compressed history — entries are removable
+    │   └── YYYY-MM-DD-N/
+    │       └── notes.md         # session-scoped detail
     ├── core.lock                # last-known-good core version (context-sync writes it)
     └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
 ```
