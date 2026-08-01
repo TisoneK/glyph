@@ -64,7 +64,7 @@ def run(args: argparse.Namespace) -> int:
     # Positional target (glyph snihunt google.com) takes precedence; fall back
     # to --target. Either seeds the hunt directly without a prior capture.
     target = args.target or getattr(args, "target_flag", None)
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         if target:
             # Normalize: strip scheme + path, keep just the host.

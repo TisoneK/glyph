@@ -18,7 +18,7 @@ def add_parser(sub) -> None:
 def run(args: argparse.Namespace) -> int:
     from glyph.mobile import mine_apk, mine_apk_to_catalog
     if args.ingest:
-        cat = catalog(args)
+        cat = catalog(args, restore_active=True)
         try:
             res = mine_apk_to_catalog(cat, args.apk)
         finally:

@@ -113,3 +113,130 @@ def test_unassigned_target_dedupes_upserts(tmp_path):
         assert any(t["host"] == "(unassigned)" for t in cat.targets())
     finally:
         cat.close()
+
+
+def test_active_target_persists_across_opens(tmp_path):
+    """Session 26: the active target survives across Catalog opens, so a
+    display command opening a FRESH catalog shows the CURRENT target's rows
+    instead of every target's. ``restore_active=True`` is the opt-in used by
+    display commands; without it the legacy all-targets fallback stays."""
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "p.db")
+    cat = Catalog(db)
+    try:
+        t1 = cat.set_target("alpha.example")
+        cat.add_flow(Flow(method="GET", url="https://alpha.example/a", host="", path=""))
+        t2 = cat.set_target("beta.example")
+        cat.add_flow(Flow(method="GET", url="https://beta.example/b", host="", path=""))
+        assert t1 != t2
+        assert cat.summary()["flows"] == 1  # active = beta
+    finally:
+        cat.close()
+
+    # Legacy: a fresh Catalog without restore sees ALL targets' rows.
+    cat = Catalog(db)
+    try:
+        assert cat.target_id() is None
+        assert cat.summary()["flows"] == 2
+    finally:
+        cat.close()
+
+    # Display path: restore_active picks up the LAST active target (beta).
+    cat = Catalog(db, restore_active=True)
+    try:
+        assert cat.target_id() == t2
+        assert cat.target() == "beta.example"
+        assert cat.summary()["flows"] == 1
+        assert {f.host for f in cat.all_flows()} == {"beta.example"}
+    finally:
+        cat.close()
+
+
+def test_clear_and_remove_clear_persisted_active(tmp_path):
+    """Session 26: clear_active_target() and remove_target() both clear the
+    persisted active target, so a later restore doesn't resurrect a stale id."""
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "c.db")
+
+    # clear_active_target() wipes the persistence.
+    cat = Catalog(db)
+    try:
+        cat.set_target("alpha.example")
+    finally:
+        cat.close()
+    cat = Catalog(db)
+    cat.clear_active_target()
+    cat.close()
+    cat = Catalog(db, restore_active=True)
+    try:
+        assert cat.target_id() is None
+    finally:
+        cat.close()
+
+    # remove_target() wipes the persistence too.
+    db2 = str(tmp_path / "r.db")
+    cat = Catalog(db2)
+    try:
+        tid = cat.set_target("alpha.example")
+    finally:
+        cat.close()
+    cat = Catalog(db2)
+    try:
+        cat.remove_target(tid)
+    finally:
+        cat.close()
+    cat = Catalog(db2, restore_active=True)
+    try:
+        assert cat.target_id() is None
+    finally:
+        cat.close()
+
+
+def test_restore_ignores_unknown_meta_id(tmp_path):
+    """A persisted active_target_id pointing at a target that no longer
+    exists must not crash restore — it is simply ignored."""
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "x.db")
+    cat = Catalog(db)
+    cat.set_meta("active_target_id", "999999")
+    cat.close()
+    cat = Catalog(db, restore_active=True)
+    try:
+        assert cat.target_id() is None
+    finally:
+        cat.close()
+
+
+
+def test_restore_never_resurrects_unassigned_bucket(tmp_path):
+    """Session 26: the reserved (unassigned) bucket (id=0) can never become
+    the restored 'current' target — that would filter every table to scratch
+    rows. set_active_target(0) keeps working for one-shot display but does
+    not persist; a forged meta '0' is cleaned up on restore."""
+    from glyph.catalog import Catalog
+    db = str(tmp_path / "u0.db")
+
+    # Forged/persisted 0: restore must clear it, not filter to unassigned.
+    cat = Catalog(db)
+    cat.set_meta("active_target_id", "0")
+    cat.close()
+    cat = Catalog(db, restore_active=True)
+    try:
+        assert cat.target_id() is None
+        assert cat.get_meta("active_target_id") is None  # cleaned up
+    finally:
+        cat.close()
+
+    # set_active_target(0) works for one-shot display but does not persist
+    # (the real target stays current across opens).
+    cat = Catalog(db)
+    cat.set_target("real.example")
+    assert cat.set_active_target(0) is True
+    assert cat.target_id() == 0  # in-memory: shows unassigned right now
+    cat.close()
+    cat = Catalog(db, restore_active=True)
+    try:
+        assert cat.target_id() is not None  # real target survives
+        assert cat.target() == "real.example"
+    finally:
+        cat.close()

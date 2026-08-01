@@ -17,7 +17,7 @@ def add_parser(sub) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         needs = True if args.review else None
         entries = cat.dictionary(needs_review=needs)

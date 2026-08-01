@@ -231,7 +231,7 @@ if HAS_TEXTUAL:
                 self._live_timers.append(self.set_interval(1.0, self._tick))
                 self._live_timers.append(self.set_interval(4.0, self._analyze_tick))
             else:
-                cat = Catalog(self.db_path)
+                cat = Catalog(self.db_path, restore_active=True)
                 try:
                     self.app.sub_title = cat.target() or "catalog"
                 finally:
@@ -263,7 +263,7 @@ if HAS_TEXTUAL:
         def _capture_state(self) -> "tuple[Optional[str], Optional[str]]":
             """(status, error) from one Catalog open — the 1s tick polls both
             every second, so avoid two connections per tick."""
-            cat = Catalog(self.db_path)
+            cat = Catalog(self.db_path, restore_active=True)
             try:
                 return (cat.get_meta("capture_status"), cat.get_meta("capture_error"))
             finally:
@@ -348,7 +348,7 @@ if HAS_TEXTUAL:
         # -- rendering ---------------------------------------------------
         def _refresh_live(self) -> None:
             """Cheap refresh: summary + only the visible tab's table."""
-            cat = Catalog(self.db_path)
+            cat = Catalog(self.db_path, restore_active=True)
             try:
                 self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
                 active = self.query_one(TabbedContent).active
@@ -359,7 +359,7 @@ if HAS_TEXTUAL:
                 cat.close()
 
         def action_reload(self) -> None:
-            cat = Catalog(self.db_path)
+            cat = Catalog(self.db_path, restore_active=True)
             try:
                 self.query_one("#summary", Static).update(_summary_markup(D.summary(cat)))
                 for tab_id, _, fn in _VIEWS:
@@ -387,7 +387,7 @@ if HAS_TEXTUAL:
             active = self.query_one(TabbedContent).active
             fn = dict((v[0], v[2]) for v in _VIEWS).get(active)
             if fn:
-                cat = Catalog(self.db_path)
+                cat = Catalog(self.db_path, restore_active=True)
                 try:
                     self._fill(f"#t_{active}", fn(cat))
                 finally:
@@ -408,7 +408,7 @@ if HAS_TEXTUAL:
                 flow_id = int(row[0])
             except (ValueError, TypeError, IndexError):
                 return
-            cat = Catalog(self.db_path)
+            cat = Catalog(self.db_path, restore_active=True)
             try:
                 detail = D.flow_detail(cat, flow_id)
             finally:

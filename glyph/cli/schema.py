@@ -13,7 +13,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph.schema import infer_all
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         res = infer_all(cat)
     finally:

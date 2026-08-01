@@ -44,7 +44,7 @@ def run(args: argparse.Namespace) -> int:
     cfg = decode_file(args.file, keys=keys)
 
     if not args.no_store:
-        cat = catalog(args)
+        cat = catalog(args, restore_active=True)
         try:
             cat.add_vpn_config(cfg)
         finally:

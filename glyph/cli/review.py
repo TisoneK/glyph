@@ -25,7 +25,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph import review as R
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         if args.stats:
             emit(R.stats(cat), args.json)

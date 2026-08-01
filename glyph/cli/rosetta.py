@@ -13,7 +13,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph.rosetta import build_dictionary
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         res = build_dictionary(cat)
     finally:

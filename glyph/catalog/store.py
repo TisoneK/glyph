@@ -186,6 +186,15 @@ SCHEMA_VERSION = "4"
 _UNASSIGNED_TARGET_ID = 0
 _UNASSIGNED_HOST = "(unassigned)"
 
+# meta key persisting the last-activated target (Session 26 fix). The active
+# target is per-instance state; without persistence every display command
+# (glyph flows / dict / dashboard …) opens a FRESH Catalog with no active
+# target and reads fall back to ALL targets' rows. set_target /
+# set_active_target write this key; display commands opt into restoring it
+# via Catalog(..., restore_active=True). Write paths (run/capture) stay
+# pristine — they set their own target (ADR-12 unchanged).
+_ACTIVE_TARGET_META = "active_target_id"
+
 # Human review outcomes stored in dictionary.review_state (NULL = not reviewed).
 REVIEW_CONFIRMED = "confirmed"
 REVIEW_EDITED = "edited"
@@ -229,7 +238,8 @@ class Catalog:
     target's rows — a re-run is idempotent without nuking other targets.
     """
 
-    def __init__(self, path: str = "glyph.db"):
+    def __init__(self, path: str = "glyph.db", *,
+                 restore_active: bool = False):
         self.path = path
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
@@ -256,6 +266,12 @@ class Catalog:
             (SCHEMA_VERSION,),
         )
         self.conn.commit()
+        # Session 26: display commands (flows/dict/dashboard …) open a FRESH
+        # Catalog; the active target is per-instance state, so without this
+        # restore every table would show ALL targets' rows. Opt-in kwarg —
+        # write paths (run/capture) set their own target and stay pristine.
+        if restore_active:
+            self._restore_active_target()
 
     def _migrate(self) -> None:
         """Additive migrations for catalogs created by an older schema."""
@@ -361,6 +377,8 @@ class Catalog:
     # -- targets (ADR-12: multi-target) ----------------------------------
     def set_target(self, host: Optional[str], *, label: Optional[str] = None,
                    notes: Optional[str] = None) -> Optional[int]:
+        # Persist the id so a later fresh Catalog (display command) can
+        # restore it as the current target (Session 26).
         """Register + activate a target. Returns its id (or ``None`` if
         ``host`` is falsy).
 
@@ -387,7 +405,11 @@ class Catalog:
             "SELECT id FROM targets WHERE host=?", (host,)
         ).fetchone()
         self._active_target_id = int(row["id"]) if row else None
-        self.conn.commit()
+        # set_meta commits; nothing else is dirty at this point.
+        if self._active_target_id is not None:
+            self.set_meta(_ACTIVE_TARGET_META, str(self._active_target_id))
+        else:
+            self.conn.commit()
         return self._active_target_id
 
     def target(self) -> Optional[str]:
@@ -420,17 +442,56 @@ class Catalog:
         ``True`` if the id exists (or is ``None``)."""
         if target_id is None:
             self._active_target_id = None
+            self._clear_active_meta()
             return True
         row = self.conn.execute(
             "SELECT id FROM targets WHERE id=?", (target_id,)).fetchone()
         if row is None:
             return False
         self._active_target_id = int(row["id"])
+        # Never persist the reserved (unassigned) bucket as current — a later
+        # restore would filter every table to scratch rows. Peeking at it
+        # (glyph target show 0) is a one-shot display: leave any previously
+        # persisted real target untouched so the current context survives.
+        if self._active_target_id != _UNASSIGNED_TARGET_ID:
+            self.set_meta(_ACTIVE_TARGET_META, str(self._active_target_id))
         return True
 
     def clear_active_target(self) -> None:
         """Unset the active target. Reads then return rows across all targets."""
         self._active_target_id = None
+        self._clear_active_meta()
+
+    def _restore_active_target(self) -> None:
+        """Restore the persisted active target (meta ``active_target_id``),
+        if it still exists. Used by display commands that open a fresh
+        Catalog so tables show the CURRENT target's rows only. A stale id
+        (target removed elsewhere) is cleaned up rather than left behind.
+        The reserved unassigned bucket (id=0) is never restored as current
+        — it would filter every table to scratch rows (renderers already
+        skip it for the "current" marker)."""
+        raw = self.get_meta(_ACTIVE_TARGET_META)
+        if not raw:
+            return
+        try:
+            tid = int(raw)
+        except (ValueError, TypeError):
+            self._clear_active_meta()
+            return
+        if tid == _UNASSIGNED_TARGET_ID:
+            self._clear_active_meta()
+            return
+        row = self.conn.execute(
+            "SELECT id FROM targets WHERE id=?", (tid,)).fetchone()
+        if row is not None:
+            self._active_target_id = tid
+        else:
+            self._clear_active_meta()
+
+    def _clear_active_meta(self) -> None:
+        self.conn.execute(
+            "DELETE FROM meta WHERE key=?", (_ACTIVE_TARGET_META,))
+        self.conn.commit()
 
     def targets(self) -> List[Dict[str, Any]]:
         """Every registered target, newest first."""
@@ -482,8 +543,10 @@ class Catalog:
             self.conn.execute(
                 f"DELETE FROM {tbl} WHERE target_id=?", (target_id,))
         self.conn.execute("DELETE FROM targets WHERE id=?", (target_id,))
-        if self._active_target_id == target_id:
+        if (self._active_target_id == target_id
+                or self.get_meta(_ACTIVE_TARGET_META) == str(target_id)):
             self._active_target_id = None
+            self._clear_active_meta()
         self.conn.commit()
         return True
 

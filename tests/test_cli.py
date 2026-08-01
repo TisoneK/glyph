@@ -170,3 +170,65 @@ def test_review_stats_json(tmp_path, make_entry, capsys):
     db, _ = _run_with_pending(tmp_path, make_entry)
     assert main(["review", "--db", db, "--stats", "--json"]) == 0
     assert "pending" in capsys.readouterr().out
+
+
+def test_display_tables_scope_to_current_target(tmp_path, make_entry, capsys):
+    """Session 26: after capturing TWO targets, `glyph flows` / `glyph dict`
+    show ONLY the current target's rows (the last captured), not every
+    target's. `glyph target show <host>` switches the current target."""
+    import json
+    db = str(tmp_path / "c.db")
+    first = tmp_path / "a.har"
+    first.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://old.example/api/x",
+                   body='{"o":[{"status":1,"status_label":"Shipped"}]}')]}}))
+    second = tmp_path / "b.har"
+    second.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://new.example/api/y",
+                   body='{"o":[{"status":2,"status_label":"Cancelled"}]}')]}}))
+    main(["run", "har", str(first), "--db", db, "--no-snihunt"])
+    main(["run", "har", str(second), "--db", db, "--no-snihunt"])
+    capsys.readouterr()
+
+    # flows shows only the current target (new.example — captured last).
+    assert main(["flows", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "/api/y" in out
+    assert "/api/x" not in out
+
+    # dict shows only the current target's decodings.
+    assert main(["dict", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "Cancelled" in out
+    assert "Shipped" not in out
+
+    # Switching the current target flips what the tables show.
+    assert main(["target", "show", "old.example", "--db", db]) == 0
+    capsys.readouterr()
+    assert main(["flows", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "/api/x" in out
+    assert "/api/y" not in out
+    assert main(["dict", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "Shipped" in out
+    assert "Cancelled" not in out
+
+
+def test_target_list_marks_current(tmp_path, make_entry, capsys):
+    """Session 26: `glyph target list` marks which target is current."""
+    import json
+    db = str(tmp_path / "c.db")
+    har = tmp_path / "a.har"
+    har.write_text(json.dumps({"log": {"entries": [
+        make_entry("GET", "https://old.example/api/x")]}}))
+    main(["run", "har", str(har), "--db", db, "--no-snihunt"])
+    capsys.readouterr()
+    assert main(["target", "list", "--db", db]) == 0
+    out = capsys.readouterr().out
+    assert "old.example" in out
+    assert "current" in out
+    assert main(["target", "list", "--db", db, "--json"]) == 0
+    rows = json.loads(capsys.readouterr().out)
+    current = [r for r in rows if r.get("current")]
+    assert len(current) == 1 and current[0]["host"] == "old.example"

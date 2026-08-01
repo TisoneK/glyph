@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 25 done — ADR-15 wall-clock profile: 1.00x offline (CPU-bound, GIL) / 1.44x controlled-I/O (snihunt network dominates, CPU hidden); no product code changed (throwaway benchmarks in /tmp).
+- **Task:** (cleared) Session 26 done — tables scoped to current target: persisted active_target_id + Catalog(restore_active=True) for display/stage commands; run/capture pristine; target list marks current; 171 pass / 5 skip.
 - **Status:** done

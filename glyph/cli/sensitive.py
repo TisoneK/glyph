@@ -36,7 +36,7 @@ def add_parser(sub) -> None:
 def run(args: argparse.Namespace) -> int:
     from glyph.sensitive import run_scan
     from glyph.sensitive.scan import is_noise
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         if getattr(args, "target", None):
             cat.set_target(args.target)

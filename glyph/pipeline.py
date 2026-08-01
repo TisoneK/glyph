@@ -78,7 +78,11 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
                     pass  # progress reporting must never break a lane
 
     def _open() -> Catalog:
-        cat = Catalog(db_path)
+        # restore_active=True (Session 26): a lane whose `target` is None
+        # (e.g. TUI dashboard opened without a live URL) falls back to the
+        # persisted CURRENT target instead of writing to the (unassigned)
+        # bucket. An explicit `target` still overrides via set_target below.
+        cat = Catalog(db_path, restore_active=True)
         if target:
             cat.set_target(target)
         return cat

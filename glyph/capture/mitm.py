@@ -17,10 +17,21 @@ from glyph.catalog import Catalog, Flow
 
 
 class GlyphAddon:
-    """A mitmproxy addon that appends each flow to a catalog."""
+    """A mitmproxy addon that appends each flow to a catalog.
+
+    Flows are stamped with the persisted CURRENT target (Session 26) — the
+    addon is passive and has no URL of its own, so it inherits the capture
+    context. Note: mitmdump sees EVERY host's traffic, so all of it buckets
+    under that one target; use a per-target proxy run (or the unassigned
+    fallback on a fresh catalog) to keep hosts separate.
+    """
 
     def __init__(self, db_path: str = "glyph.db") -> None:
-        self.catalog = Catalog(db_path)
+        # restore_active=True: stamp flows on the persisted current target
+        # (Session 26) instead of the (unassigned) bucket when the addon
+        # runs standalone — mitm writes what the current target's capture
+        # context expects.
+        self.catalog = Catalog(db_path, restore_active=True)
 
     def response(self, flow: Any) -> None:  # mitmproxy http.HTTPFlow
         req, resp = flow.request, flow.response

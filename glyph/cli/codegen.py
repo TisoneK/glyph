@@ -15,7 +15,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph.codegen import to_openapi_json
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         spec = to_openapi_json(cat)
     finally:

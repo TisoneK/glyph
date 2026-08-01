@@ -14,7 +14,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph.auth import analyze
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         emit(analyze(cat), args.json)
     finally:

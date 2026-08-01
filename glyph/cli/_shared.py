@@ -5,9 +5,13 @@ import argparse
 import os
 
 
-def catalog(args: argparse.Namespace):
+def catalog(args: argparse.Namespace, *, restore_active: bool = False):
+    """Open the catalog. ``restore_active=True`` restores the persisted
+    active target (Session 26) so table displays show the CURRENT target's
+    rows instead of every target's. Write paths (run/capture) pass the
+    default False — they set their own target (ADR-12)."""
     from glyph.catalog import Catalog
-    return Catalog(args.db)
+    return Catalog(args.db, restore_active=restore_active)
 
 
 def with_db(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:

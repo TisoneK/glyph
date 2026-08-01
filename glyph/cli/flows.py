@@ -17,7 +17,7 @@ def add_parser(sub) -> None:
 
 def run(args: argparse.Namespace) -> int:
     from glyph.tui import data as D
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         headers, rows = D.flow_rows(cat, text_filter=args.filter)
     finally:

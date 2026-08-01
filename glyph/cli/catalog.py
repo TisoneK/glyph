@@ -13,7 +13,7 @@ def add_parser(sub) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    cat = catalog(args)
+    cat = catalog(args, restore_active=True)
     try:
         summary = cat.summary()
         endpoints = cat.endpoints()
