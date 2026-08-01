@@ -148,6 +148,79 @@ def test_live_dashboard_streams(tmp_path, monkeypatch):
     asyncio.run(go())
 
 
+def test_quit_confirmation_can_cancel_and_confirm(tmp_path, monkeypatch):
+    """Quit is deliberate: q opens a modal, cancel keeps the app alive, and
+    confirmation delegates to the graceful shutdown hook."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.tui.app import GlyphApp, QuitConfirmScreen
+
+    app = GlyphApp(home=False, db_path=str(tmp_path / "q.db"), live=None)
+    requested = []
+    monkeypatch.setattr(app, "request_shutdown", lambda: requested.append(True))
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("q")
+            await pilot.pause()
+            assert isinstance(app.screen, QuitConfirmScreen)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app.screen.__class__.__name__ == "DashboardScreen"
+            await pilot.press("q")
+            await pilot.pause()
+            await pilot.click("#quit-confirm")
+            await pilot.pause()
+            assert requested == [True]
+
+    asyncio.run(go())
+
+
+def test_target_picker_switches_to_previous_target(tmp_path):
+    """The TUI target picker activates a stored target and reloads its view."""
+    import asyncio
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from glyph.catalog import Catalog, Flow
+    from glyph.tui.app import GlyphApp, TargetPickerScreen
+
+    db = str(tmp_path / "targets.db")
+    cat = Catalog(db)
+    first = cat.set_target("first.example")
+    cat.add_flow(Flow(method="GET", url="https://first.example/", host="", path=""))
+    second = cat.set_target("second.example")
+    cat.add_flow(Flow(method="GET", url="https://second.example/", host="", path=""))
+    cat.close()
+
+    app = GlyphApp(home=False, db_path=db, live=None)
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("t")
+            await pilot.pause()
+            assert isinstance(app.screen, TargetPickerScreen)
+            await pilot.click(f"#target-{first}")
+            await pilot.pause()
+            assert app.screen.__class__.__name__ == "DashboardScreen"
+            with Catalog(db, restore_active=True) as selected:
+                assert selected.target_id() == first
+                assert selected.target() == "first.example"
+                assert {flow.host for flow in selected.all_flows()} == {"first.example"}
+            assert "first.example" in app.sub_title or "first.example" in str(
+                app.query_one("#brand").render())
+
+    asyncio.run(go())
+
+
 def test_home_screen_mounts(tmp_path):
     """Bare `glyph` home screen mounts, shows the logo, and captures a URL."""
     import asyncio

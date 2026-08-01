@@ -1,14 +1,15 @@
-"""The Glyph TUI — a home/splash screen and the live dashboard.
+"""The Glyph TUI — home, live dashboard, quit lifecycle, and target views.
 
-`glyph` (no args) opens the home screen: the GLYPH wordmark and a target
-box. Enter a URL → the live dashboard captures and streams it in real time
-(ADR-9 Phase 2). `glyph dashboard` / `glyph run live` jump straight to the
-dashboard. The app only reads/refreshes the catalog; the analysis engine
-stays headless.
+`glyph` opens the home screen. Enter a URL → the dashboard captures and
+streams it in real time. Core analysis is parallel; SNI hunting runs as a
+separate tracked worker. The TUI remains a presentation/lifecycle layer over
+the headless engine.
 """
 from __future__ import annotations
 
 import os
+import threading
+import time
 from typing import Optional
 
 try:
@@ -88,6 +89,64 @@ def _summary_markup(s: dict) -> str:
 
 if HAS_TEXTUAL:
 
+    class QuitConfirmScreen(ModalScreen):
+        """Confirm exit so a live capture never stops mid-write silently."""
+
+        BINDINGS = [Binding("escape,n", "cancel", "No")]
+
+        def compose(self) -> "ComposeResult":
+            with Vertical(id="quit-dialog"):
+                yield Static("Quit Glyph?", classes="dialog-title")
+                yield Static("Finish any active capture or analysis before closing?",
+                             id="quit-copy", classes="dialog-copy")
+                with Horizontal(classes="dialog-actions"):
+                    yield Button("Quit", id="quit-confirm", variant="error")
+                    yield Button("Keep working", id="quit-cancel")
+
+        def on_button_pressed(self, event) -> None:
+            self.dismiss(event.button.id == "quit-confirm")
+
+        def action_cancel(self) -> None:
+            self.dismiss(False)
+
+
+    class TargetPickerScreen(ModalScreen):
+        """Choose a target already registered in the multi-target catalog."""
+
+        BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+        def __init__(self, targets: list, current_id: Optional[int]) -> None:
+            super().__init__()
+            self.targets = targets
+            self.current_id = current_id
+
+        def compose(self) -> "ComposeResult":
+            with Vertical(id="target-dialog"):
+                yield Static("Switch target", classes="dialog-title")
+                yield Static("Choose a previously processed target to inspect.",
+                             classes="dialog-copy")
+                real_targets = [t for t in self.targets if t["id"] != 0]
+                if not real_targets:
+                    yield Static("No processed targets yet.", classes="dialog-copy")
+                for target in real_targets:
+                    current = "  · current" if target["id"] == self.current_id else ""
+                    label = f"{target['host']}  ·  {target.get('flows', 0)} flows{current}"
+                    yield Button(label, id=f"target-{target['id']}",
+                                 disabled=target["id"] == self.current_id)
+                with Horizontal(classes="dialog-actions"):
+                    yield Button("Cancel", id="target-cancel")
+
+        def on_button_pressed(self, event) -> None:
+            button_id = event.button.id or ""
+            if button_id == "target-cancel":
+                self.dismiss(None)
+            elif button_id.startswith("target-"):
+                self.dismiss(int(button_id.split("-", 1)[1]))
+
+        def action_cancel(self) -> None:
+            self.dismiss(None)
+
+
     class FlowDetail(ModalScreen):
         BINDINGS = [Binding("escape,q,enter", "close", "Close")]
 
@@ -116,7 +175,7 @@ if HAS_TEXTUAL:
             self.app.pop_screen()
 
     class HomeScreen(Screen):
-        BINDINGS = [Binding("q,escape", "app.quit", "Quit")]
+        BINDINGS = [Binding("q,escape", "confirm_quit", "Quit")]
 
         #: analysis stages the user can tick. Every stage ships ON by default
         #: except vpndec — it needs a config FILE to point at, not captured
@@ -200,13 +259,20 @@ if HAS_TEXTUAL:
         def on_input_submitted(self, event) -> None:
             self._capture(event.value)
 
+        def action_confirm_quit(self) -> None:
+            self.app.push_screen(QuitConfirmScreen(), self._quit_result)
+
+        def _quit_result(self, confirmed: bool) -> None:
+            if confirmed:
+                self.app.request_shutdown()
+
         def on_button_pressed(self, event) -> None:
             if event.button.id == "capture":
                 self._capture(self.query_one("#url", Input).value)
             elif event.button.id == "open":
                 self.app.push_screen(DashboardScreen(self.app.db_path, live=None))
             elif event.button.id == "quit":
-                self.app.exit()
+                self.action_confirm_quit()
 
     class DashboardScreen(Screen):
         BINDINGS = [
@@ -219,7 +285,8 @@ if HAS_TEXTUAL:
             Binding("7", "show('vpndec')", "VPN Dec"),
             Binding("r", "reload", "Reload"),
             Binding("escape", "back", "Back"),
-            Binding("q", "app.quit", "Quit"),
+            Binding("q", "confirm_quit", "Quit"),
+            Binding("t", "targets", "Targets"),
         ]
 
         def __init__(self, db_path: str, live: Optional[dict] = None) -> None:
@@ -247,6 +314,9 @@ if HAS_TEXTUAL:
             self._start = None
             self._done = live.get("url") is None
             self._analyzing = False   # guard: never overlap analysis passes
+            self._finalizing = False
+            self._analysis_lock = threading.Lock()
+            self._sni_running = False
             self._live_timers = []
 
         _MAX_ROWS = 800  # cap table rows so live refresh stays snappy
@@ -268,7 +338,7 @@ if HAS_TEXTUAL:
             self.action_reload()
             if self.live:
                 self._start = time.monotonic()
-                self.app.run_worker(self._capture_worker, thread=True, name="capture")
+                self.app.start_background(self._capture_worker, name="capture")
                 # Light 1s tick (summary + visible tab) + guarded analysis.
                 self._live_timers.append(self.set_interval(1.0, self._tick))
                 self._live_timers.append(self.set_interval(4.0, self._analyze_tick))
@@ -285,16 +355,16 @@ if HAS_TEXTUAL:
             (Session 27)."""
             from urllib.parse import urlparse
             from rich.text import Text
-            host = ""
-            url = (self.live or {}).get("url")
-            if url:
-                host = urlparse(url).hostname or ""
+            cat = Catalog(self.db_path, restore_active=True)
+            try:
+                # The restored catalog target is authoritative after a
+                # target switch; live URL is only a fallback during startup.
+                host = cat.target() or ""
+            finally:
+                cat.close()
             if not host:
-                cat = Catalog(self.db_path, restore_active=True)
-                try:
-                    host = cat.target() or ""
-                finally:
-                    cat.close()
+                url = (self.live or {}).get("url")
+                host = urlparse(url).hostname if url else ""
             t = Text()
             t.append_text(logo_compact())
             if host:
@@ -359,8 +429,9 @@ if HAS_TEXTUAL:
                     self.app.sub_title = sub
                 if not self._done:
                     self._done = True
-                    # one final analysis + full reload, then stop polling.
-                    self.app.run_worker(self._finalize, thread=True, name="final")
+                    # One final core analysis + detached SNI worker. Keep the
+                    # worker tracked so quit can wait for graceful shutdown.
+                    self.app.start_background(self._finalize, name="final")
             else:
                 self.app.sub_title = f"● LIVE  {mm:02d}:{ss:02d}"
 
@@ -368,7 +439,7 @@ if HAS_TEXTUAL:
             if self._done or self._analyzing:
                 return  # never let analysis passes overlap and pile up
             self._analyzing = True
-            self.app.run_worker(self._analyze_once, thread=True, name="analyze")
+            self.app.start_background(self._analyze_once, name="analyze")
 
         def _target_host(self) -> Optional[str]:
             """The capture target's host (from the live url), so analysis
@@ -385,47 +456,77 @@ if HAS_TEXTUAL:
             # to repeat every tick), so it's skipped on live ticks.
             from glyph.pipeline import run_analysis
             try:
-                run_analysis(
-                    self.db_path,
-                    target=self._target_host(),
-                    no_schema=self._no_schema,
-                    no_rosetta=self._no_rosetta,
-                    no_sensitive=self._no_sensitive,
-                    no_snihunt=True,  # hunt runs once at finalize
-                )
+                with self._analysis_lock:
+                    run_analysis(
+                        self.db_path,
+                        target=self._target_host(),
+                        no_schema=self._no_schema,
+                        no_rosetta=self._no_rosetta,
+                        no_sensitive=self._no_sensitive,
+                    )
             except Exception:
                 pass  # transient lock while capture writes: retry next tick
             finally:
                 self._analyzing = False
 
         def _finalize(self) -> None:
-            # Full parallel analysis INCLUDING the SNI hunt (ADR-15): all
-            # lanes (schema→rosetta, sensitive, snihunt) run concurrently, so
-            # the hunt no longer waits for the other stages. --no-snihunt
-            # skips it; --snihunt-no-net keeps it local-only (ADR-10).
+            """Finish core analysis, then launch SNI as a separate worker.
+
+            SNI is intentionally outside ``run_analysis``'s core pool. The
+            dashboard keeps polling while that bounded network stage runs, so
+            candidates appear without holding the rest of the result hostage.
+            """
             from glyph.pipeline import run_analysis
+            self._finalizing = True
             try:
-                run_analysis(
+                with self._analysis_lock:
+                    run_analysis(
+                        self.db_path,
+                        target=self._target_host(),
+                        no_schema=self._no_schema,
+                        no_rosetta=self._no_rosetta,
+                        no_sensitive=self._no_sensitive,
+                    )
+                if self._vpndec_file:
+                    self._decode_vpndec()
+            except Exception:
+                pass  # a later CLI stage can be re-run without losing capture
+            finally:
+                self._finalizing = False
+            self.app.call_from_thread(self.action_reload)
+            if self._no_snihunt:
+                self.app.call_from_thread(self._stop_live_timers)
+            else:
+                self.app.call_from_thread(self._start_snihunt)
+
+        def _start_snihunt(self) -> None:
+            if self._sni_running or self.app._shutdown_requested:
+                return
+            self._sni_running = True
+            self.app.start_background(self._run_snihunt, name="snihunt")
+
+        def _run_snihunt(self) -> None:
+            from glyph.pipeline import run_snihunt
+            try:
+                run_snihunt(
                     self.db_path,
                     target=self._target_host(),
-                    no_schema=self._no_schema,
-                    no_rosetta=self._no_rosetta,
-                    no_sensitive=self._no_sensitive,
-                    no_snihunt=self._no_snihunt,
                     snihunt_no_net=self._snihunt_no_net,
                 )
             except Exception:
-                pass  # network/lock hiccup — the snihunt CLI can re-run it
-            if self._vpndec_file:
-                self._decode_vpndec()
-            # stop the live timers now that capture is done (no more polling).
-            for t in self._live_timers:
+                pass
+            finally:
+                self._sni_running = False
+                self.app.call_from_thread(self.action_reload)
+                self.app.call_from_thread(self._stop_live_timers)
+
+        def _stop_live_timers(self) -> None:
+            for timer in self._live_timers:
                 try:
-                    t.stop()
+                    timer.stop()
                 except Exception:
                     pass
             self._live_timers = []
-            self.app.call_from_thread(self.action_reload)  # one full refresh
 
         def _decode_vpndec(self) -> None:
             """Decode the VPN config file picked on the home screen into the
@@ -506,12 +607,47 @@ if HAS_TEXTUAL:
                 finally:
                     cat.close()
 
+        def action_confirm_quit(self) -> None:
+            self.app.push_screen(QuitConfirmScreen(), self._quit_result)
+
+        def _quit_result(self, confirmed: bool) -> None:
+            if confirmed:
+                self.app.request_shutdown()
+
+        def action_targets(self) -> None:
+            # Do not redirect a dashboard while its capture is still writing;
+            # completed live captures and read-only dashboards are safe.
+            if self.app.has_active_workers():
+                self.app.bell()
+                return
+            cat = Catalog(self.db_path, restore_active=True)
+            try:
+                targets = cat.targets()
+                current_id = cat.target_id()
+            finally:
+                cat.close()
+            self.app.push_screen(TargetPickerScreen(targets, current_id),
+                                  self._target_selected)
+
+        def _target_selected(self, target_id: Optional[int]) -> None:
+            if target_id is None:
+                return
+            cat = Catalog(self.db_path, restore_active=True)
+            try:
+                if cat.set_active_target(target_id):
+                    self.app.sub_title = D.clip(cat.target() or "catalog", 48)
+                    self._set_brand()
+                    self.action_reload()
+            finally:
+                cat.close()
+
         def action_back(self) -> None:
-            # Pop back to the home screen if we came from it; otherwise quit.
+            # Pop back to the home screen if we came from it; otherwise ask
+            # before closing so Esc never bypasses graceful shutdown.
             if len(self.app.screen_stack) > 1:
                 self.app.pop_screen()
             else:
-                self.app.exit()
+                self.action_confirm_quit()
 
         def on_data_table_row_selected(self, event) -> None:
             if event.data_table.id != "t_flows":
@@ -554,6 +690,14 @@ if HAS_TEXTUAL:
         HomeScreen #hint { content-align: center middle; color: $text-muted; }
         DashboardScreen #brand { height: 1; }
         DashboardScreen #summary { height: 1; }
+        QuitConfirmScreen { align: center middle; background: $background 80%; }
+        QuitConfirmScreen #quit-dialog { width: 58; height: auto; padding: 2 3; border: round $error; background: $surface; }
+        TargetPickerScreen { align: center middle; background: $background 80%; }
+        TargetPickerScreen #target-dialog { width: 72; max-height: 80%; height: auto; padding: 2 3; border: round $primary; background: $surface; }
+        .dialog-title { text-style: bold; color: $primary; margin: 0 0 1 0; }
+        .dialog-copy { color: $text-muted; margin: 0 0 1 0; }
+        .dialog-actions { height: auto; align: right middle; margin: 1 0 0 0; }
+        .dialog-actions Button { margin-left: 1; }
         DashboardScreen TabbedContent { height: 1fr; }
         DashboardScreen DataTable { height: 1fr; }
         FlowDetail #detail { padding: 1 2; }
@@ -565,6 +709,59 @@ if HAS_TEXTUAL:
             self._home = home
             self.db_path = db_path
             self._live = live
+            self._shutdown_requested = False
+            self._background = []
+
+        def start_background(self, fn, *, name: str):
+            """Run a thread worker and retain a completion event for shutdown."""
+            complete = threading.Event()
+
+            def wrapped():
+                try:
+                    return fn()
+                finally:
+                    complete.set()
+
+            worker = self.run_worker(wrapped, thread=True, name=name)
+            self._background.append((worker, complete))
+            return worker
+
+        def has_active_workers(self) -> bool:
+            return any(not complete.is_set() for _, complete in self._background)
+
+        def request_shutdown(self) -> None:
+            """Cancel pending workers and exit only after their bodies finish."""
+            if self._shutdown_requested:
+                return
+            self._shutdown_requested = True
+            # The confirmation modal is dismissed before its callback runs,
+            # so put the status on the app chrome as well as the dialog when
+            # it is still mounted. The app remains visible while uncancellable
+            # Python workers finish their SQLite/Playwright work.
+            self.title = "GLYPH · finishing active work…"
+            self.sub_title = "Please wait — closing safely"
+            try:
+                self.screen.query_one("#quit-copy", Static).update(
+                    "Finishing active work… Glyph will close when it is safe.")
+                for button in self.screen.query("#quit-dialog Button"):
+                    button.disabled = True
+            except Exception:
+                pass
+            # Textual cannot forcibly stop Python threads. Do not call
+            # Worker.cancel(): it could prevent a not-yet-started wrapper from
+            # setting its completion event. Waiting for the tracked bodies is
+            # the graceful, SQLite-safe shutdown contract.
+            self.run_worker(self._wait_for_shutdown, thread=True, name="shutdown")
+
+        def _wait_for_shutdown(self) -> None:
+            while any(not complete.is_set() for _, complete in self._background):
+                time.sleep(0.05)
+            self.call_from_thread(self._finish_shutdown)
+
+        def _finish_shutdown(self) -> None:
+            self.title = "GLYPH"
+            self.sub_title = "closed safely"
+            self.exit()
 
         def get_default_screen(self) -> "Screen":
             if self._home:

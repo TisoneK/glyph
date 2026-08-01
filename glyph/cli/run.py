@@ -1,4 +1,4 @@
-"""`glyph run har|live` — capture, then schema -> rosetta -> sensitive."""
+"""`glyph run har|live` — capture, core analysis, then independent SNI hunt."""
 from __future__ import annotations
 
 import argparse
@@ -26,12 +26,12 @@ def _sub(text: str) -> str:
 
 def add_parser(sub) -> None:
     sp = with_db(sub.add_parser(
-        "run", help="capture -> schema -> rosetta -> sensitive -> snihunt",
+        "run", help="capture + parallel core analysis + independent SNI hunt",
         description=(
-            "Run the full analysis pipeline on a capture source.\n"
-            "    capture -> schema -> rosetta -> sensitive -> snihunt\n\n"
-            "Stages run in order; each is opt-out-able with a flag on the "
-            "SUBCOMMAND (not here):\n"
+            "Run capture + analysis on a source. Core stages run in parallel;\n"
+            "SNI hunting is a separate bounded-recon stage.\n\n"
+            "Core stages run in parallel; SNI is a separate bounded stage. "
+            "Each is opt-out-able with a flag on the SUBCOMMAND (not here):\n"
             "    --no-sensitive      skip the sensitive/risk scan\n"
             "    --no-snihunt        skip the SNI bug-host hunt\n"
             "    --snihunt-no-net    SNI hunt local-only (no DoH/CT/reverse-IP)\n\n"
@@ -88,20 +88,23 @@ def _progress(msg: str) -> None:
 
 
 def _gather(cat, args, cap: dict) -> dict:
-    # ADR-15: the analysis stages run CONCURRENTLY (schema→rosetta chain,
-    # sensitive, and snihunt are independent lanes over a thread pool, each
-    # with its own target-anchored Catalog connection). The stage opt-out
-    # flags thread straight through. Result dict shape is unchanged so the
-    # renderers below don't care how the stages were run.
-    from glyph.pipeline import run_analysis
+    # ADR-15: schema→rosetta and sensitive run concurrently. SNI is a
+    # separate bounded-recon lifecycle: await it here so headless output is
+    # complete, while the TUI submits the same function independently.
+    from glyph.pipeline import run_analysis, run_snihunt
     r = run_analysis(
         cat.path,
         target=cat.target(),
         no_sensitive=getattr(args, "no_sensitive", False),
-        no_snihunt=getattr(args, "no_snihunt", False),
-        snihunt_no_net=getattr(args, "snihunt_no_net", False),
         progress=_progress,
     )
+    if not getattr(args, "no_snihunt", False):
+        r.update(run_snihunt(
+            cat.path,
+            target=cat.target(),
+            snihunt_no_net=getattr(args, "snihunt_no_net", False),
+            progress=_progress,
+        ))
     return {"cap": cap, **r}
 
 
