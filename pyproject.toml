@@ -28,7 +28,10 @@ dependencies = ["rich>=13"]
 
 [project.optional-dependencies]
 # Live capture backends (proxy + browser driver).
-live = ["mitmproxy>=10", "playwright>=1.40"]
+# mitmproxy floor is 9, NOT 10: mitmproxy 10+ requires Python >= 3.10, and
+# the package still supports Python 3.9 (the user's Mac runs 3.9). 9.0.1 is
+# the last 3.9-compatible release; on newer Pythons pip resolves the latest.
+live = ["mitmproxy>=9", "playwright>=1.40"]
 # Higher-fidelity JSON Schema inference (the pure-python inferer is the fallback).
 schema = ["genson>=1.2"]
 # Columnar catalog store for drift analytics (post-MVP promotion path, ADR-2).
