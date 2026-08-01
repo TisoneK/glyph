@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 20 done — TUI E2E wiring fixed: stage opt-out flags honored by the live dashboard, capture errors surfaced as ✗ failed, auto-mode progress lines, url check before TUI takeover. 156 pass / 8 skip. Report: `.context/memory/reviews/2026-08-01-tui-e2e-wiring.md`.
+- **Task:** (cleared) Session 21 done — `pip install -e '.[dev]'` fixed on the Mac (mitmproxy floor lowered to >=9; install verified, 159 pass / 5 skip). Identity clarified: user is Tisone Kironget; "bao" is only the macOS account name.
 - **Status:** done
