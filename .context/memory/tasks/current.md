@@ -11,6 +11,6 @@ check its session entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** 2026-08-01 — Buffy / openai/gpt-5.6-luna
-- **Task:** Start kickoff. Target: The TUI is still not wired E2E. First synchronize the vendored context core to 0.5.0, then trace and fix the TUI's end-to-end path from CLI through live capture and Textual dashboard.
-- **Status:** in-progress
+- **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
+- **Task:** (cleared) Session 20 done — TUI E2E wiring fixed: stage opt-out flags honored by the live dashboard, capture errors surfaced as ✗ failed, auto-mode progress lines, url check before TUI takeover. 156 pass / 8 skip. Report: `.context/memory/reviews/2026-08-01-tui-e2e-wiring.md`.
+- **Status:** done

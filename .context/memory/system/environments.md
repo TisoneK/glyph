@@ -30,18 +30,22 @@ block (and its "last verified" date) every time you run on it again.
 -->
 
 ---
-## bao@local (macOS) (last verified 2026-07-30)
+## bao@local (macOS) (last verified 2026-08-01)
 - **Identify by:** `$USER` = bao; repo path `~/Code/glyph`
 - **OS:** macOS (Darwin 24.6.0)
 - **Runtimes:** system `python3` = **3.9.6** at `/usr/bin/python3` (no pyenv) — this is only what's *currently installed*. **The user's preferred target is Python 3.13** (stable on Windows, no platform issues; see `user/preferences.md` → Runtime & tooling). The base package was written 3.9-compatible (`from __future__ import annotations` + `typing` imports) as a stopgap; a retarget to 3.13 (+ Pydantic models) is a pending decision. Next session: check whether 3.13 is installed (`python3.13 --version`) before assuming 3.9.
 - **Package manager:** `pip` via a project venv at `.venv/` (gitignored). Create with `python3 -m venv .venv`; install with `.venv/bin/python -m pip install -e '.[dev]'`.
-- **Verified commands (2026-07-30):**
+- **Verified commands (2026-08-01):**
   - `python3 -m venv .venv && .venv/bin/python -m pip install -e . pytest` — clean install of `glyph-re` (pure-stdlib base) + pytest
-  - `.venv/bin/python -m pytest -q` → **32 passed**
+  - `.venv/bin/python -m pytest -q` → **156 passed, 8 skipped** (Session 20)
+  - `.venv/bin/python -m pytest tests/test_tui.py tests/test_capture_live.py tests/test_capture.py tests/test_cli.py -q` → 37 passed, 4 skipped
+  - `sh .context/core/bin/context-sync verify` → `core OK ... (0.5.0)`; `status` → up to date
   - `.venv/bin/glyph --version` → `glyph 0.1.0` (console script installs)
   - `python3 -m glyph.cli ...` runs without install when `PYTHONPATH=<repo>` is set
   - `git` with the `osxkeychain` credential helper — commit + push to `origin` work
-- **Quirks:** `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
+- **Quirks:**
+  - **`.venv` has textual + rich but NOT playwright** (no `live` extra installed here). `test_capture_live.py` browse tests skip cleanly (they patch the real `playwright.sync_api`); the live-browser capture path can only be verified on the Windows box. If you need live capture here: `.venv/bin/python -m pip install -e '.[live]'` + `playwright install chromium`.
+  - `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
 
 ---
 ## Z.ai cloud sandbox (Linux) (last verified 2026-07-30)

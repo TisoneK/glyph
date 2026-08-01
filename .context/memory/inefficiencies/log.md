@@ -386,3 +386,14 @@ never harvested.
   or event-loop-bound objects (Playwright sync, sqlite3, tkinter, etc.), mock
   tests are necessary but NOT sufficient; flag the need for a real-integration
   test in the session's exit checklist."
+
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 20)
+- **Problem:** Three friction points, all project-local:
+  1. **This Mac's `.venv` lacks playwright** (Session 4 installed `pip install -e . pytest` only — no `live` extra; only textual + rich are present). Four browse-mode tests in `tests/test_capture_live.py` therefore HARD-FAILED with `ModuleNotFoundError: No module named 'playwright'` (baseline was 153 pass / 4 fail / 4 skip) instead of skipping — the file's own `_PLAYWRIGHT` skip pattern was applied to only ONE test (`test_graceful_without_playwright`), not the four that patch `playwright.sync_api`.
+  2. **First draft of the new TUI tests used fixed `pilot.pause(1.5)` sleeps** to wait for the finalize worker — the code-reviewer correctly flagged that as flaky on slow machines (the worker-thread calls may not have completed when the assert runs).
+  3. **`_capture_state()` batching left `_status()` as dead code** — caught by the reviewer's dead-code scan, not by me; removed in the same pass.
+- **Cost:** ~10 min diagnosing the playwright-absent baseline (4 failing tests); ~5 min rewriting the three tests to poll with a deadline (40 × 0.1s + break condition); ~2 min removing the dead method.
+- **Cause:** (1) The browse tests patch the REAL `playwright.sync_api` module, so they need it importable — the skip-guard pattern existed in the file but was applied inconsistently (only the negative test got it). (2) Timing-based assertions on worker threads are inherently racy; fixed sleeps are the worst form. (3) Refactor left an old call site (`_status()` in `_tick`) updated but the method itself orphaned — I replaced the CALLERS before checking for now-unused methods.
+- **Workaround / fix:** (1) Added a shared `_BROWSE_SKIP = pytest.mark.skipif(not _PLAYWRIGHT, ...)` applied to all four browse tests + corrected the module docstring ("browse tests require the live extra"). They still run fully on the Windows box where playwright is installed. (2) Rewrote the three new tests to poll (`for _ in range(40): await pilot.pause(0.1); if <condition>: break`) with a final assert — deterministic on slow machines. (3) Deleted `_status()`.
+- **Prevent next time:** (1) When a test file patches a heavy optional dependency (playwright), EVERY test that does so needs the same skip guard as the first — grep for the import before trusting the file's "testable without X" claim. (2) For Textual worker-thread tests, always poll with a deadline for the expected condition; never fixed sleeps. (3) After any refactor that changes a helper's callers, grep for the old name and delete orphans in the same pass.
