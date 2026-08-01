@@ -112,10 +112,17 @@ def test_no_sensitive_skips_scan_lane(tmp_path, make_entry, monkeypatch):
 
     db = _seeded(tmp_path, make_entry)
     calls = {"scan": 0, "hunt": 0}
-    monkeypatch.setattr(sens, "run_scan", lambda cat: calls.__setitem__("scan", calls["scan"] + 1) or {})
-    monkeypatch.setattr(sh, "run_hunt",
-                        lambda cat, net=True, progress=None:
-                        calls.__setitem__("hunt", calls["hunt"] + 1) or {})
+
+    def fake_scan(cat):
+        calls["scan"] += 1
+        return {}
+
+    def fake_hunt(cat, net=True, progress=None):
+        calls["hunt"] += 1
+        return {}
+
+    monkeypatch.setattr(sens, "run_scan", fake_scan)
+    monkeypatch.setattr(sh, "run_hunt", fake_hunt)
 
     res = run_analysis(db, target="s.t", no_sensitive=True, no_snihunt=True)
     assert res["sens"] is None and res["sni"] is None
