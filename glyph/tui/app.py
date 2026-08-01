@@ -200,6 +200,13 @@ if HAS_TEXTUAL:
                         placeholder="https://target.example.com  —  enter a URL to capture",
                         id="url")
                     with Vertical(id="stages"):
+                        yield Static("CAPTURE MODE", classes="stages-title")
+                        with Horizontal(classes="stages-row"):
+                            yield Checkbox("Use my browser (live)",
+                                           id="st_browser", value=False)
+                        yield Static("[dim]Uses your existing Chrome/Edge/Brave via "
+                                     "CDP. Leave URL empty to capture every open tab.[/dim]",
+                                     id="browser-hint", markup=True)
                         yield Static("ANALYSIS STAGES", classes="stages-title")
                         with Horizontal(classes="stages-row"):
                             for sid, label in self.STAGES[:2]:
@@ -232,10 +239,11 @@ if HAS_TEXTUAL:
 
         def _capture(self, url: str) -> None:
             url = (url or "").strip()
-            if not url:
+            browser_mode = self.query_one("#st_browser", Checkbox).value
+            if not url and not browser_mode:
                 self.app.bell()
                 return
-            if not url.startswith(("http://", "https://")):
+            if url and not url.startswith(("http://", "https://")):
                 url = "https://" + url
             vpn_file = ""
             if self.query_one("#st_vpndec", Checkbox).value:
@@ -244,10 +252,17 @@ if HAS_TEXTUAL:
                     # Tick the stage but no file: never a silent no-op.
                     self.app.bell()
             live = {
-                "url": url,
+                "url": url or None,
                 "kwargs": {"explore": 2, "settle_ms": 3000, "timeout_ms": 30000,
                            "wait_selector": None,
-                           "proxy": os.environ.get("GLYPH_PROXY")},
+                           "proxy": os.environ.get("GLYPH_PROXY"),
+                           "browse": browser_mode,
+                           "cdp_url": (os.environ.get("GLYPH_CDP_URL")
+                                       or "http://localhost:9222") if browser_mode else None,
+                           "browser": "chrome",
+                           "user_data_dir": None,
+                           "incognito": False,
+                           "browser_path": None},
                 "stages": self._checked_stages(),
                 "vpndec_file": vpn_file or None,
             }
@@ -258,6 +273,12 @@ if HAS_TEXTUAL:
             # when the stage is checked.
             if event.checkbox.id == "st_vpndec":
                 self.query_one("#vpnfile", Input).disabled = not event.value
+            elif event.checkbox.id == "st_browser":
+                # A URL is optional only for real-browser all-traffic mode.
+                self.query_one("#url", Input).placeholder = (
+                    "https://target.example.com  —  target tab + popups"
+                    if event.value else
+                    "https://target.example.com  —  enter a URL to capture")
 
         def on_input_submitted(self, event) -> None:
             self._capture(event.value)
@@ -288,6 +309,7 @@ if HAS_TEXTUAL:
             Binding("7", "show('snihunt')", "SNI Hunt"),
             Binding("8", "show('vpndec')", "VPN Dec"),
             Binding("r", "reload", "Reload"),
+            Binding("s", "stop_capture", "Stop capture"),
             Binding("escape", "back", "Back"),
             Binding("q", "confirm_quit", "Quit"),
             Binding("t", "targets", "Targets"),
@@ -316,7 +338,10 @@ if HAS_TEXTUAL:
             self._snihunt_no_net = bool(live.get("snihunt_no_net"))
             self._vpndec_file = live.get("vpndec_file") or None
             self._start = None
-            self._done = live.get("url") is None
+            # A live browser session may intentionally have no URL (all tabs),
+            # but it is still active until the browser closes or the user
+            # presses Stop capture. Read-only dashboards use live=None.
+            self._done = False if live else True
             self._analyzing = False   # guard: never overlap analysis passes
             self._finalizing = False
             self._analysis_lock = threading.Lock()
@@ -324,6 +349,7 @@ if HAS_TEXTUAL:
             self._capture_worker_error = None
             self._analysis_worker_error = None
             self._live_timers = []
+            self._stop_event = threading.Event()
 
         _MAX_ROWS = 800  # cap table rows so live refresh stays snappy
 
@@ -406,11 +432,14 @@ if HAS_TEXTUAL:
                 # ADR-12: activate this target + clear only its old rows.
                 # Other targets in the catalog coexist; a re-run of the
                 # same target replaces its data.
-                host = urlparse(self.live["url"]).hostname
+                url = self.live.get("url")
+                host = urlparse(url).hostname if url else None
                 if host:
                     cat.set_target(host)
                     cat.clear_target()
-                capture_url(cat, self.live["url"], **self.live["kwargs"])
+                kwargs = dict(self.live.get("kwargs") or {})
+                kwargs["stop_event"] = self._stop_event
+                capture_url(cat, url, **kwargs)
             except Exception as exc:
                 error = str(exc).splitlines()[0] or type(exc).__name__
                 self._capture_worker_error = error
@@ -638,6 +667,17 @@ if HAS_TEXTUAL:
                 self.app.call_from_thread(self.action_reload)
                 self.app.call_from_thread(self._stop_live_timers)
 
+        def action_stop_capture(self) -> None:
+            """Stop a live capture without closing an attached browser.
+
+            The capture worker owns Playwright and observes this event on its
+            own thread; the UI never touches Playwright objects cross-thread.
+            """
+            if not self.live or self._done:
+                return
+            self._stop_event.set()
+            self.app.sub_title = "stopping capture safely…"
+
         def _stop_live_timers(self) -> None:
             for timer in self._live_timers:
                 try:
@@ -783,6 +823,12 @@ if HAS_TEXTUAL:
                 cat.close()
 
         def action_back(self) -> None:
+            # Never pop an active live screen: doing so would orphan its
+            # Playwright worker. Signal a safe stop first; the user can quit
+            # or navigate after the capture reaches its terminal state.
+            if self.live and not self._done:
+                self.action_stop_capture()
+                return
             # Pop back to the home screen if we came from it; otherwise ask
             # before closing so Esc never bypasses graceful shutdown.
             if len(self.app.screen_stack) > 1:
@@ -875,6 +921,13 @@ if HAS_TEXTUAL:
             if self._shutdown_requested:
                 return
             self._shutdown_requested = True
+            # A live browser worker cannot receive KeyboardInterrupt from the
+            # Textual UI. Signal it before waiting; attach mode detaches while
+            # launch fallback closes the browser it owns.
+            for screen in self.screen_stack:
+                stop_event = getattr(screen, "_stop_event", None)
+                if stop_event is not None:
+                    stop_event.set()
             # The confirmation modal is dismissed before its callback runs,
             # so put the status on the app chrome as well as the dialog when
             # it is still mounted. The app remains visible while uncancellable

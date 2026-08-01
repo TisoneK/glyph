@@ -5,6 +5,31 @@ import argparse
 import os
 
 
+class _BrowserOption(argparse.Action):
+    """Support ``--browser`` as a mode switch or with a fallback name.
+
+    Keep ``args.browser == 'chrome'`` as the compatibility default while
+    separately recording whether the option was actually supplied. This lets
+    ``--browser`` mean "use my real browser" without turning ordinary live
+    capture into browse mode.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        # ``glyph run live --browser https://target`` is intentionally
+        # accepted: argparse otherwise mistakes the URL for the optional
+        # browser name. A value matching a browser selects the launch
+        # fallback; any URL-like value is the positional target.
+        browsers = {"chrome", "msedge", "brave"}
+        if values in browsers:
+            setattr(namespace, self.dest, values)
+        else:
+            if getattr(namespace, "url", None) is not None:
+                parser.error("--browser accepts chrome, msedge, brave, or one target URL")
+            setattr(namespace, "url", values)
+            setattr(namespace, self.dest, "chrome")
+        setattr(namespace, "browser_requested", True)
+
+
 def catalog(args: argparse.Namespace, *, restore_active: bool = False):
     """Open the catalog. ``restore_active=True`` restores the persisted
     active target (Session 26) so table displays show the CURRENT target's
@@ -57,10 +82,11 @@ def with_live(sp: argparse.ArgumentParser) -> argparse.ArgumentParser:
                     help="CDP-attach port (default 9222)")
     sp.add_argument("--cdp-host", default="localhost", dest="cdp_host",
                     help="CDP-attach host (default localhost)")
-    sp.add_argument("--browser", default="chrome",
-                    choices=["chrome", "msedge", "brave"],
-                    help="fallback browser binary to launch (default chrome; "
-                         "msedge and brave also work — all Chromium)")
+    sp.add_argument("--browser", nargs="?", const="chrome", default="chrome",
+                    action=_BrowserOption,
+                    help="enable real-browser capture; optionally choose the "
+                         "launch fallback (chrome, msedge, or brave). With no "
+                         "value, attaches to the default Chrome CDP endpoint")
     sp.add_argument("--browser-path", default=None, dest="browser_path",
                     help="explicit path to a browser binary (Brave needs this if "
                          "not auto-detected at the standard locations)")
@@ -74,7 +100,9 @@ def live_kwargs(args: argparse.Namespace) -> dict:
     """Driver options from CLI args, with a GLYPH_PROXY env fallback so the
     proxy (which may carry credentials) need not sit on the command line."""
     cdp_url = None
-    if getattr(args, "browse", False):
+    browser_mode = (getattr(args, "browse", False)
+                    or getattr(args, "browser_requested", False))
+    if browser_mode:
         cdp_url = (os.environ.get("GLYPH_CDP_URL")
                    or f"http://{args.cdp_host}:{args.cdp_port}")
     return {
@@ -83,9 +111,9 @@ def live_kwargs(args: argparse.Namespace) -> dict:
         "settle_ms": args.settle_ms,
         "wait_selector": args.wait_selector,
         "timeout_ms": args.timeout_ms,
-        "browse": getattr(args, "browse", False),
+        "browse": browser_mode,
         "cdp_url": cdp_url,
-        "browser": getattr(args, "browser", "chrome"),
+        "browser": getattr(args, "browser", None) or "chrome",
         "user_data_dir": None,
         "incognito": getattr(args, "incognito", False),
         "browser_path": getattr(args, "browser_path", None),

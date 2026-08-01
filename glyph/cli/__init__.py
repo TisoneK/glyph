@@ -12,6 +12,36 @@ import argparse
 import sys
 from typing import Optional, Sequence
 
+
+class _GlyphArgumentParser(argparse.ArgumentParser):
+    """Normalize the convenient ``--browser <url>`` spelling.
+
+    ``--browser`` has an optional browser-name argument for compatibility
+    (``--browser brave``). Argparse can otherwise treat a following URL as
+    that optional argument and leave the positional target empty. Move a URL
+    before the flag so both ``--browser https://x`` and
+    ``https://x --browser`` mean the same real-browser capture.
+    """
+
+    def parse_args(self, args=None, namespace=None):
+        if args is None:
+            args = sys.argv[1:]
+        normalized = list(args)
+        for i in range(len(normalized) - 1):
+            if normalized[i] == "--browser":
+                candidate = normalized[i + 1]
+                # Browser names are the optional value; any other ordinary
+                # token is the target URL/host and belongs to the positional
+                # argument. This supports --browser example.com as well as
+                # the explicit https:// form.
+                if (not candidate.startswith("-")
+                        and candidate not in {"chrome", "msedge", "brave"}):
+                    url = normalized.pop(i + 1)
+                    normalized.insert(i, url)
+                    break
+        return super().parse_args(normalized, namespace)
+
+
 from glyph import __version__
 from glyph.cli import (
     auth,
@@ -48,7 +78,7 @@ _COMMANDS = [
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
+    p = _GlyphArgumentParser(
         prog="glyph",
         description="Capture, catalog, and decode a target's API surface.")
     p.add_argument("--version", action="version", version=f"glyph {__version__}")

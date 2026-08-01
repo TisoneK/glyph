@@ -48,7 +48,8 @@ def run_har(args: argparse.Namespace) -> int:
 
 def run_live(args: argparse.Namespace) -> int:
     from glyph.capture import capture_live
-    if getattr(args, "browse", False):
+    if (getattr(args, "browse", False)
+            or getattr(args, "browser_requested", False)):
         # Browse mode: the browser is visible + user-driven. No TUI takeover;
         # the capture blocks until Ctrl+C / browser-close. (ADR-14 point 6.)
         if not args.url:
@@ -66,7 +67,7 @@ def run_live(args: argparse.Namespace) -> int:
         report_live(args.url or "(all tabs)", res)
         return 0
     if not args.url:
-        print("error: a target URL is required (or use --browse for browse mode)",
+        print("error: a target URL is required (or use --browse/--browser for browse mode)",
               file=sys.stderr)
         return 1
     _progress(f"launching browser → {args.url}")

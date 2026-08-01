@@ -121,14 +121,16 @@ glyph browse --launch --browser brave --url https://target.example.com
 #   (or launch it yourself: brave-browser --remote-debugging-port=9222 &)
 
 # 2. Attach + capture. Ctrl+C detaches (your browser + tabs stay open):
+glyph run live --browser https://target.example.com
+# `--browse` is retained as an equivalent spelling; a browser name is optional:
 glyph run live --browse https://target.example.com --browser brave
 ```
 
 | Flag | Meaning |
 |------|---------|
-| `--browse` | browse mode (visible, user-driven browser) |
-| `--browser chrome\|msedge\|brave` | fallback browser binary to launch if no CDP endpoint (default chrome; Edge uses `channel="msedge"`, Brave uses `executable_path`) |
-| `--cdp-port N` / `--cdp-host H` | CDP-attach endpoint (default localhost:9222; or set `GLYPH_CDP_URL`) |
+| `--browser [chrome\|msedge\|brave]` | enable continuous capture from your real Chromium browser; with no name it attaches to CDP, with a name it selects the launch fallback |
+| `--browse` | equivalent legacy spelling for browser mode |
+| `--cdp-port N` / `--cdp-host H` | CDP-attach endpoint (default `localhost:9222`; or set `GLYPH_CDP_URL`) |
 | `--browser-path PATH` | explicit browser binary (Brave needs this if not auto-detected) |
 | `--incognito` | launch-fallback only: fresh ephemeral context (no persistent profile) |
 
@@ -145,9 +147,12 @@ glyph run live --browse https://target.example.com --browser brave
 
 **Stop signal:**
 
-- CDP-attach mode: **Ctrl+C detaches** — the CDP connection drops, your browser
+- CLI CDP-attach mode: **Ctrl+C detaches** — the CDP connection drops, your browser
   and all its tabs stay open (closing your whole browser would be disruptive).
-- Launch-fallback mode: close the browser, or Ctrl+C (which closes it).
+- TUI browser mode: press **`s` — Stop capture** (or confirm Quit). Glyph signals the
+  capture worker; attached browsers stay open, while a browser Glyph launched is closed.
+- Closing a launched browser also stops capture. The TUI continues refreshing until the
+  capture reaches `done` and final analysis completes.
 
 Notes:
 
@@ -200,7 +205,8 @@ them.
 | Command | Purpose |
 |---------|---------|
 | `glyph run live <url>` | drive a live page, then the full pipeline |
-| `glyph run live --browse <url>` | browse mode: you drive your real browser (Brave/Edge/Chrome), pipeline runs after |
+| `glyph run live --browser [<url>]` | continuous real-browser capture: you browse normally; stop with Ctrl+C or TUI `s` |
+| `glyph run live --browse <url>` | equivalent browse-mode spelling; pipeline runs after detach/close |
 | `glyph run har <file>` | run the full pipeline on a HAR |
 | `glyph browse --launch` | spawn your browser with the CDP debug port for `--browse` |
 | `glyph capture live <url>` | drive a live page and capture everything |

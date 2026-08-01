@@ -254,6 +254,10 @@ def run_live(args: argparse.Namespace) -> int:
     # capture (the user needs the actual browser). Capture blocks until Ctrl+C
     # / browser-close, THEN run the pipeline + open the dashboard as a post-
     # capture view (or print summary if --no-tui). (ADR-14 point 6.)
+    # Keep the historical --browse path's post-capture dashboard behavior.
+    # The new --browser spelling is intended for a live terminal dashboard
+    # while the user's real browser remains open, so it flows through the
+    # normal TUI/live-worker path below.
     if getattr(args, "browse", False):
         from glyph.capture import capture_live
         from urllib.parse import urlparse
@@ -287,8 +291,9 @@ def run_live(args: argparse.Namespace) -> int:
         return 0
     # Interactive: the live dashboard runs the capture itself and streams it
     # in real time (ADR-9 Phase 2). It takes over the screen and returns on quit.
-    if not args.url:
-        print("error: a target URL is required (or use --browse for browse mode)",
+    browser_requested = getattr(args, "browser_requested", False)
+    if not args.url and not browser_requested:
+        print("error: a target URL is required (or use --browse/--browser for browse mode)",
               file=__import__("sys").stderr)
         return 1
     if _open_live_dashboard(args):
@@ -314,5 +319,5 @@ def run_live(args: argparse.Namespace) -> int:
         r = _gather(cat, args, cap)
     finally:
         cat.close()
-    _render(args, args.url, r)
+    _render(args, args.url or "(all tabs)", r)
     return 0

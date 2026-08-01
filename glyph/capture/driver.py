@@ -236,8 +236,20 @@ def _make_recorders(catalog: Catalog, by_source, state, url: Optional[str],
         except Exception:
             pass
 
+    hooked_pages = set()
+
     def hook_page(page) -> None:
-        """Register every capture listener on a Page + recurse into its popups."""
+        """Register every capture listener once on a Page.
+
+        A popup can be reported by both a page-level ``popup`` event and the
+        context-level ``page`` event in all-tabs mode. Identity-based
+        de-duplication keeps those two lineage paths from recording flows
+        twice.
+        """
+        key = id(page)
+        if key in hooked_pages:
+            return
+        hooked_pages.add(key)
         try:
             page.on("response", on_response)
         except Exception:
@@ -271,6 +283,7 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
                 user_data_dir: Optional[str] = None,
                 incognito: bool = False,
                 browser_path: Optional[str] = None,
+                stop_event: Optional[threading.Event] = None,
                 progress=None) -> dict:
     """Capture a target's traffic into the catalog.
 
@@ -303,7 +316,7 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
             catalog, url, sync_playwright,
             cdp_url=cdp_url, browser=browser, user_data_dir=user_data_dir,
             incognito=incognito, browser_path=browser_path,
-            timeout_ms=timeout_ms, progress=progress)
+            stop_event=stop_event, timeout_ms=timeout_ms, progress=progress)
 
     if not url:
         raise RuntimeError("a target URL is required for auto (non-browse) capture")
@@ -382,7 +395,8 @@ def capture_url(catalog: Catalog, url: Optional[str] = None,
 def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                     cdp_url: Optional[str], browser: str,
                     user_data_dir: Optional[str], incognito: bool,
-                    browser_path: Optional[str], timeout_ms: int,
+                    browser_path: Optional[str],
+                    stop_event: Optional[threading.Event], timeout_ms: int,
                     progress=None) -> dict:
     """Browse mode — CDP-attach primary, launch fallback (ADR-14)."""
     from collections import Counter
@@ -433,9 +447,12 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
         with sync_playwright() as pw:
             browser_obj = None
             context = None
+            attached_browser = False
+            owns_browser = False
             # --- PRIMARY: CDP-attach to the user's real browser ---------------
             try:
                 browser_obj = pw.chromium.connect_over_cdp(cdp_target)
+                attached_browser = True
                 mode = "browse-attach"
                 # The user's existing context holds their session (cookies,
                 # saved logins, password manager). Reuse it; don't make a new
@@ -466,10 +483,10 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                     context = pw.chromium.launch_persistent_context(
                         user_data_dir=profile, **launch_kwargs)
                     browser_obj = context.browser  # may be None for persistent
+                owns_browser = True
                 mode = "browse-launch"
 
             catalog.set_meta("capture_mode", mode)
-            ctx_holder = [context]
 
             # --- hook pages per the capture-scoping rule (ADR-14 point 7) ----
             if url:
@@ -504,6 +521,9 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                 for p in context.pages:
                     hook_page(p)
                 try:
+                    # In all-traffic mode context.page is the sole source of
+                    # new-tab events; popup listeners would hook the same page
+                    # twice and duplicate every recorded flow.
                     context.on("page", hook_page)
                 except Exception:
                     pass
@@ -521,35 +541,62 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                         browser_obj.on("disconnected", lambda: done.set())
                     except Exception:
                         pass
-                # For launch_persistent_context (browser_obj may be None), watch
-                # the context close instead.
-                if browser_obj is None:
+                # Watch the context as well as the Browser. Persistent
+                # contexts expose ``context.browser`` differently across
+                # Playwright versions; context close is the stable signal for
+                # a user closing a Glyph-owned launch-fallback browser.
+                if context is not None:
                     try:
                         context.on("close", lambda: done.set())
                     except Exception:
                         pass
                 _last_cookie_snap = 0.0
                 while not done.wait(0.2):
+                    # Textual workers do not receive KeyboardInterrupt. The
+                    # caller therefore supplies an Event for an explicit,
+                    # thread-safe stop (TUI Stop / graceful app shutdown).
+                    if stop_event is not None and stop_event.is_set():
+                        done.set()
+                        break
                     now = time.time()
                     if now - _last_cookie_snap >= 5.0:
                         _snapshot_cookies(context)
                         _last_cookie_snap = now
+                if stop_event is not None and stop_event.is_set():
+                    if attached_browser:
+                        _say("stop requested — detaching (browser stays open)…")
+                    elif owns_browser:
+                        _say("stop requested — closing browser…")
+                        try:
+                            if context is not None:
+                                context.close()
+                        except Exception:
+                            pass
+                        # Incognito launch uses a separate Browser object;
+                        # persistent contexts are fully closed above.
+                        if browser_obj is not None:
+                            try:
+                                browser_obj.close()
+                            except Exception:
+                                pass
             except KeyboardInterrupt:
                 done.set()  # stop the poll loop first; no more cookie snaps
-                if mode == "browse-attach":
+                if attached_browser:
                     _say("Ctrl+C — detaching (browser stays open)…")
-                    # Do NOT call browser_obj.close() — that closes the user's
-                    # browser. Just break; sync_playwright exit drops the CDP
-                    # WebSocket connection, leaving the browser running.
+                    # Do NOT close the attached browser or context: the user's
+                    # real browser and all of its tabs remain usable.
                 else:
                     _say("Ctrl+C — closing browser…")
                     try:
-                        if browser_obj is not None:
-                            browser_obj.close()
-                        else:
+                        if context is not None:
                             context.close()
                     except Exception:
                         pass  # greenlet noise during shutdown — already done
+                    if browser_obj is not None:
+                        try:
+                            browser_obj.close()
+                        except Exception:
+                            pass
             finally:
                 _snapshot_cookies(context)  # final cookie snapshot (main thread)
     finally:

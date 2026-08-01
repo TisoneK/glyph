@@ -455,6 +455,7 @@ def test_home_screen_stage_checkbox_defaults(tmp_path):
             await pilot.pause()
             for sid in ("schema", "rosetta", "sensitive", "snihunt"):
                 assert app.query_one(f"#st_{sid}", Checkbox).value is True
+            assert app.query_one("#st_browser", Checkbox).value is False
             assert app.query_one("#st_vpndec", Checkbox).value is False
             assert app.query_one("#vpnfile", Input).disabled is True
             # CSS regression guard (Session 27): the home layout used to be
@@ -466,9 +467,9 @@ def test_home_screen_stage_checkbox_defaults(tmp_path):
     asyncio.run(go())
 
 
-def test_home_screen_threads_stage_selection(tmp_path, monkeypatch):
-    """Unchecking a stage on the home screen threads that choice into the
-    dashboard's analysis flags (capture is faked)."""
+def test_home_screen_threads_browser_mode_and_stage_selection(tmp_path, monkeypatch):
+    """The home screen threads both browser mode and analysis stage choices
+    into the live dashboard (capture is faked)."""
     import asyncio
 
     from glyph.tui.app import HAS_TEXTUAL
@@ -492,14 +493,69 @@ def test_home_screen_threads_stage_selection(tmp_path, monkeypatch):
             await pilot.pause()
             app.query_one("#st_sensitive", Checkbox).value = False
             app.query_one("#st_snihunt", Checkbox).value = False
+            app.query_one("#st_browser", Checkbox).value = True
             app.query_one("#url").value = "example.com"
             await pilot.press("enter")          # submit URL -> dashboard
             await pilot.pause()
             assert isinstance(app.screen, DashboardScreen)
             assert app.screen._no_sensitive is True
             assert app.screen._no_snihunt is True
+            assert app.screen.live["kwargs"]["browse"] is True
+            assert app.screen.live["kwargs"]["cdp_url"] == "http://localhost:9222"
             assert app.screen._no_schema is False  # untouched stage stays on
             assert app.screen._no_rosetta is False
+
+    asyncio.run(go())
+
+
+def test_home_browser_mode_all_tabs_and_dashboard_stop(tmp_path, monkeypatch):
+    """Browser mode permits an empty URL for all-tabs capture, and the
+    dashboard's Stop capture action signals the worker without touching
+    Playwright objects from the UI thread."""
+    import asyncio
+    import time
+
+    from glyph.tui.app import HAS_TEXTUAL
+    if not HAS_TEXTUAL:
+        import pytest
+        pytest.skip("textual not installed")
+    from textual.widgets import Checkbox
+    import glyph.capture.driver as drv
+    from glyph.tui.app import DashboardScreen, GlyphApp
+
+    observed = {"stop_event": None, "started": False}
+
+    def fake_capture(cat, url, **kw):
+        observed["stop_event"] = kw["stop_event"]
+        observed["started"] = True
+        cat.set_meta("capture_status", "running")
+        while not kw["stop_event"].is_set():
+            time.sleep(0.01)
+        cat.set_meta("capture_status", "done")
+        return {"flows": 0, "pages": 0, "labels": 0,
+                "by_source": {}, "error": None, "mode": "browse-attach"}
+
+    monkeypatch.setattr(drv, "capture_url", fake_capture)
+    db = str(tmp_path / "browser-stop.db")
+    app = GlyphApp(home=True, db_path=db)
+
+    async def go():
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#st_browser", Checkbox).value = True
+            app.query_one("#url").value = ""
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            assert isinstance(app.screen, DashboardScreen)
+            assert app.screen.live["url"] is None
+            assert app.screen.live["kwargs"]["browse"] is True
+            assert observed["started"] is True
+            await pilot.press("s")
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if observed["stop_event"].is_set():
+                    break
+            assert observed["stop_event"].is_set()
 
     asyncio.run(go())
 

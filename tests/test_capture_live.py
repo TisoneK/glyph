@@ -225,6 +225,37 @@ def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
 
 
 @_BROWSE_SKIP
+def test_browse_attach_stop_event_detaches_without_closing_browser(tmp_path, monkeypatch):
+    """A TUI stop signal ends the worker and preserves the attached browser."""
+    import glyph.capture.driver as drv
+    from glyph.catalog import Catalog
+
+    existing_context = _FakeContext()
+    target_browser = _FakeBrowser(contexts=[existing_context], via_cdp=True)
+    chromium = _FakeChromium(cdp_browser=target_browser, cdp_raises=False)
+    _patch_playwright(monkeypatch, chromium)
+
+    db = str(tmp_path / "stop.db")
+    cat = Catalog(db)
+    import threading as _t
+    import time
+    stop = _t.Event()
+
+    def _request_stop():
+        time.sleep(0.2)
+        stop.set()
+
+    _t.Thread(target=_request_stop, daemon=True).start()
+    res = drv.capture_url(cat, "https://target.test", browse=True,
+                          stop_event=stop, progress=lambda m: None)
+    assert res["mode"] == "browse-attach"
+    assert stop.is_set()
+    assert target_browser.closed is False
+    assert cat.get_meta("capture_status") == "done"
+    cat.close()
+
+
+@_BROWSE_SKIP
 def test_browse_attach_all_traffic_hooks_every_tab(tmp_path, monkeypatch):
     """No url → all-traffic: every existing tab is hooked + context.on('page')."""
     import glyph.capture.driver as drv
@@ -337,6 +368,36 @@ def test_browse_flags_in_parser():
     args = build_parser().parse_args(["capture", "live", "--browse"])
     assert args.url is None
     assert args.browse is True
+
+
+def test_browser_option_is_a_real_browser_mode_alias():
+    """The requested ``--browser`` spelling enables continuous real-browser
+    capture, while still accepting a browser name for launch fallback.
+
+    The URL is positional before the flag when both are supplied; omitting it
+    intentionally selects all-traffic mode over the user's existing tabs.
+    """
+    args = build_parser().parse_args(
+        ["run", "live", "https://target.test", "--browser"])
+    assert args.browser == "chrome"
+    assert args.browser_requested is True
+    assert args.url == "https://target.test"
+    kw = _live_kwargs(args)
+    assert kw["browse"] is True
+    assert kw["cdp_url"] == "http://localhost:9222"
+
+    args = build_parser().parse_args(
+        ["capture", "live", "https://target.test", "--browser", "brave"])
+    assert args.browser == "brave"
+    assert args.browser_requested is True
+    assert args.url == "https://target.test"
+
+
+def test_browser_option_without_url_enables_all_traffic():
+    args = build_parser().parse_args(["capture", "live", "--browser"])
+    assert args.url is None
+    assert args.browser_requested is True
+    assert _live_kwargs(args)["browse"] is True
 
 
 def test_live_kwargs_carries_browse_options(monkeypatch):
