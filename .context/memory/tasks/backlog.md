@@ -293,3 +293,6 @@ for the authoritative implementation — read ADR-14, not ADR-13.
       `websocket` handler to the addon (captures WS frames), and documents browser-proxy +
       cert-install per browser. ~100-150 LOC. Deferred until a Firefox/Safari user asks.
       Low-Medium. See ADR-14 + review section 7.
+
+---
+- [x] **TUI target picker** (added 2026-07-31 in the Session 18 follow-ups; completed Session 28, product commit `21d3739`) — the dashboard now opens a `t` picker over registered real targets, activates the selected target, reloads all views, excludes `(unassigned)`, and blocks switching while capture/analysis workers are active.

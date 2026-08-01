@@ -450,3 +450,11 @@ never harvested.
   on the App class, not the Screen class. Any new Screen with CSS must add it
   to ``GlyphApp.CSS`` (or push the screen) or the styling silently won't apply
   — and no widget-level test will catch it unless it asserts computed CSS/region.
+
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 28)
+- **Problem:** Existing `.context/memory` files use CRLF, and normal edit operations made newly added lines appear as trailing whitespace under `git diff --check`.
+- **Cost:** Small finalization delay while preserving append-only history and avoiding a whole-file line-ending rewrite.
+- **Cause:** Mixed line-ending conventions in legacy context files; new edits inherited CRLF while Git's whitespace check flags CR on added lines.
+- **Workaround / fix:** Converted only this session's exact added lines to LF using binary replacements; appended new records with Python append mode and explicit LF. Verified with `git diff --check`.
+- **Prevent next time:** Inspect line endings before editing context files; preserve old bytes and write new appended/replaced lines with LF without normalizing the full file.

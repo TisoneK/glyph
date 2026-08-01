@@ -12,5 +12,5 @@ check its session entry and backlog before starting.
 -->
 
 - **Session:** 2026-08-01 — Buffy / deepseek-v4-flash
-- **Task:** (cleared) Session 27 done — TUI overhaul: home redesign + stage checkboxes + vpndec file input; App.CSS root-cause fix for the squeezed layout; dashboard compact brand row + host clipping; 177 pass / 5 skip.
+- **Task:** Session 28 done — quit confirmation/graceful shutdown; detached SNI lifecycle; TUI target switching.
 - **Status:** done

@@ -751,3 +751,11 @@ on the main thread's poll loop, not a daemon thread.
   --no-schema/--no-rosetta CLI flags (pipeline supports, renderers need
   None-guards).
 - **Report:** .context/memory/reviews/2026-08-01-tui-overhaul.md
+
+---
+## 2026-08-01 — Buffy / deepseek-v4-flash (Session 28)
+- **Task:** Implement quit confirmation/graceful shutdown, detach SNI hunting from the core parallel pool, and add TUI switching among previously processed targets.
+- **Commits:** 1 product commit (`21d3739`); context bookkeeping commit follows.
+- **Outcome:** done. Added quit modal and tracked worker shutdown, separate target-pinned `run_snihunt()` lifecycle, and dashboard target picker (`t`). Added lifecycle, pipeline, and target-selection regression tests. Full suite: 180 passed / 5 skipped.
+- **Open items:** Windows live-TUI verification; consider a bounded shutdown timeout/fallback for pathological hangs.
+- **Report:** .context/memory/reviews/2026-08-01-quit-sni-targets.md

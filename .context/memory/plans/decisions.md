@@ -756,3 +756,10 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
   to them when ``stages`` is absent. ``FlowDetail #detail`` padding now applies
   (previously scoped to the wrong screen). A ticked-but-empty vpndec path
   bells instead of silently doing nothing.
+
+---
+## ADR-18: TUI quit lifecycle, detached SNI, and target switching (2026-08-01)
+- **Status:** accepted
+- **Context:** The TUI previously exited directly from `q`/Escape, the SNI hunt was coupled to the analysis pool, and the dashboard had no way to inspect a previously processed target without leaving the TUI. The catalog already persists an active target and the live dashboard already has background capture/analysis workers.
+- **Decision:** Add a Yes/Keep-working quit modal and track capture, core analysis, finalization, and SNI workers in `GlyphApp`; shutdown waits for worker completion and visibly reports that it is finishing active work. Keep schema→Rosetta and sensitive in the core parallel pool, but move SNI to `run_snihunt()` with its own target-pinned Catalog lifecycle. The headless CLI awaits SNI for complete output; the live TUI starts it as a separate worker after core finalization. Add a `t` target picker backed by `Catalog.targets()`/`set_active_target()`, exclude `(unassigned)`, and block switching while any worker is active.
+- **Consequences:** Python threads are not forcibly cancellable, so graceful shutdown may wait for a long browser/network operation; a bounded timeout/fallback is a future UX decision. SNI cannot redirect writes after a target switch because its worker reactivates the original host. TUI views now follow the selected persisted target.

@@ -40,7 +40,7 @@ block (and its "last verified" date) every time you run on it again.
 - **Verified commands (2026-08-01):**
   - `python3 -m venv .venv && .venv/bin/python -m pip install -e . pytest` — clean install of `glyph-re` (pure-stdlib base) + pytest
   - `.venv/bin/python -m pip install -e '.[dev]'` → **succeeds on this Mac** (Session 21; after the mitmproxy floor fix). Installs mitmproxy 9.0.1 (the last Python-3.9-compatible release), playwright 1.60.0, duckdb 1.4.5, pycryptodome, genson, textual, rich. NOTE: mitmproxy 10+ needs Python >=3.10 so pip pins 9.0.1 here; the Windows box (3.14) gets the latest.
-  - `.venv/bin/python -m pytest -q` → **161 passed, 5 skipped** (Session 22; up from 159/5 — +2 by_type regression tests). Earlier: 159/5 (Session 21; playwright now installed so the 4 browse tests run+pass)
+  - `.venv/bin/python -m pytest -q` → **180 passed, 5 skipped** (Session 28; TUI lifecycle, detached-SNI, and target-picker tests included). Earlier: 177/5 (Session 27), 161/5 (Session 22; playwright now installed so the 4 browse tests run+pass)
   - `.venv/bin/playwright install chromium` → succeeds (Session 22; browser binary + deps installed — the last blocker to on-device live capture)
   - `.venv/bin/glyph capture live https://example.com --db /tmp/glyph-smoke.db` → 46 flows + 46 DOM labels, exit 0 (Session 22 smoke test)
   - `.venv/bin/python -m pytest tests/test_tui.py tests/test_capture_live.py tests/test_capture.py tests/test_cli.py -q` → 37 passed, 4 skipped
