@@ -706,3 +706,25 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 - **Supersedes / amends:** nothing. Builds on ADR-10 (snihunt finalize-only in the TUI —
   unchanged: live ticks still skip the hunt), ADR-12 (multi-target — per-lane set_target
   keeps every write stamped with the active target_id).
+
+---
+## ADR-16: The current target is persisted and restored for display commands (2026-08-01)
+- **Status:** accepted
+- **Context:** Users reported that table outputs (flows, dictionary, sensitive, dashboard)
+  fetched rows from ALL targets instead of only the current one. The store layer already
+  filtered every read to the ACTIVE target — but the active target lived only in memory on
+  each `Catalog` instance, so every display command that opened a fresh `Catalog` had no
+  active target and reads silently fell back to all targets.
+- **Decision:** Persist the current target as meta key `active_target_id` (written by
+  `set_target`/`set_active_target`, cleared by `clear_active_target`/`set_active_target(None)`/
+  `remove_target`). Add `Catalog(path, restore_active=True)` to restore it on open (refusing
+  the reserved unassigned bucket id=0 and self-cleaning stale ids). Display + stage CLI
+  commands, all TUI read sites, `pipeline._open()`, and the mitm addon opt in;
+  run/capture write paths stay pristine (ADR-12 unchanged — they set their own target).
+  `glyph target list` marks the current target; `glyph target show` persists the switch.
+- **Consequences:** The reserved (unassigned) bucket (id=0) can never become the restored
+  current target. `set_active_target(0)` is one-shot display only and never nukes a
+  previously persisted real target. Passive mitm proxy traffic buckets under the persisted
+  current target — use a per-target proxy run or a fresh catalog for the unassigned fallback.
+  Future display commands must pass `restore_active=True` (via `_shared.catalog`) or they
+  will read ALL targets' rows again.
