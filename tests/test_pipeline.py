@@ -170,8 +170,8 @@ def test_no_schema_and_no_rosetta_skip_lane_stages(tmp_path, make_entry, monkeyp
     """Session 27: each stage of the schema->rosetta lane can be opted out
     independently (the TUI checkboxes), without touching the other lanes.
     A skipped stage leaves its result key ``None``."""
-    import glyph.schema as sch
     import glyph.rosetta as ros
+    import glyph.schema as sch
     import glyph.sensitive as sens
     db = _seeded(tmp_path, make_entry)
 

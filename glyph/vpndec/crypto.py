@@ -15,9 +15,9 @@ import hashlib
 from typing import Optional
 
 try:
-    from Crypto.Cipher import AES, ChaCha20_Poly1305
-    from Crypto.Protocol.KDF import PBKDF2
+    from Crypto.Cipher import AES, ChaCha20_Poly1305  # noqa: F401  availability probe
     from Crypto.Hash import SHA256
+    from Crypto.Protocol.KDF import PBKDF2
     HAS_CRYPTO = True
 except ImportError:  # pragma: no cover
     HAS_CRYPTO = False

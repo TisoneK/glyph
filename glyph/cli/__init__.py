@@ -50,7 +50,6 @@ from glyph.cli import (
     catalog,
     codegen,
     dashboard,
-    dict as dict_cmd,
     dom,
     drift,
     fingerprint,
@@ -67,7 +66,10 @@ from glyph.cli import (
     target,
     vpndec,
 )
-from glyph.cli._shared import live_kwargs as _live_kwargs  # re-export for tests
+from glyph.cli import (
+    dict as dict_cmd,
+)
+from glyph.cli._shared import live_kwargs as _live_kwargs  # noqa: F401  re-export for tests
 
 # Registration order = help-listing order.
 _COMMANDS = [

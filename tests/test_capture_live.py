@@ -218,7 +218,8 @@ def test_browse_attach_connects_and_hooks_target_tab(tmp_path, monkeypatch):
     cat = Catalog(db)
     # Fire the browser's "disconnected" handlers shortly after capture starts
     # (the driver registers one → sets `done` → the blocking wait returns).
-    import threading as _t, time
+    import threading as _t
+    import time
     def _fire_disconnect():
         time.sleep(0.2)
         for fn in target_browser._handlers.get("disconnected", []):
@@ -297,7 +298,8 @@ def test_browse_attach_all_traffic_hooks_every_tab(tmp_path, monkeypatch):
 
     db = str(tmp_path / "b.db")
     cat = Catalog(db)
-    import threading as _t, time
+    import threading as _t
+    import time
     def _fire_disconnect():
         time.sleep(0.2)
         for fn in target_browser._handlers.get("disconnected", []):
@@ -328,7 +330,8 @@ def test_browse_launch_fallback_when_no_cdp(tmp_path, monkeypatch):
 
     db = str(tmp_path / "b.db")
     cat = Catalog(db)
-    import threading as _t, time
+    import threading as _t
+    import time
     # In the launch-fallback, browser_obj is context.browser (None for a
     # persistent context) → the driver watches context.on("close"). Fire it.
     fired = {"ctx": None}

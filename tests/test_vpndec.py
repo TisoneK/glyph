@@ -12,15 +12,13 @@ decryptors. If it's absent, those tests skip and only the no-crypto path
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 from glyph.catalog import Catalog
-from glyph.vpndec import decode_bytes, decode_file
 from glyph.vpndec import crypto as crypto_mod
-from glyph.vpndec import detect
+from glyph.vpndec import decode_bytes, decode_file, detect
 from glyph.vpndec.models import DecryptStatus, Format, Scheme
 
 INJECTX_CONFIGS = Path("/home/z/my-project/injectx-work/InjectX/assets/configs")
@@ -223,6 +221,7 @@ def test_catalog_reset_clears_vpn_configs(tmp_path):
 
 def test_tui_vpndec_rows(tmp_path):
     import base64
+
     from glyph.tui import data as D
     p = base64.b64encode(json.dumps({"type": "VLESS", "server": "x.test",
                                      "port": 443}).encode()).decode()
@@ -240,6 +239,7 @@ def test_tui_vpndec_rows(tmp_path):
 
 def test_tui_summary_includes_vpn_count(tmp_path):
     import base64
+
     from glyph.tui import data as D
     p = base64.b64encode(json.dumps({"type": "SSH"}).encode()).decode()
     cfg = decode_bytes("t.dark", ("darktunnel://" + p).encode(),
@@ -256,6 +256,7 @@ def test_tui_summary_includes_vpn_count(tmp_path):
 
 def test_cli_vpndec_dark(tmp_path, capsys):
     import base64
+
     from glyph.cli import main
     f = tmp_path / "t.dark"
     p = base64.b64encode(json.dumps(
@@ -271,6 +272,7 @@ def test_cli_vpndec_dark(tmp_path, capsys):
 
 def test_cli_vpndec_json(tmp_path, capsys):
     import base64
+
     from glyph.cli import main
     f = tmp_path / "t.dark"
     p = base64.b64encode(json.dumps(

@@ -17,7 +17,6 @@ from glyph.catalog import (
     FINDING_SNI_BUG_HOST,
     Catalog,
     Finding,
-    severity_rank,
 )
 from glyph.sensitive import endpoints as endpoints_mod
 from glyph.sensitive import party as party_mod

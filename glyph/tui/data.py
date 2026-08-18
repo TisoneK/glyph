@@ -13,7 +13,6 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from glyph.catalog import Catalog
-from glyph.catalog.normalize import template_path
 
 Rows = Tuple[List[str], List[List[str]]]  # (headers, rows)
 
@@ -270,8 +269,8 @@ def schema_rows(cat: Catalog) -> Rows:
 
 
 def sensitive_rows(cat: Catalog, include_noise: bool = False) -> Rows:
-    from glyph.sensitive.scan import is_noise
     from glyph.cli._format import mask_value
+    from glyph.sensitive.scan import is_noise
     headers = ["#", "SEVERITY", "CATEGORY", "KIND", "HOST", "LOCATION", "VALUE"]
     kind_label = {"sensitive_data": "data", "sensitive_endpoint": "endpoint",
                   "risk": "risk"}

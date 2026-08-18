@@ -257,8 +257,9 @@ def test_confirmed_quit_waits_for_workers_and_finishes(tmp_path, monkeypatch):
     if not HAS_TEXTUAL:
         import pytest
         pytest.skip("textual not installed")
-    from glyph.tui.app import GlyphApp, QuitConfirmScreen
     from textual.widgets import Static
+
+    from glyph.tui.app import GlyphApp, QuitConfirmScreen
 
     app = GlyphApp(home=False, db_path=str(tmp_path / "wait.db"), live=None)
     release = threading.Event()
@@ -319,7 +320,7 @@ def test_target_picker_switches_to_previous_target(tmp_path):
     cat = Catalog(db)
     first = cat.set_target("first.example")
     cat.add_flow(Flow(method="GET", url="https://first.example/", host="", path=""))
-    second = cat.set_target("second.example")
+    cat.set_target("second.example")
     cat.add_flow(Flow(method="GET", url="https://second.example/", host="", path=""))
     cat.close()
 
@@ -480,12 +481,14 @@ def test_geo_blocked_capture_opens_home_settings(tmp_path):
     """A geo-blocked live state opens the acknowledgement dialog and its OK
     action returns the user to the main settings screen."""
     import asyncio
+
     from glyph.tui.app import HAS_TEXTUAL
     if not HAS_TEXTUAL:
         import pytest
         pytest.skip("textual not installed")
-    from glyph.tui.app import DashboardScreen, GeoBlockedScreen, GlyphApp, HomeScreen
     from textual.widgets import Input
+
+    from glyph.tui.app import DashboardScreen, GeoBlockedScreen, GlyphApp, HomeScreen
     app = GlyphApp(home=False, db_path=str(tmp_path / "geo.db"),
                    live={"url": "https://blocked.test", "kwargs": {}})
 
@@ -583,6 +586,7 @@ def test_home_screen_stage_checkbox_defaults(tmp_path):
         import pytest
         pytest.skip("textual not installed")
     from textual.widgets import Checkbox, Input
+
     from glyph.tui.app import GlyphApp
     app = GlyphApp(home=True, db_path=str(tmp_path / "h.db"))
 
@@ -609,12 +613,14 @@ def test_home_screen_threads_browser_settings(tmp_path, monkeypatch):
     """Home settings pass proxy, executable, profile, and force-launch into
     the live capture payload even when the browser checkbox was not toggled."""
     import asyncio
+
     from glyph.tui.app import HAS_TEXTUAL
     if not HAS_TEXTUAL:
         import pytest
         pytest.skip("textual not installed")
-    from glyph.tui.app import DashboardScreen, GlyphApp
     from textual.widgets import Input
+
+    from glyph.tui.app import DashboardScreen, GlyphApp
     app = GlyphApp(home=True, db_path=str(tmp_path / "settings.db"))
 
     async def go():
@@ -647,8 +653,9 @@ def test_home_screen_threads_browser_mode_and_stage_selection(tmp_path, monkeypa
         import pytest
         pytest.skip("textual not installed")
 
-    import glyph.capture.driver as drv
     from textual.widgets import Checkbox
+
+    import glyph.capture.driver as drv
 
     def fake_capture(cat, url, **kw):
         cat.set_meta("capture_status", "done")
@@ -690,6 +697,7 @@ def test_home_browser_mode_all_tabs_and_dashboard_stop(tmp_path, monkeypatch):
         import pytest
         pytest.skip("textual not installed")
     from textual.widgets import Checkbox
+
     import glyph.capture.driver as drv
     from glyph.tui.app import DashboardScreen, GlyphApp
 

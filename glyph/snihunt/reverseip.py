@@ -10,7 +10,7 @@ Bounded and graceful: any error or timeout returns ``[]``.
 """
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import List, Optional
 
 from glyph.snihunt._net import HttpGet, default_http_get, get_text
 

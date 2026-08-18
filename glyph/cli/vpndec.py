@@ -37,9 +37,10 @@ def add_parser(sub) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
+    import os
+
     from glyph.vpndec import decode_file
     from glyph.vpndec.keys import KeyStore
-    import os
     keys = KeyStore(args.keyfile or os.environ.get("GLYPH_VPNKEYFILE"))
     cfg = decode_file(args.file, keys=keys)
 
@@ -132,7 +133,7 @@ def _render_plain(cfg, args) -> None:
     if cfg.ssh_user:
         print(f"  ssh user: {cfg.ssh_user}")
     if cfg.ssh_pass:
-        print(f"  ssh pass: (redacted in display, kept in catalog)")
+        print("  ssh pass: (redacted in display, kept in catalog)")
     if cfg.proxy_host:
         print(f"  proxy: {cfg.proxy_host}" +
               (f":{cfg.proxy_port}" if cfg.proxy_port else ""))

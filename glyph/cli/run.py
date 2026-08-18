@@ -268,8 +268,9 @@ def run_live(args: argparse.Namespace) -> int:
     # while the user's real browser remains open, so it flows through the
     # normal TUI/live-worker path below.
     if is_browse_mode(args) and getattr(args, "browse", False):
-        from glyph.capture import capture_live
         from urllib.parse import urlparse
+
+        from glyph.capture import capture_live
         if not url:
             _progress("⚠ browse-all mode: capturing EVERY tab in your browser.")
         else:
@@ -309,8 +310,9 @@ def run_live(args: argparse.Namespace) -> int:
         return 0
     # Headless fallback (pipe / CI / --no-tui / no textual): capture
     # synchronously, then print the designed summary.
-    from glyph.capture import capture_live
     from urllib.parse import urlparse
+
+    from glyph.capture import capture_live
     _progress(f"launching browser → {url}")
     _progress("(driving the page; capturing flows as they load…)")
     cat = catalog(args)

@@ -59,6 +59,7 @@ def test_run_coexists_across_targets(tmp_path, make_entry):
     # target_id. A re-run of the SAME target replaces only that target's
     # rows (clear_target, not reset).
     import json
+
     from glyph.catalog import Catalog
     db = str(tmp_path / "c.db")
     first = tmp_path / "a.har"
@@ -133,6 +134,7 @@ def test_report_live_prints_aggregated_types(capsys):
 def _run_with_pending(tmp_path, make_entry):
     """Build a catalog file with a pending reference-join row; return its path."""
     import json
+
     from glyph.capture import ingest_har
     from glyph.catalog import Catalog
     from glyph.rosetta import build_dictionary

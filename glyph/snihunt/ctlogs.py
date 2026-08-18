@@ -12,9 +12,9 @@ Both are bounded with a per-domain cap and 429-aware.
 """
 from __future__ import annotations
 
-from typing import Callable, Optional, Set
+from typing import Optional, Set
 
-from glyph.snihunt._net import HttpGet, get_json, get_text
+from glyph.snihunt._net import HttpGet, get_json
 
 _CERTSPOTTER = "https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names"
 _CRTSH = "https://crt.sh/?q=%.{domain}&output=json"

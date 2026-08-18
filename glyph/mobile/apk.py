@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import zipfile
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from urllib.parse import urlsplit
 
 from glyph.catalog import Catalog, Flow

@@ -18,8 +18,8 @@ the user already possesses and names no tunneling tool (ADR-3).
 """
 from __future__ import annotations
 
-from glyph.vpndec.decode import decode_file, decode_bytes
-from glyph.vpndec.models import VpnConfig, Format, Scheme, DecryptStatus
+from glyph.vpndec.decode import decode_bytes, decode_file
+from glyph.vpndec.models import DecryptStatus, Format, Scheme, VpnConfig
 
 __all__ = ["decode_file", "decode_bytes", "VpnConfig", "Format", "Scheme",
            "DecryptStatus"]

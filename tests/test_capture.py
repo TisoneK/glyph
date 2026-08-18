@@ -19,7 +19,7 @@ def test_harvest_labels_keeps_attrs():
     labels = harvest_labels(
         "<div><span data-status='3' class='b'>Shipped</span>"
         "<span data-status='1'>Pending</span></div>")
-    texts = {l["text"]: l["attrs"] for l in labels}
+    texts = {label["text"]: label["attrs"] for label in labels}
     assert texts["Shipped"]["data-status"] == "3"
     assert texts["Pending"]["data-status"] == "1"
 
@@ -28,8 +28,8 @@ def test_harvest_skips_script_style():
     labels = harvest_labels(
         "<p>Visible</p><script>var x='Hidden'</script>"
         "<style>.a{color:red}</style>")
-    assert any(l["text"] == "Visible" for l in labels)
-    assert not any("Hidden" in l["text"] for l in labels)
+    assert any(label["text"] == "Visible" for label in labels)
+    assert not any("Hidden" in label["text"] for label in labels)
 
 
 def test_plain_text():

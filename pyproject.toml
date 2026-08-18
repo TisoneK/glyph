@@ -43,7 +43,7 @@ tui = ["textual>=0.60"]
 # envelope, OVPN) still decode; crypto-dependent formats report no_decryptor.
 crypto = ["pycryptodome>=3.20"]
 # Everything, plus test tooling.
-dev = ["glyph-re[live,schema,analytics,tui,crypto]", "pytest>=7"]
+dev = ["glyph-re[live,schema,analytics,tui,crypto]", "pytest>=7", "ruff>=0.16"]
 
 [project.scripts]
 glyph = "glyph.cli:main"
@@ -57,3 +57,23 @@ include = ["glyph*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+# Classic ruff default set: pycodestyle errors (E4/E7/E9) + pyflakes (F) +
+# isort (I). Deliberately not enabling UP/BLE/S/SIM etc. — those fight the
+# project's Python 3.9 constraint (typing.Optional/List instead of X | Y)
+# and add noise without catching real bugs.
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+# E701/E702 (multiple statements on one line): the codebase deliberately
+# uses compact one-liners (`if x: y`, `A1 = "A1"; A2 = "A2"` constant
+# tables). Keep that style; the gate still catches the real bug classes.
+ignore = ["E701", "E702"]
+
+[tool.ruff.lint.per-file-ignores]
+# glyph/cli/__init__.py imports its submodules at the bottom of the file
+# (after the parser class) to avoid circular imports — intentional.
+"glyph/cli/__init__.py" = ["E402"]

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import json
 
-from glyph.catalog import Catalog, Flow, FINDING_SNI_BUG_HOST
+from glyph.catalog import FINDING_SNI_BUG_HOST, Catalog, Flow
 from glyph.cli import main
-from glyph.snihunt import run_hunt, summarize
 from glyph.snihunt import cdn as cdn_mod
 from glyph.snihunt import extract as extract_mod
+from glyph.snihunt import run_hunt, summarize
 from glyph.snihunt import zerorate as zr_mod
 
 
@@ -120,7 +120,7 @@ def test_hunt_offline_local_heuristics_only():
                       url="https://0.facebook.com/login", host="", path="",
                       req_headers={"CF-Connecting-IP": "104.16.1.2"}))
     cat.add_flow(Flow(method="GET", url="https://api.shop.ke/x", host="", path=""))
-    summary = run_hunt(cat, net=False)
+    run_hunt(cat, net=False)
     findings = cat.findings(kind=FINDING_SNI_BUG_HOST)
     assert any(f.host == "0.facebook.com" for f in findings)
     fb = [f for f in findings if f.host == "0.facebook.com"][0]
@@ -157,7 +157,7 @@ def test_hunt_with_mocked_network_discovers_new_hosts():
     # probe=False: the mocked http_get doesn't cover the probe's raw socket
     # calls, so we disable the probe here (it's tested separately against
     # real hosts). net=True exercises the DoH/CT/reverse-IP mock.
-    summary = run_hunt(cat, net=True, http_get=fake, probe=False)
+    run_hunt(cat, net=True, http_get=fake, probe=False)
 
     findings = cat.findings(kind=FINDING_SNI_BUG_HOST)
     hosts = {f.host for f in findings}
@@ -238,7 +238,8 @@ def test_sensitive_summary_excludes_snihunt_findings():
     # The sensitive summary must NOT count sni_bug_host findings in its
     # actionable_total / by_severity. Session 16 fix: summarize filters to
     # sensitive-stage kinds only.
-    from glyph.sensitive import run_scan, summarize as sens_summarize
+    from glyph.sensitive import run_scan
+    from glyph.sensitive import summarize as sens_summarize
     cat = Catalog(":memory:")
     cat.add_flow(Flow(method="POST", url="https://a.t/api/login", host="", path="",
                       resp_mime="application/json", status=200,
@@ -360,8 +361,8 @@ def test_cli_snihunt_direct_target_no_net(tmp_path, capsys):
 
 def test_cli_snihunt_direct_target_normalizes_scheme(tmp_path, capsys):
     # A URL with scheme+path should normalize to just the host.
-    from glyph.cli import main
     from glyph.catalog import Catalog
+    from glyph.cli import main
     db = str(tmp_path / "c.db")
     assert main(["snihunt", "https://www.example.com/path", "--db", db,
                  "--no-net"]) == 0
@@ -373,8 +374,8 @@ def test_cli_snihunt_direct_target_normalizes_scheme(tmp_path, capsys):
 
 def test_cli_snihunt_catalog_mode_still_works(tmp_path, make_entry, capsys):
     # No positional target → runs over the existing catalog (the original mode).
-    from glyph.cli import main
     from glyph.capture import ingest_har
+    from glyph.cli import main
     db = str(tmp_path / "c.db")
     har = tmp_path / "s.har"
     har.write_text(json.dumps({"log": {"entries": [

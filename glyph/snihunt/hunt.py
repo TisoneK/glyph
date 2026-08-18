@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set
 
-from glyph.catalog import Catalog, Finding, FINDING_SNI_BUG_HOST
-from glyph.catalog.models import SEV_HIGH, SEV_MEDIUM, SEV_LOW
+from glyph.catalog import FINDING_SNI_BUG_HOST, Catalog, Finding
+from glyph.catalog.models import SEV_HIGH, SEV_LOW, SEV_MEDIUM
 from glyph.snihunt import cdn as cdn_mod
 from glyph.snihunt import ctlogs as ct_mod
 from glyph.snihunt import dns as dns_mod

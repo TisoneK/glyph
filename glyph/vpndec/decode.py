@@ -7,12 +7,11 @@ directly and routes encrypted formats to their decryptor.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Optional
 
 from glyph.vpndec import dark, ehi, hc, tls, ziv
-from glyph.vpndec.detect import detect_format, detect_format_bytes
+from glyph.vpndec.detect import detect_format_bytes
 from glyph.vpndec.keys import KeyStore
 from glyph.vpndec.models import DecryptStatus, Format, Scheme, VpnConfig
 

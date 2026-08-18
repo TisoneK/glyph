@@ -20,7 +20,6 @@ from typing import Optional
 
 from glyph.cli._shared import with_db
 
-
 # Per-OS default binary names + candidate paths for each browser. `shutil.which`
 # handles PATH lookup; the candidate lists cover common install locations that
 # aren't on PATH (macOS .app bundles, Windows Program Files).

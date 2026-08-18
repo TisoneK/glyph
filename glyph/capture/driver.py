@@ -24,12 +24,11 @@ import json
 import os
 import threading
 import time
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import unquote, urlparse
 
-from glyph.catalog import Catalog, Flow, PageObservation
 from glyph.capture.snapshot import harvest_labels, plain_text
-
+from glyph.catalog import Catalog, Flow, PageObservation
 
 _GEO_BLOCK_MARKERS = (
     "not available in your country",
@@ -490,8 +489,8 @@ def _capture_browse(catalog: Catalog, url: Optional[str], sync_playwright, *,
                     stop_event: Optional[threading.Event], timeout_ms: int,
                     progress=None) -> dict:
     """Browse mode — CDP-attach primary, launch fallback (ADR-14)."""
-    from collections import Counter
     import sys
+    from collections import Counter
 
     def _say(msg: str) -> None:
         if progress:

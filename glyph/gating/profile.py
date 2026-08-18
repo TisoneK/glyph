@@ -7,9 +7,8 @@ observation, not evasion: Glyph documents what defends a surface
 """
 from __future__ import annotations
 
-import re
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from glyph.catalog import Catalog
 

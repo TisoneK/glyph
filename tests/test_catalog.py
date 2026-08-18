@@ -38,7 +38,7 @@ def test_reachability_is_neutral_attribute(catalog: Catalog):
 
 def test_multi_target_coexists_and_clears_per_target(tmp_path):
     """ADR-12: multiple targets coexist; clear_target wipes only one."""
-    from glyph.catalog import Catalog, Finding, FINDING_SENSITIVE_DATA, SEV_HIGH
+    from glyph.catalog import FINDING_SENSITIVE_DATA, SEV_HIGH, Catalog, Finding
     from glyph.catalog.models import PageObservation
     cat = Catalog(str(tmp_path / "mt.db"))
     try:

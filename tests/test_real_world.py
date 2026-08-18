@@ -53,8 +53,8 @@ def _load_real_catalog() -> Catalog:
 def decoded_real():
     """Run the full pipeline on the real fixture once; cache for the module."""
     cat = _load_real_catalog()
-    from glyph.schema import infer_all
     from glyph.rosetta import build_dictionary
+    from glyph.schema import infer_all
     infer_all(cat)
     build_dictionary(cat)
     return {(d.json_path, str(d.code)): d for d in cat.dictionary()}

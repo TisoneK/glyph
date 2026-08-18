@@ -50,8 +50,8 @@ def run_analysis(db_path: str, *, target: Optional[str] = None,
     def _schema_rosetta() -> Dict[str, Any]:
         # Rosetta depends on schema's enum-candidate fields, so these stay
         # chained inside one worker while the sensitive lane runs beside it.
-        from glyph.schema import infer_all
         from glyph.rosetta import build_dictionary
+        from glyph.schema import infer_all
         cat = _open()
         try:
             out: Dict[str, Any] = {}

@@ -8,7 +8,7 @@ reads only what capture already recorded.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, Set
 
 from glyph.catalog import Catalog
 

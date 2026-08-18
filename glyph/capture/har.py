@@ -67,8 +67,8 @@ def ingest_har(catalog: Catalog, har_path: str,
     with open(har_path, "r", encoding="utf-8") as fh:
         har = json.load(fh)
     entries = (har.get("log") or {}).get("entries") or []
-    from urllib.parse import urlparse
     from collections import Counter
+    from urllib.parse import urlparse
 
     # Pass 1: parse entries + infer the target host. We do NOT write yet —
     # clear (if requested) must happen between target activation and the

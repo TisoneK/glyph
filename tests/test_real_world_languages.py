@@ -52,8 +52,8 @@ def _load_languages_catalog() -> Catalog:
 @pytest.fixture(scope="module")
 def decoded_languages():
     cat = _load_languages_catalog()
-    from glyph.schema import infer_all
     from glyph.rosetta import build_dictionary
+    from glyph.schema import infer_all
     infer_all(cat)
     build_dictionary(cat)
     return {(d.json_path, str(d.code)): d for d in cat.dictionary()}

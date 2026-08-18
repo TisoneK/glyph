@@ -446,6 +446,7 @@ if HAS_TEXTUAL:
             host is clipped so a single long host can't stretch the header
             (Session 27)."""
             from urllib.parse import urlparse
+
             from rich.text import Text
             cat = Catalog(self.db_path, restore_active=True)
             try:
@@ -465,8 +466,9 @@ if HAS_TEXTUAL:
 
         # -- live capture + refresh --------------------------------------
         def _capture_worker(self) -> None:
-            from glyph.capture.driver import capture_url
             from urllib.parse import urlparse
+
+            from glyph.capture.driver import capture_url
             cat = None
             try:
                 # Catalog construction itself can fail on Windows (bad path,
@@ -789,6 +791,7 @@ if HAS_TEXTUAL:
             once at finalize like the SNI hunt. Status/error land in meta so
             the 1s tick can surface them in the header."""
             import os
+
             from glyph.vpndec import decode_file
             from glyph.vpndec.keys import KeyStore
             cat = Catalog(self.db_path, restore_active=True)
