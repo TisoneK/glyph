@@ -30,7 +30,7 @@ block (and its "last verified" date) every time you run on it again.
 -->
 
 ---
-## bao@local (macOS) (last verified 2026-08-01)
+## bao@local (macOS) (last verified 2026-08-17)
 - **Identify by:** `$USER` = bao; repo path `~/Code/glyph`. NOTE: "bao" is the
   macOS ACCOUNT name (hostname `Baos-Mac-mini`); the USER is **Tisone Kironget**
   (see `user/identity.md`) — never conflate the account name with the person.
@@ -48,8 +48,15 @@ block (and its "last verified" date) every time you run on it again.
   - `.venv/bin/glyph --version` → `glyph 0.1.0` (console script installs)
   - `python3 -m glyph.cli ...` runs without install when `PYTHONPATH=<repo>` is set
   - `git` with the `osxkeychain` credential helper — commit + push to `origin` work
+  - `.venv/bin/ruff check .` → **All checks passed!** (Session 34; ruff 0.16.3 installed into `.venv`, ruleset in `pyproject.toml [tool.ruff]`: E4/E7/E9/F/I, E701/E702 ignored, per-file E402 for `glyph/cli/__init__.py`)
+  - `.venv/bin/ruff --version` → `ruff 0.16.3`
+  - `sh .context/core/bin/context-gates run pre-commit` → passes (git diff --cached --check + `ruff check .` + pytest; gate commands in `.context/memory/workflows/gates.conf`)
+  - `sh .context/core/bin/context-gates run exit` → passes (context-sync verify + git diff --check + ruff + pytest)
+  - `sh .context/core/bin/context-gates checkpoint` → `CHECKPOINT PASSED` (working-tree refresh; no project command configured)
+  - `sh .context/core/bin/context-sync verify` → `core OK ... (0.8.0)`; `status` → `source: 0.8.0 — up to date` — core updated 0.5.0 → 0.8.0 on 2026-08-17 (Session 34), adding `context-collab` + `context-gates` tools and the project `gates.conf`
 - **Quirks:**
   - **`.venv` now has the FULL dev extra** (playwright + mitmproxy + duckdb + pycryptodome since Session 21). Live browser capture now works on this Mac (Session 22: `playwright install chromium` run + headless smoke test). The live Textual DASHBOARD is verified on-device too (Session 23): `glyph run live https://example.com` in a real pty showed `● LIVE` → FLOWS streaming 0→46 → `✓ captured`, quit cleanly on `q`, catalog persisted 46 flows + 1 page. (No tmux here — use expect or a Python pty harness to drive full-screen TUIs.)
+  - **Lint gate: `ruff` runs under `.venv`** (Session 34) — system `python3` has no pytest/ruff, so gate commands in `gates.conf` are `.venv/bin/ruff check .` + `.venv/bin/python -m pytest`. `.venv` is gitignored; a fresh machine must `pip install -e '.[dev]'` (now includes `ruff>=0.16`) before gates pass. `ruff check` runs in ~1s; full pytest ~40s.
   - **`$USER` is `bao` (macOS account name; hostname `Baos-Mac-mini`) but the USER is Tisone Kironget** — see the Identify-by note above; never conflate the account name with the person.
   - `gh` CLI is NOT installed; pushes rely on the osxkeychain HTTPS credential helper. System Python is 3.9 — do not rely on 3.10+ syntax.
 
