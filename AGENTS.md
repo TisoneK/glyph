@@ -9,7 +9,7 @@ The "Core + Memory at a glance" section below was added by Session 2
 (2026-07-30) to give tier-1 agents a fast orientation map of the two
 zones without first having to read .context/README.md and the schema.
 It is project-owned documentation (the root AGENTS.md is NOT auto-
-refreshed by `context-sync update` — only `.context/README.md` is), so
+refreshed by `context-sync update` — only .context/README.md is), so
 custom additions survive core bumps. If a future core release changes
 the zone layout, the file modes, or the fact scopes, regenerate this
 file from .context/core/templates/AGENTS.md and re-add the section by
@@ -37,20 +37,30 @@ If you read nothing else, obey these rules:
 4. **Read memory before working:** at minimum
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
+   `.context/memory/collaboration/README.md` and relevant event files
+   when collaboration is enabled, `.context/memory/workflows/gates.conf`,
    `.context/memory/tasks/current.md`, and
-   `.context/memory/inefficiencies/log.md` (known traps).
-5. **One task at a time.** If `.context/memory/tasks/current.md` shows
-   another live session in progress, do not start.
+   `.context/memory/inefficiencies/log.md` (known traps). If the
+   active session has detailed notes at
+   `.context/memory/sessions/`, skim them for current state.
+5. **Choose the mode explicitly.** Without a shared collaboration
+   `session` + `issue`, `tasks/current.md` is the single-agent lock. In
+   collaboration mode, use an isolated git worktree/branch and the
+   immutable event trail; do not block peers on `tasks/current.md`. Before
+   each next action run `context-gates checkpoint`; before commits,
+   integration, and exit run the matching gate.
 6. **Append-only files are append-only:** `agents/sessions.md`,
    `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`,
    `inefficiencies/log.md`. Add at the bottom; never edit or delete
-   past entries.
+   past entries. Collaboration event files are stronger: immutable,
+   one event per file; emit a correction instead of editing one.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
 8. **Two surfaces, two prefixes:** editing product code = normal commit
    prefixes; editing `.context/` = `chore(context):` (reports:
-   `docs(review):`). Never mix both surfaces in one commit.
+   `docs(review):`). Never mix both surfaces in one commit. Collaboration
+   events are separate immutable context commits.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
    `.context/memory/tasks/current.md` is cleared. If the user has to
@@ -76,14 +86,16 @@ it is the entire sync model.
 | **core/** | `.context/core/` | the protocol package | **Never. Not one byte.** | Only via `context-sync update` (whole-tree, version-stamped, memory untouched) |
 | **memory/** | `.context/memory/` | this project | Yes — per each file's write mode | Normal session work, committed with the project |
 
-### Zone 1 — `core/` (read-only reference, vendored at version 0.3.0)
+### Zone 1 — `core/` (read-only reference, vendored at version 0.8.0)
 
 ```
 core/
-├── VERSION              # 0.3.0  (semver of this core tree)
+├── VERSION              # 0.8.0  (semver of this core tree)
 ├── CHANGELOG.md         # one entry per release + migration notes
 ├── MANIFEST.sha256      # checksums — `context-sync verify` checks every file
 ├── bin/context-sync     # POSIX sh, 8 commands (5 project + 3 package)
+├── bin/context-collab   # peer coordination + integration checks (opt-in)
+├── bin/context-gates    # lifecycle gates: checkpoint / pre-commit / integration / exit
 ├── rules/               # ai-engineering-protocol.md (cloud) + -local.md (IDE)
 ├── roles/               # overlays: feature-engineer, reviewer, security-auditor, docs-agent
 ├── schemas/             # context-schema.md (authoritative) + context.schema.json (mirror)
@@ -108,13 +120,14 @@ release) — **never patched into the vendored copy**.
 | Path (under `memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
 | `agents/sessions.md` | append-only | project | One entry per session: agent, model, task, commits, outcome |
-| `tasks/current.md` | overwrite | project | The one task in progress — **doubles as the concurrency lock** |
+| `tasks/current.md` | overwrite | project | The one task in progress — **the single-agent session lock** |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
 | `flaws/log.md` | append-only | project→package | Friction with the `.context/` system itself; flows upstream via `harvest` |
 | `inefficiencies/log.md` | append-only | project | Friction with the project's code/env/deps. Mark `Upstream: candidate` for protocol-level friction worth harvesting |
 | `reviews/YYYY-MM-DD-*.md` | new file per session | project | Session reports — commit as `docs(review):` |
 | `workflows/active.md` | overwrite | project | Standing session parameters; protocol recorded "by agent type" (both editions, never one) |
+| `workflows/gates.conf` | update-in-place | project | Lifecycle gate command registry (init via `context-gates init`) |
 | `system/environments.md` | update-in-place | **machine** | One block per machine, keyed by its "Identify by" line |
 | `system/ai-models.md` | update-in-place | **agent-model** | Registry + observations per agent/model |
 | `user/identity.md` | update-in-place | user | Who the user is |
