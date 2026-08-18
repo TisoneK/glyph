@@ -804,3 +804,12 @@ on the main thread's poll loop, not a daemon thread.
 - **Outcome:** done — added target/browser aliases and URL normalization, conservative geo-block detection with immediate metadata, browser path/profile/proxy propagation with forced launch, deterministic geo recovery for direct and Home-originated dashboards, Windows-safe quit handling, and regression coverage. Validation: 195 passed / 5 skipped; compileall and diff checks passed.
 - **Open items:** Real Windows/CDP verification, external Ctrl+C worker cleanup verification, and strict historical isolation for all-tabs capture remain in backlog.
 - **Report:** .context/memory/reviews/2026-08-01-geo-browser-targeting.md
+
+---
+## 2026-08-18 — Session 34
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** bao@local macOS (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Sync the context stack and stand up lint gates: update core 0.5.0 → 0.8.0, initialize/configure `gates.conf`, add ruff linting, record environment facts.
+- **Commits:** 5 — `f8c1142` (core → 0.8.0 + regenerated kickoff/AGENTS), `8bf3f60` (explicit pytest gates), `a53797f` (ruff + 92 violations fixed), `2dae214` (ruff in pre-commit/exit gates), `f782a5a` (environments.md facts).
+- **Outcome:** done — core updated to 0.8.0 (adds context-collab + context-gates), `.context/kickoff.md` + `AGENTS.md` regenerated from new templates (project-owned sections preserved), `gates.conf` initialized with explicit commands, ruff 0.16.3 added to dev extras and wired into pre-commit/exit gates (E4/E7/E9/F/I, E701/E702 ignored, E402 per-file for `glyph/cli/__init__.py`), all 92 existing violations fixed, availability-probe imports kept with targeted noqa. Validation: ruff clean, 195 passed / 5 skipped, both gates pass.
+- **Open items:** none — future tightening of the ruff ruleset (SIM/RUF) is optional once the baseline stays clean; collaboration mode (context-collab) available but not opted in.
+- **Report:** none (infrastructure/tooling session).
