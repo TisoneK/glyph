@@ -42,8 +42,6 @@ causes, "the current design does X because Y".
 
 | ID | Summary |
 |----|---------|
-| P-2026-09-23-1 | **Windows CRLF + stale stat cache.** A checkout can leave CRLF copies of core files while `git status` still reports the tree clean, so `ledger-sync verify` fails on every file and `git checkout -- .context_ledger/core` silently does nothing (git trusts the cached stat, never re-hashes). Delete-then-checkout restores LF; the recursive `.gitattributes` installed by core 2.x prevents recurrence. Diagnosed by proving the manifest hash matched the LF blob while the worktree bytes were CRLF. |
-| P-2026-09-23-2 | **`git add --renormalize .` is unsafe repo-wide here.** The root `.gitattributes` has no `text=auto`, so a global renormalize would stage CRLF into the blobs of ~25 product files (any path without an `eol=lf` attribute) instead of normalizing them. Normalize per path, or add a real repo-wide policy first. |
 
 ## Open questions
 
@@ -53,7 +51,6 @@ becomes a backlog row or an ADR in `plans/decisions.md`).
 
 | ID | Summary |
 |----|---------|
-| P-2026-09-23-3 | **Retarget the base package to Python 3.13 + Pydantic?** The user prefers 3.13 (stable on Windows) and Pydantic as the model layer; the package was written 3.9-compatible with stdlib dataclasses as a stopgap because 3.9 was the only interpreter on the macOS box. Adopting Pydantic makes it a hard dependency, which reopens ADR-2's "zero required dependencies" base. Needs a decision before the next schema-heavy stage. |
 
 ## Deferred work
 
@@ -63,8 +60,6 @@ out of the queue, not into the void.
 
 | ID | Summary |
 |----|---------|
-| P-2026-09-23-4 | **DuckDB catalog backend.** The catalog is SQLite today; a DuckDB backend was considered for analytical queries over large captures and consciously deferred. Revisit when a capture is big enough that SQLite aggregation is the bottleneck. |
-| P-2026-09-23-5 | **`glyph capture proxy` (mitmproxy) for Firefox/Safari.** CDP attach is Chromium-only, so non-Chromium users have no browse-mode path (they use `glyph run har`). The command would start `mitmdump -s glyph/capture/mitm.py`, add a websocket handler, and document browser-proxy + cert install per browser — roughly 100–150 LOC. Parked until a Firefox/Safari user asks for it. |
 
 ## Someday
 

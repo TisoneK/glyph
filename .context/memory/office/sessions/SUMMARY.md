@@ -1,24 +1,32 @@
-# Session Summary (compressed continuity — prunable)
+# Session Summary (compressed history — entries are removable)
 
-One line per session, newest at the bottom. Durable facts live in their
-domain files (`agents/sessions.md`, `plans/decisions.md`,
-`inefficiencies/log.md`, …) — this file is only for quick orientation.
-If this file exceeds ~40 lines, prune entries older than the last 10.
+One compact entry per session, newest at the bottom. Unlike
+`agents/sessions.md` (the formal registry, append-only forever), this
+file is a **working summary**: entries may be removed when a session is
+no longer useful, and older detail is expected to compress over time.
 
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 20: fixed the TUI's E2E wiring (stage opt-out flags now honored by the live dashboard; failed captures show ✗ failed; auto-capture progress lines; url check before TUI takeover). 156 pass / 8 skip. Report: reviews/2026-08-01-tui-e2e-wiring.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 21: fixed `pip install -e '.[dev]'` on the Mac — mitmproxy floor lowered to >=9 (mitmproxy 10+ needs Python >=3.10; Mac runs 3.9). Install verified, 159 pass / 5 skip. Also clarified identity: user is Tisone Kironget, "bao" is just the macOS account name.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 22: installed Playwright Chromium on the Mac + smoke-tested `glyph capture live https://example.com` end-to-end (46 flows, exit 0). Smoke test surfaced a by-type display bug (each type listed twice) — fixed with a shared by_type() aggregator used by report_live + run's _types_line. 161 pass / 5 skip. Report: reviews/2026-08-01-live-capture-smoke.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 23: verified the live Textual dashboard ON-DEVICE on the Mac (`glyph run live https://example.com` in a pty harness): ● LIVE → FLOWS streaming 0→46 → ✓ captured at ~15s, clean quit, catalog persisted. Closes the live-TUI verification open item from Session 15. No code changed. Report: reviews/2026-08-01-live-tui-on-device.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 24: parallel analysis pipeline (ADR-15) — schema→rosetta, sensitive, snihunt now run as 3 concurrent lanes (glyph/pipeline.py::run_analysis) instead of strictly sequential. Per-lane target-anchored catalogs also FIXED the unassigned-bucket bug (TUI analysis was writing fields/dictionary/findings to target_id=0). 165 pass / 5 skip. Report: reviews/2026-08-01-parallel-analysis-pipeline.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 25: profiled ADR-15's wall-clock speedup on larger synthetic HARs (before = old _gather order reconstructed, after = run_analysis). Offline/CPU-bound: 1.00x (GIL). Controlled I/O (deterministic CT/DNS/reverse-IP sleeps): 1.44x — snihunt's network I/O dominates and ~6s of CPU stages hide under it; parity identical. Win is I/O-bound-only. No code changed. Report: reviews/2026-08-01-adr15-parallel-profile.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 26: fixed tables fetching ALL targets' rows. The active target was in-memory only, so fresh Catalogs opened by display commands had none and reads fell back to all targets. Persisted active_target_id in meta + Catalog(restore_active=True) opt-in for display/stage commands + TUI reads; run/capture write paths stay pristine. target list marks current; target show switches it. 171 pass / 5 skip. Report: reviews/2026-08-01-target-filtered-tables.md.
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 27: TUI overhaul — home redesigned (centered shell, ANALYSIS STAGES checkboxes all-ON-except-vpndec + vpndec file input form), output page gets a compact logo brand row + clipped long hosts. Root-caused the squeezed layout: this Textual build never loads the DEFAULT screen's CSS — moved all screen CSS to GlyphApp.CSS (type-scoped) + CSS regression test. run_analysis gained no_schema/no_rosetta so every stage is skippable. 177 pass / 5 skip. Report: reviews/2026-08-01-tui-overhaul.md
+The purpose is **continuity, not archival completeness**. A future agent
+should understand at a glance what important work happened recently,
+what significant decisions were made, and where to find detail if needed.
 
-- 2026-08-01 — Buffy / deepseek-v4-flash — Session 28: added quit confirmation with tracked graceful shutdown, separated SNI into a target-pinned worker lifecycle, and added TUI target switching; 180 passed / 5 skipped. Product commit 21d3739. Report: reviews/2026-08-01-quit-sni-targets.md.
+Entries are separated by `---` so agents can parse them as discrete
+records.
 
-- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 29: added endpoint Data tab, payload classification, Windows/live-TUI diagnostics, final-analysis retries, and no-cache freshness policy; 181 passed / 5 skipped. Product commit df80a3e. Report: reviews/2026-08-01-endpoint-data-windows-tui.md.
-- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 30: added continuous CDP real-browser capture, TUI browser-live checkbox, safe stop/detach controls, all-tabs/target-tab scoping, and launch fallback ownership; 185 passed / 5 skipped. Product commit fd7948a. Report: reviews/2026-08-01-real-browser-live-capture.md.
-- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 31: fixed cross-platform quit confirmation and coordinated target-pinned SNI alongside core analysis; native Ctrl+Q/Ctrl+C now confirm, async shutdown has a visible timeout fallback, and run_pipeline overlaps SNI with core lanes; 188 passed / 5 skipped. Report: reviews/2026-08-01-quit-sni-parallel.md.
-- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 32: fixed live-browser event pumping, browser-close stop reporting, stale launch-profile tabs, sandbox configuration, all-tabs target visibility, and executable/profile selection; 189 passed / 5 skipped. Report: reviews/2026-08-01-live-browser-fixes.md.
-- 2026-08-01 — Buffy / openai/gpt-5.6-luna — Session 33: added explicit target/browser aliases, conservative geo-block UX, browser path/profile/proxy settings, deterministic Textual recovery for direct and Home-originated dashboards, and Windows-safe quit hardening; 195 passed / 5 skipped. Product commit 091cf0f. Report: reviews/2026-08-01-geo-browser-targeting.md.
-- 2026-08-18 — Buffy / deepseek-v4-pro — Session 34: infrastructure/tooling — synced core 0.5.0 → 0.8.0 (context-collab + context-gates), regenerated kickoff.md + AGENTS.md, initialized gates.conf with explicit pytest commands, added ruff 0.16.3 (dev extra + pre-commit/exit gates) and fixed all 92 existing violations (E4/E7/E9/F/I; E701/E702 ignored; probe imports kept with noqa); 195 passed / 5 skipped. Commits f8c1142..f782a5a.
+<!-- TEMPLATE — copy below the last entry:
+---
+- **YYYY-MM-DD — Session N** — <agent> / <model> — <one-line outcome>.
+  <Key decision or discovery, if any.>
+  Detail: .context_ledger/memory/office/sessions/YYYY-MM-DD-N/notes.md (or \"summary only\").
+-->
+
+<!-- GC GUIDANCE (not part of the template — remove this comment before committing):
+- Keep all entries from the last ~10 sessions.
+- Older entries: distill key facts into the durable logs (decisions,
+  inefficiencies, backlog) if they haven't been promoted already, then
+  remove the summary line. The compact entry in agents/sessions.md is
+  the permanent record that the session happened.
+- Never let SUMMARY.md become another giant history file — if it exceeds
+  ~40 lines, it's time to compress.
+- A removed summary line MUST have a corresponding permanent entry in
+  agents/sessions.md — never delete the only record of a session.
+-->
