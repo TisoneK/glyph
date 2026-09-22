@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Kofi | S001 | deepseek/deepseek-flash | Protocol migration to core 2.0.3, then the first live capture + analysis of cryptonichub.pro | Working | Phase 2: core 2.0.3 in place, office-001 closed and re-seeded; project facts + `.context_ledger/` rename still to finish before target work |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
