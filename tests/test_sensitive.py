@@ -41,6 +41,19 @@ def test_password_field_and_secret_gating():
     assert "secret_token" in {c for c, _, _ in scan_value("api_secret", rnd)}
 
 
+def test_public_identifier_names_are_not_secrets():
+    # Cloudflare Web Analytics publishes its site tag in the page HTML and
+    # echoes it back as `siteToken` in the /cdn-cgi/rum beacon payload; the
+    # name matches _SECRET_NAME but the value is public by construction, and
+    # flagging it chained into a bogus unauthenticated_sensitive_data critical.
+    tag = "ce9005d541374434bc02ab87e05fa02d"
+    assert "secret_token" not in {c for c, _, _ in scan_value("siteToken", tag)}
+    assert "secret_token" not in {c for c, _, _ in scan_value("site_token", tag)}
+    # the exception is NARROW: other token-named fields still flag
+    assert "secret_token" in {c for c, _, _ in scan_value("sessionToken", tag)}
+    assert "secret_token" in {c for c, _, _ in scan_value("siteApiToken", tag)}
+
+
 def test_kenyan_phone():
     assert "phone_ke" in {c for c, _, _ in scan_value("msisdn", "+254712345678")}
 

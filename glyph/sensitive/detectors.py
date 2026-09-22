@@ -47,6 +47,14 @@ _SECRET_NAME = re.compile(
 # Field names that are explicitly a credential value.
 _PASSWORD_NAME = re.compile(r"^(password|passwd|pwd|pass)$", re.IGNORECASE)
 
+# Field names that LOOK secret but carry a public-by-construction value — the
+# vendor publishes it in page source, so it is never a credential. The
+# Cloudflare Web Analytics beacon (POST <site>/cdn-cgi/rum) sends `siteToken`,
+# the site tag embedded in the page's own HTML; flagging it as a leaked secret
+# then chains into a bogus `unauthenticated_sensitive_data` critical in
+# glyph/sensitive/risk.py. Keep this list to names with evidence behind them.
+_PUBLIC_IDENTIFIER_NAMES = {"sitetoken", "site_token"}
+
 _ENTROPY_MIN = 3.6      # bits/char — random-looking
 _ENTROPY_MIN_LEN = 20
 
@@ -118,6 +126,7 @@ def scan_value(name: str, value: object) -> List[Tuple[str, str, str]]:
 
     # Generic secret: high-entropy value in a secret-named field.
     if (_SECRET_NAME.search(name or "")
+            and (name or "").strip().lower() not in _PUBLIC_IDENTIFIER_NAMES
             and len(text) >= _ENTROPY_MIN_LEN
             and " " not in text
             and _shannon_entropy(text) >= _ENTROPY_MIN
