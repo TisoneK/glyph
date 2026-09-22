@@ -39,3 +39,17 @@ Examples:
 ---
 
 - **[core-defect]** `core/schemas/context.schema.json` declares `"coreVersion": "0.2.0"` while `core/VERSION` is `0.3.0`. The JSON is documented as a machine-readable mirror of `context-schema.md` and "must be updated in the same commit as any schema change" — but the 0.3.0 release (harvest release) did not bump the JSON's `coreVersion` field. Workaround: read `core/VERSION` for the authoritative version (which `context-sync` already does); treat the JSON's `coreVersion` as stale until the package fixes it. The fix belongs in the package repo: bump `context.schema.json`'s `coreVersion` to `0.3.0` in the next 0.3.x patch release, and add "if `core/VERSION` changed, update `context.schema.json`'s `coreVersion` in the same commit" to the package release checklist. (set by Super Z, 2026-07-30; see `memory/inefficiencies/log.md` 2026-07-30 entry for full context)
+
+- **[core-defect]** `ledger-sync verify` — and therefore every `ledger-gates`
+  gate, which calls it as a built-in — exits 3 on Windows with "PORT PARSE
+  FAILURE", because core 2.0.3 ships two `.ps1` ports that no PowerShell engine
+  can parse: `core/bin/ledger-state.ps1:60` uses `$Label:` inside a
+  double-quoted string (an invalid variable reference in 5.1 and 7 alike), and
+  `core/bin/ledger-mem.ps1` also fails under Windows PowerShell 5.1; on top of
+  that, `parse_ports` prefers the legacy 5.1 engine over `pwsh`. Workaround on
+  this project: treat the manifest check as the integrity gate —
+  `(cd .context_ledger/core && sha256sum -c MANIFEST.sha256)` — plus the `sh -n`
+  parse of the sh ports; the ps1 parse step cannot pass until the package ships
+  a fix. Do NOT patch core in place. Reported upstream through
+  `memory/office/flaws/log.md` (2026-09-23, two entries). (set by Kofi,
+  2026-09-23, core 2.0.3)

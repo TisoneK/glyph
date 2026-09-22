@@ -12,6 +12,6 @@ entry and backlog before starting.
 - **Status:** in-progress | done | blocked (<blocker>)
 -->
 
-- **Session:** —
-- **Task:** none — no session in progress
-- **Status:** idle
+- **Session:** 2026-09-23 — Kofi (S001) / deepseek/deepseek-flash — local Windows box (`C:\Users\tison\Dev\glyph`)
+- **Task:** (1) Migrate the vendored protocol core 0.8.0 → 2.0.3 (`update --major` → `migrate` → `rename`), user-approved in-session; (2) fill the project facts and re-seed the fresh office; (3) then tackle the user's target **https://cryptonichub.pro** with `glyph` — live capture, analysis stages, findings.
+- **Status:** in-progress (core 2.0.3 in place, office-001 closed; facts committed next, then the `.context_ledger/` rename, then target work)
