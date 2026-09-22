@@ -84,7 +84,7 @@ block (and its "last verified" date) every time you run on it again.
   - **Local agents must NOT absorb this block** — the PAT dance, the `/home/z/my-project/glyph` path, and the cloud-sandbox identity are machine- and agent-type-scoped facts. A local agent reading this block should ignore the PAT instructions and log a flaw if memory tried to enforce them on a local session (Pitfall #43).
 
 ---
-## bao@local (Windows 10/11, PowerShell 7) (last verified 2026-07-31)
+## bao@local (Windows 10/11, PowerShell 7) (last verified 2026-09-23)
 - **Identify by:** hostname/path `C:\Users\tison\Dev\glyph`; agent runs as user `tison`
 - **OS:** Windows (win32), PowerShell 7 (`pwsh.exe`)
 - **Runtimes:** system `python` = **3.14.2**; project venv at `.venv/` (Python 3.14.2)
@@ -98,8 +98,40 @@ block (and its "last verified" date) every time you run on it again.
   - `pwsh -File .context/core/bin/context-sync.ps1 status` — core status
   - `git config user.name` / `git config user.email` — already set to `Tisone Kironget` / `tisonkironget@gmail.com`
 - **Quirks:**
-  - `core.autocrlf=true` causes `.context/core/*` files to be checked out with CRLF on Windows, breaking `context-sync verify` against the LF-only MANIFEST.sha256. Workaround: `git checkout -- .context/core/` after any verify failure (rollback restores LF blobs from git history). `.gitattributes` added with `.context/core/* text eol=lf` to prevent renormalization.
-  - `context-sync.ps1` is the Windows port of `context-sync`; use it instead of `sh` on this machine.
+  - **Core 2.0.3 (2026-09-23):** the project now uses `.context_ledger/` and the
+    `ledger-*` tools; `context-sync`/`context-gates` no longer exist. Reach the
+    update source with the sibling package clone at `C:\Users\tison\Dev\.context`
+    (that clone is at 2.0.3; another sibling, `../context-ledger`, is an older
+    1.2.0 checkout and is ignored because it is behind local).
+  - **`ledger-sync verify` exits 3 on this machine — known upstream defect, not
+    a local problem.** Two shipped `.ps1` ports cannot be parsed by any
+    PowerShell engine (`core/bin/ledger-state.ps1:60` uses `$Label:` inside a
+    double-quoted string; `core/bin/ledger-mem.ps1` also fails 5.1), and
+    `parse_ports` prefers the legacy 5.1 engine over pwsh 7. The manifest check
+    itself passes. Integrity gate until upstream ships a fix:
+    `(cd .context_ledger/core && sha256sum -c MANIFEST.sha256)`. See
+    `memory/overrides/rules.md` `[core-defect]` and `memory/office/flaws/log.md`
+    (2026-09-23).
+  - **`git status` can lie about line endings.** After a CRLF-converting
+    checkout, git trusts its cached stat data and reports the tree clean while
+    the worktree bytes differ from the blobs; `git checkout -- <path>` is then a
+    silent no-op (delete the file first, then check it out). `git ls-files --eol`
+    and `git hash-object` show the truth. The repo-wide `* text=auto eol=lf`
+    policy added 2026-09-23 prevents new occurrences.
+  - `context-sync.ps1`/`ledger-sync.ps1` exist as Windows wrappers, but every
+    `ledger-*` command also runs fine as `sh .context_ledger/core/bin/ledger-<cmd>`
+    under Git Bash — which is what the gates themselves use.
   - System Python is 3.14.2 — newer than the project's `>=3.9` requirement; code runs fine.
+  - **The `.cmd` launchers are for a stock cmd.exe; under Git Bash, `sh` is
+    simpler.** `pwsh -File` also works where the ps1 port is not one of the two
+    broken ones.
+  - **Verified 2026-09-23:** `.venv/Scripts/python.exe -m pytest -q` →
+    **196 passed, 5 skipped**; `-m ruff check .` → clean (ruff 0.16.8 was
+    installed into the venv this session — it had been missing here);
+    `sh .context_ledger/core/bin/ledger-gates run pre-commit` → PASSED;
+    `glyph run live https://cryptonichub.pro --no-tui` → 70 flows / 228 DOM
+    labels, then `glyph capture live .../login` and `.../register` (80/84 flows);
+    `ledger-sync migrate` and `ledger-sync rename` → both completed (the rename
+    printed its ps1 parse errors afterwards, from the verify tail).
 
   - `.venv/bin/python -m pytest -q` → **181 passed, 5 skipped** (Session 29; endpoint Data tab, payload classification, Windows failure diagnostics, final-analysis retries, and TUI lifecycle coverage).
