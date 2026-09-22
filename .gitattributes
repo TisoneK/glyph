@@ -1,2 +1,10 @@
-.context/core/* text eol=lf
-
+# Repo-wide line-ending policy: LF in the repository and on checkout, on every
+# platform. Without it, a Windows worktree keeps CRLF copies of tracked files
+# while the index holds LF; git treats those as clean until the file is edited,
+# and then the WHOLE file diffs and `git diff --check` (run by the exit gate)
+# fails on every line as "trailing whitespace".
+#
+# The integrity-critical policy for the vendored protocol lives in
+# .context_ledger/.gitattributes — its patterns are relative to that directory
+# and are checked byte-for-byte against core/MANIFEST.sha256 (LF-computed).
+* text=auto eol=lf
