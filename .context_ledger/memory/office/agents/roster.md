@@ -52,6 +52,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing | Status | Status detail |
 |------|----------|-------|-------|--------|---------------|
+| Kofi | S001 | deepseek/deepseek-flash | Syncing the ledger core to 2.0.4 and closing the defect follow-through | Working | Core 2.0.4 installed and verified on Windows (manifest + both PowerShell engines); updating the memory files that still described the 2.0.3 defect |
 
 **Keep your Status cells current — that is what the board is for.** The
 next live worker reads it to know at a glance what a peer has finished,
