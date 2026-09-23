@@ -65,7 +65,6 @@ Full spec: `.context_ledger/core/schemas/ledger-schema.md` →
 | ID | Summary |
 |----|---------|
 | B-2026-09-23-1 | Verify the live browser path on-device on Windows: `glyph run live --browser <url>` with CDP attach to a real Chrome/Edge/Brave → streaming TUI → stop/detach → clean shutdown; record the result in the session entry and the Windows environments block. |
-| B-2026-09-23-2 | Fix and release the core 2.0.3 Windows port defects upstream in the ledger package: `ledger-state.ps1:60` (`"...$Label:..."` is an invalid variable reference — unparseable by PowerShell 5.1 AND 7) and `ledger-mem.ps1` under 5.1; also make `parse_ports` prefer `pwsh` over `powershell`. Today `ledger-sync verify` returns 3 on Windows, so no gate can pass there. |
 
 ### Medium Priority
 

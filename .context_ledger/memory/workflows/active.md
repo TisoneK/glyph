@@ -15,4 +15,4 @@ The workflow currently in force for this repo.
 - **Commit style:** Conventional Commits with scope; `chore(ledger):` for `.context_ledger/`
 - **Commit granularity:** one logical change per commit; never mix product + `.context_ledger` surfaces
 - **Deliverable:** working `glyph` Python package (installable, tested) + chat summary
-- **Known trap (Windows, core 2.0.3):** `ledger-sync verify` exits 3 with "PORT PARSE FAILURE" because two shipped `.ps1` ports cannot be parsed; the manifest check itself passes. Workaround and upstream report: `memory/overrides/rules.md` (`[core-defect]`) and `memory/office/flaws/log.md` (2026-09-23).
+- **Core:** 2.0.4 — `ledger-sync verify` passes on this Windows box (manifest match plus every port parsing under both PowerShell 5.1 and pwsh 7). The 2.0.3 port defect and the `[core-defect]` override it needed are retired.

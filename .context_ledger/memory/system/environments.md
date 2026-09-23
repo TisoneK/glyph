@@ -103,15 +103,15 @@ block (and its "last verified" date) every time you run on it again.
     update source with the sibling package clone at `C:\Users\tison\Dev\.context`
     (that clone is at 2.0.3; another sibling, `../context-ledger`, is an older
     1.2.0 checkout and is ignored because it is behind local).
-  - **`ledger-sync verify` exits 3 on this machine — known upstream defect, not
-    a local problem.** Two shipped `.ps1` ports cannot be parsed by any
-    PowerShell engine (`core/bin/ledger-state.ps1:60` uses `$Label:` inside a
-    double-quoted string; `core/bin/ledger-mem.ps1` also fails 5.1), and
-    `parse_ports` prefers the legacy 5.1 engine over pwsh 7. The manifest check
-    itself passes. Integrity gate until upstream ships a fix:
-    `(cd .context_ledger/core && sha256sum -c MANIFEST.sha256)`. See
-    `memory/overrides/rules.md` `[core-defect]` and `memory/office/flaws/log.md`
-    (2026-09-23).
+  - **Core 2.0.4 (2026-09-23): `ledger-sync verify` passes here.** The 2.0.3
+    `.ps1` ports could not be parsed by any engine (`$Label:` inside a
+    double-quoted string, plus non-ASCII bytes decoded through the 5.1
+    system codepage), so `verify` and every gate exited 3. 2.0.4 fixed
+    both and made `parse_ports` check every engine on PATH. Verified:
+    `ps1 parse: OK (powershell 5.1.26100.9444, pwsh 7.6.6)` and `core OK:
+    every file matches MANIFEST.sha256 and every port parses (2.0.4)`.
+    History: `memory/office/flaws/log.md` (2026-09-23, both entries now
+    marked fixed).
   - **`git status` can lie about line endings.** After a CRLF-converting
     checkout, git trusts its cached stat data and reports the tree clean while
     the worktree bytes differ from the blobs; `git checkout -- <path>` is then a
